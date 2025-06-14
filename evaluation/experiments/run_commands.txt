@@ -9,6 +9,9 @@ du -sh folder/ #reports human readable summary of space used in folder
 ##Delete all files of a given type
 find /path/to/folder -type f -name "*.pickle" -delete
 
+#deleting files/folders
+rm -r folder
+
 # Cross Validation Partitioning ---------------------------------------------------------------------------------------------
 
 python run_CV_Partitioner.py --d /project/kamoun_shared/data_shared/heros_sim_data/gametes_data --w /project/kamoun_shared/data_shared/heros_sim_data --o gametes_data_cv --cv 10 --l Class
@@ -27,21 +30,21 @@ python run_multisurf_hpc.py --d /project/kamoun_shared/data_shared/heros_sim_dat
 
 #HEROS Training and Evaluation --------------------------------------------------------------------------------------------- --check  --resub 
 
+#MULTIPLEXER DATA------------(1200 jobs each) - run these first for cluster use efficiency (as they include some longer running jobs)
+python run_heros_hpc.py --d /project/kamoun_shared/data_shared/heros_sim_data/multiplexer_data_cv --w /project/kamoun_shared/output_shared/heros_gecco --o multiplexer_cv --ekf /project/kamoun_shared/output_shared/heros_gecco/output/MultiSURF_multiplexer_cv --ol Class --il InstanceID --el Group --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20 --in random --it 200000 --ps 2000 --nu 1 --mi 200 --ms 100 --c sub --tp 1000 --sr 500,1000,10000,100000,200000 --sm 5,10,50,100 
+
+python run_heros_hpc.py --d /project/kamoun_shared/data_shared/heros_sim_data/multiplexer_data_cv --w /project/kamoun_shared/output_shared/heros_gecco --o multiplexer_cv_acc_init --ekf /project/kamoun_shared/output_shared/heros_gecco/output/MultiSURF_multiplexer_cv --ol Class --il InstanceID --el Group --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20 --in target_acc --it 200000 --ps 2000 --nu 1 --mi 200 --ms 100 --c sub --tp 1000 --sr 500,1000,10000,100000,200000 --sm 5,10,50,100
+
+
+python run_heros_hpc.py --d /project/kamoun_shared/data_shared/heros_sim_data/multiplexer_data_cv --w /project/kamoun_shared/output_shared/heros_gecco --o multiplexer_cv_nu10 --ekf /project/kamoun_shared/output_shared/heros_gecco/output/MultiSURF_multiplexer_cv --ol Class --il InstanceID --el Group --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20 --in random --it 200000 --ps 2000 --nu 10 --mi 200 --ms 100 --c sub --tp 1000 --sr 500,1000,10000,100000,200000 --sm 5,10,50,100 --v
+
+python run_heros_hpc.py --d /project/kamoun_shared/data_shared/heros_sim_data/multiplexer_data_cv --w /project/kamoun_shared/output_shared/heros_gecco --o multiplexer_cv_acc_init_nu10 --ekf /project/kamoun_shared/output_shared/heros_gecco/output/MultiSURF_multiplexer_cv --ol Class --il InstanceID --el Group --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20 --in target_acc --it 200000 --ps 2000 --nu 10 --mi 200 --ms 100 --c sub --tp 1000 --sr 500,1000,10000,100000,200000 --sm 5,10,50,100 --v
+
+
 #GAMETES DATA------------(1200 jobs each)
-python run_heros_hpc.py --d /project/kamoun_shared/data_shared/heros_sim_data/gametes_data_cv --w /project/kamoun_shared/output_shared/heros_gecco --o gametes_cv --ekf /project/kamoun_shared/output_shared/heros_gecco/output/MultiSURF_gametes_cv --ol Class --il InstanceID --el Model --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20 --in random --it 200000 --ps 2000 --nu 1 --mi 200 --ms 100 --c sub --tp 1000 --sr 500,1000,10000,100000,200000 --sm 5,10,50,100 --check
+python run_heros_hpc.py --d /project/kamoun_shared/data_shared/heros_sim_data/gametes_data_cv --w /project/kamoun_shared/output_shared/heros_gecco --o gametes_cv --ekf /project/kamoun_shared/output_shared/heros_gecco/output/MultiSURF_gametes_cv --ol Class --il InstanceID --el Model --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20 --in random --it 200000 --ps 2000 --nu 1 --mi 200 --ms 100 --c sub --tp 1000 --sr 500,1000,10000,100000,200000 --sm 5,10,50,100
 
-python run_heros_hpc.py --d /project/kamoun_shared/data_shared/heros_sim_data/gametes_data_cv --w /project/kamoun_shared/output_shared/heros_gecco --o gametes_cv_acc_init --ekf /project/kamoun_shared/output_shared/heros_gecco/output/MultiSURF_gametes_cv --ol Class --il InstanceID --el Model --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20 --in target_acc --it 200000 --ps 2000 --nu 1 --mi 200 --ms 100 --c sub --tp 1000 --sr 500,1000,10000,100000,200000 --sm 5,10,50,100 --check
-
-
-#MULTIPLEXER DATA------------(1200 jobs each)
-python run_heros_hpc.py --d /project/kamoun_shared/data_shared/heros_sim_data/multiplexer_data_cv --w /project/kamoun_shared/output_shared/heros_gecco --o multiplexer_cv --ekf /project/kamoun_shared/output_shared/heros_gecco/output/MultiSURF_multiplexer_cv --ol Class --il InstanceID --el Group --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20 --in random --it 200000 --ps 2000 --nu 1 --mi 200 --ms 100 --c sub --tp 1000 --sr 500,1000,10000,100000,200000 --sm 5,10,50,100 --check
-
-python run_heros_hpc.py --d /project/kamoun_shared/data_shared/heros_sim_data/multiplexer_data_cv --w /project/kamoun_shared/output_shared/heros_gecco --o multiplexer_cv_acc_init --ekf /project/kamoun_shared/output_shared/heros_gecco/output/MultiSURF_multiplexer_cv --ol Class --il InstanceID --el Group --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20 --in target_acc --it 200000 --ps 2000 --nu 1 --mi 200 --ms 100 --c sub --tp 1000 --sr 500,1000,10000,100000,200000 --sm 5,10,50,100 --check 
-
-
-python run_heros_hpc.py --d /project/kamoun_shared/data_shared/heros_sim_data/multiplexer_data_cv --w /project/kamoun_shared/output_shared/heros_gecco --o multiplexer_cv_nu10 --ekf /project/kamoun_shared/output_shared/heros_gecco/output/MultiSURF_multiplexer_cv --ol Class --il InstanceID --el Group --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20 --in random --it 200000 --ps 2000 --nu 10 --mi 200 --ms 100 --c sub --tp 1000 --sr 500,1000,10000,100000,200000 --sm 5,10,50,100 --check 
-
-python run_heros_hpc.py --d /project/kamoun_shared/data_shared/heros_sim_data/multiplexer_data_cv --w /project/kamoun_shared/output_shared/heros_gecco --o multiplexer_cv_acc_init_nu10 --ekf /project/kamoun_shared/output_shared/heros_gecco/output/MultiSURF_multiplexer_cv --ol Class --il InstanceID --el Group --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20 --in target_acc --it 200000 --ps 2000 --nu 10 --mi 200 --ms 100 --c sub --tp 1000 --sr 500,1000,10000,100000,200000 --sm 5,10,50,100 --check
+python run_heros_hpc.py --d /project/kamoun_shared/data_shared/heros_sim_data/gametes_data_cv --w /project/kamoun_shared/output_shared/heros_gecco --o gametes_cv_acc_init --ekf /project/kamoun_shared/output_shared/heros_gecco/output/MultiSURF_gametes_cv --ol Class --il InstanceID --el Model --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20 --in target_acc --it 200000 --ps 2000 --nu 1 --mi 200 --ms 100 --c sub --tp 1000 --sr 500,1000,10000,100000,200000 --sm 5,10,50,100
 
 
 
@@ -91,13 +94,8 @@ python run_exstracs_sum_hpc.py --w /project/kamoun_shared/output_shared/heros_ge
 python run_exstracs_sum_hpc.py --w /project/kamoun_shared/output_shared/heros_gecco --o  gametes_cv --ol Class --il InstanceID --el Group --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20
 
 
-
-
 ## TABLE MAKING
 python run_heros_table_hpc.py --w /project/kamoun_shared/output_shared/heros_gecco --o output --ol Class --il InstanceID --el Group --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20
-
-
-
 
 
 

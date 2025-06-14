@@ -23,10 +23,12 @@ class MODEL:
         self.accuracy = None #rule-set accuracy (not to be confused with model accuracy) i.e. of the instances this ruleset matches, the proportion where this ruleset predicts the correct outcome
         self.coverage = None # proportion of instaces in training data covered by model
         self.birth_iteration = None #iteration number when this ruleset was first introduced (or re-introduced) to the population
+        self.objectives = None
         # FLEXIBLE MODEL PARAMETERS ***************************************************
         self.fitness = None #model 'goodness' metric that drives many aspects of algorithm learning, discovery, and prediction
         self.deletion_prob = None #probability of model being selected for deletion
         self.model_on_front = None #identifies if the model was on the pareto front at the end of phase 2 training
+
 
     def initialize_all_rule_model(self,heros):
         """ Initializes a rule set containing all rules from the population. """
@@ -38,6 +40,7 @@ class MODEL:
             self.rule_IDs.append(heros.rule_population.pop_set[i].ID)
         self.birth_iteration = heros.model_iteration
 
+
     def initialize_randomly(self, rules_in_model,heros):
         """ Initializes a rule set by randomly selecting rules from the population. """
         index_list = list(range(len(heros.rule_population.pop_set)))
@@ -48,65 +51,8 @@ class MODEL:
             self.rule_set.append(heros.rule_population.pop_set[i])
             self.rule_IDs.append(heros.rule_population.pop_set[i].ID)
         self.birth_iteration = heros.model_iteration
-        #self.check_for_duplicates(self.rule_IDs, "Initialize")
-
-    def initalize_by_list(self, heros, rules):
-        """ Initializes a rule set from a given list of rules. """
-        self.rule_set = []
-        self.rule_IDs = []
-        for r in rules: 
-            self.rule_set.append(r)
-            self.rule_IDs.append(r.ID)
-        self.birth_iteration = heros.model_iteration
-        self.complete_evaluation_class()
-
-    def initialize_probabilistically(self,rules_in_model, heros):
-        """ Initializes a rule set by probabilistically selecting rules from the population based on fitness. """
-        
-        pool = copy.copy(heros.rule_population.pop_set)
-        self.rule_set = []
-        self.rule_IDs = []
-
-        tot = sum([x.fitness for x in pool])
-        rules = np.random.choice(pool, rules_in_model, replace = False, p = [(x.fitness/tot) for x in pool])
-        
-        for r in rules:
-            self.rule_set.append(r)
-            self.rule_IDs.append(r.ID)
-        self.birth_iteration = heros.model_iteration
-
-    def initialize_smart(self, heros):
-        """ Initializes a rule set by probabilistically selecting rules from the population based on fitness. """
-        pool = copy.copy(heros.rule_population.pop_set)
-        train_data = copy.deepcopy(heros.env.train_data)
-        self.rule_set = []
-        self.rule_IDs = []
-
-        while (len(heros.env.train_data[0]) > 0 and len(pool) != 0):
-            r = random.choices(pool, weights = [x.fitness for x in pool], k = 1)[0]
-            pool.remove(r)
-            paired_data = list(zip(heros.env.train_data[0], heros.env.train_data[1]))
-            filtered_data = [(x,y) for x,y in paired_data if x not in r.match_set]
-            heros.env.train_data[0], heros.env.train_data[1] = map(list, zip(*filtered_data)) if filtered_data else ([],[])
-            heros.env.num_instances = len(heros.env.train_data[0])
-            self.rule_set.append(r)
-            self.rule_IDs.append(r.ID)
-
-        heros.env.train_data[0] = train_data[0]
-        heros.env.train_data[1] = train_data[1]
-        heros.env.num_instances = len(heros.env.train_data[0])
-
-    def initialize_bootstrap(self, rules_in_model, heros):
-        bootstrap_data = self.bootstrap_sample(heros.env.train_data[0], heros.env.num_instances)
-        rules = self.select_matching_rules(bootstrap_data, heros.rule_population.pop_set, heros)[:rules_in_model]
-        for r in rules:
-            self.rule_set.append(r)
-            self.rule_IDs.append(r.ID)
-        self.birth_iteration = heros.model_iteration
-
-    def bootstrap_sample(self, data, num):
-        return [random.choice(data) for _ in range(num)]
     
+
     def select_matching_rules(self, data, rule_pop,heros):
         pool = copy.copy(rule_pop)
         train_data = copy.deepcopy(data)
@@ -121,22 +67,6 @@ class MODEL:
             pool = [rule for rule in pool if rule not in chosen]
         return selected_rules
 
-
-    def initialize_coinflip(self, rules_in_model, heros):
-        pool = copy.copy(heros.rule_population.pop_set)
-        self.rule_set = []
-        self.rule_IDs = []
-        rules = []
-        for i in range(rules_in_model):
-            if random.random() < 0.5:
-                rules.append(random.choices(pool, weights = [x.useful_accuracy for x in pool], k = 1)[0])
-            else:
-                rules.append(random.choices(pool, weights = [x.useful_coverage for x in pool], k = 1)[0])
-        for r in rules:
-            self.rule_set.append(r)
-            self.rule_IDs.append(r.ID)
-        self.birth_iteration = heros.model_iteration
-        return None
     
     def initialize_target(self, rules_in_model, target, heros):
         """ Initializes rules sets based on a target rule accuracy, so that all rules in each initialized rule set have a similar accuracy value.  The intution behind this strategy is to make the model search flexible in dealing with both clean and noisy problems, exploring the space of rules that would be most suitible to either problem type. """
@@ -148,9 +78,8 @@ class MODEL:
         if len(selected_rules) > rules_in_model:
             #Select a random number of the rules to equal the chosen rules_in_model
             selected_rules = random.sample(selected_rules,rules_in_model)
-
         elif len(selected_rules) < rules_in_model:
-            #Remove s3lected rules from rule population pool
+            #Remove selected rules from rule population pool
             for rule in selected_rules: 
                 pool.remove(rule)
             #Probabilistically add rules with an accuracy as close to the target as possible. 
@@ -158,10 +87,6 @@ class MODEL:
                 weights = []
                 for rule in pool:
                     weights.append(float(1/(abs(rule.accuracy - target))))
-                    #if rule in selected_rules: 
-                    #    weights.append(0)
-                    #else:
-                    #    weights.append(float(1/(abs(rule.accuracy - target))))
                 if sum(weights) == 0:
                     break
                 else: 
@@ -187,6 +112,7 @@ class MODEL:
             print(len(rule_IDs))
             print(str(counts))
             print(str(5/0))
+
 
     def balanced_accuracy(self, y_true, y_pred):
         """
@@ -217,14 +143,15 @@ class MODEL:
         balanced_acc = np.mean(list(recall_per_class.values()))
         return balanced_acc
 
+
     def predict(self, instance_state,heros):
         class_counts = {}
         for rule in self.rule_set:
             if rule.match(instance_state,heros):
                 if rule.action in class_counts:
-                    class_counts[rule.action] += 1 #rule.useful_accuracy
+                    class_counts[rule.action] += 1 
                 else:
-                    class_counts[rule.action] = 1 #rule.useful_accuracy
+                    class_counts[rule.action] = 1 
         if len(class_counts.keys()) > 0: 
             max_count = max(class_counts.values())
             tied_classes = [k for k, v in class_counts.items() if v == max_count]
@@ -235,8 +162,9 @@ class MODEL:
             return True, pred 
         else: 
             return False, None # instance not covered by model
+        
 
-    def complete_evaluation_class(self,heros):
+    def evaluate_model_class(self,heros):
         """ Evaluate set performance across the entire training dataset and update set parameters accordingly. """
         train_data = heros.env.train_data
         y_true = [] # true class values
@@ -258,21 +186,9 @@ class MODEL:
                 uncovered_count += 1
         self.accuracy = self.balanced_accuracy(y_true, y_pred)
         self.coverage = (heros.env.num_instances - uncovered_count) / float(heros.env.num_instances)
-        if heros.fitness_function == 'accuracy':
-            self.fitness = pow(self.accuracy, heros.nu)
-        elif heros.fitness_function == 'pareto':
-            # Check if new model updates pareto front
-            front_updated = heros.model_pareto.update_front(self.accuracy, len(self.rule_set), ['max', 'min'])
-            #Calculate and update the rule fitness
-            self.fitness = heros.model_pareto.get_pareto_fitness(self.accuracy, len(self.rule_set), False,heros)
-            if self.fitness is None: 
-                self.fitness = pow(self.accuracy, heros.nu)
-            if front_updated:
-                #self.show_model() #debug
-                return True
-        else:
-            print("Fitness metric not available")
-        return False
+        #self.objectives = (self.useful_accuracy,len(self.rule_set))
+        self.objectives = (self.accuracy,len(self.rule_set))
+
 
     def copy_parent(self,parent,iteration):
         #Attributes cloned from parent
@@ -281,6 +197,7 @@ class MODEL:
         for ruleID in parent.rule_IDs:
             self.rule_IDs.append(ruleID)
         self.birth_iteration = iteration
+
 
     def merge(self,other_parent):
         """ """
@@ -347,34 +264,30 @@ class MODEL:
                 self.rule_IDs.append(heros.rule_population.pop_set[i].ID)
             self.birth_iteration = heros.model_iteration
         elif len(self.rule_IDs) == 1: # Addition and Swap Only (to avoid empty models)
-            for ruleID in self.rule_IDs:
-                if random.random() < heros.mut_prob:
-                    other_rule_IDs = [] # rule ids from the rule population that are not in the current model
-                    other_rule_indexs = [] # rule position indexes in the rule population corresponding with other_rule_IDs
-                    #Identify all other rules in the population that may be candidates for addition to this model
-                    pop_index = 0
-                    for rule in heros.rule_population.pop_set:
-                        if rule.ID not in self.rule_IDs:
-                            other_rule_IDs.append(rule.ID)
-                            other_rule_indexs.append(pop_index)
-                        pop_index += 1
-                    #Select the rule to add to this model
-                    random_rule_ID = random.choice(other_rule_IDs) #the id of a new rule to add to this model
-                    #Get the index to this rule within the rule population 
-                    random_rule_index = other_rule_IDs.index(random_rule_ID) 
-                    random_rule_pop_index = other_rule_indexs[random_rule_index]
-                    if random.random() < 0.5: # Swap
-                        self.rule_IDs.remove(ruleID)
-                        del self.rule_set[0] #remove the one rule currently in the model
-                    # Addition
-                    self.rule_IDs.append(random_rule_ID)
-                    self.rule_set.append(heros.rule_population.pop_set[random_rule_pop_index])
+            if random.random() < heros.mut_prob:
+                other_rule_indexs = [] # rule position indexes in the rule population corresponding with other_rule_IDs
+                #Identify all other rules in the population that may be candidates for addition to this model
+                pop_index = 0
+                for rule in heros.rule_population.pop_set:
+                    if rule.ID not in self.rule_IDs:
+                        #other_rule_IDs.append(rule.ID)
+                        other_rule_indexs.append(pop_index)
+                    pop_index += 1
+                #Select the rule to add to this model
+                random_rule_index = random.choice(other_rule_indexs)
+                random_rule_ID = heros.rule_population.pop_set[random_rule_index].ID
+                #Get the index to this rule within the rule population 
+                if random.random() < 0.5: # Swap
+                    self.rule_IDs.remove(self.rule_IDs[0])
+                    del self.rule_set[0] #remove the one rule currently in the model
+                # Addition
+                self.rule_IDs.append(random_rule_ID)
+                self.rule_set.append(heros.rule_population.pop_set[random_rule_index])
         else: # Addition, Deletion, or Swap 
             mutate_options = ['A','D','S'] #Add, delete, swap
             original_rule_IDs = []
             for id in self.rule_IDs:
                 original_rule_IDs.append(id)
-            #print(original_rule_IDs)
             for ruleID in original_rule_IDs:
                 if random.random() < heros.mut_prob:
                     mutate_type = random.choice(mutate_options)
@@ -409,15 +322,82 @@ class MODEL:
                                 self.rule_set.append(heros.rule_population.pop_set[random_rule_pop_index])
 
 
-    def update_fitness(self,heros):
-        """ Updates the rule fitness as a result of an update to the pareto front."""
-        self.fitness = heros.model_pareto.get_pareto_fitness(self.accuracy, len(self.rule_set), False,heros)
-        if self.fitness is None: #
-            self.fitness = pow(self.accuracy, heros.nu)
+    def mutation_acc_pressure(self,random,heros):
+        """ Applies muation to this model """
+        if len(self.rule_IDs) == 0: #Initialize new model if empty after crossover
+            target_rule_min = 10
+            target_rule_max = int(len(heros.rule_population.pop_set)/2)
+            if target_rule_max < target_rule_min:
+                min_rules = 2
+                max_rules = len(heros.rule_population.pop_set)
+            else:
+                min_rules = target_rule_min
+                max_rules = int(len(heros.rule_population.pop_set)/2)
+            rules_in_model = random.randint(min_rules,max_rules)
+            self.rule_set = random.choices(heros.rule_population.pop_set, weights=[obj.useful_accuracy for obj in heros.rule_population.pop_set],k=rules_in_model)
+            for rule in self.rule_set:
+                self.rule_IDs.append(rule.ID)
+            self.birth_iteration = heros.model_iteration
+        elif len(self.rule_IDs) == 1: # Addition and Swap Only (to avoid empty models)
+            if random.random() < heros.mut_prob:
+                other_rule_IDs = [] # rule ids from the rule population that are not in the current model
+                other_rule_indexs = [] # rule position indexes in the rule population corresponding with other_rule_IDs
+                #Identify all other rules in the population that may be candidates for addition to this model
+                pop_index = 0
+                for rule in heros.rule_population.pop_set:
+                    if rule.ID not in self.rule_IDs:
+                        other_rule_indexs.append(pop_index)
+                    pop_index += 1
+                #Select the rule to add to this model
+                random_rule_index = random.choices(other_rule_indexs, weights=[heros.rule_population.pop_set[i].useful_accuracy for i in other_rule_indexs],k=1)[0] #the id of a new rule to add to this model
+                random_rule_ID = heros.rule_population.pop_set[random_rule_index].ID
+                if random.random() < 0.5: # Swap
+                    self.rule_IDs.remove(self.rule_IDs[0])
+                    del self.rule_set[0] #remove the one rule currently in the model
+                # Addition
+                self.rule_IDs.append(random_rule_ID)
+                self.rule_set.append(heros.rule_population.pop_set[random_rule_index])
+        else: # Addition, Deletion, or Swap 
+            mutate_options = ['A','D','S'] #Add, delete, swap
+            original_rule_IDs = []
+            for id in self.rule_IDs:
+                original_rule_IDs.append(id)
+            for ruleID in original_rule_IDs:
+                if random.random() < heros.mut_prob:
+                    mutate_type = random.choice(mutate_options)
+                    if mutate_type == 'D' or len(heros.rule_population.pop_set) <= len(self.rule_IDs):
+                        rule_ID_index = self.rule_IDs.index(ruleID)
+                        self.rule_IDs.remove(ruleID)
+                        del self.rule_set[rule_ID_index]
+                    else: #swap or add
+                        other_rule_IDs = [] # rule ids from the rule population that are not in the current model
+                        other_rule_indexs = [] # rule position indexes in the rule population corresponding with other_rule_IDs
+                        other_rule_acc = []
+                        #Identify all other rules in the population that may be candidates for addition to this model
+                        pop_index = 0
+                        for rule in heros.rule_population.pop_set:
+                            if rule.ID not in self.rule_IDs and rule.ID not in original_rule_IDs:
+                                other_rule_IDs.append(rule.ID)
+                                other_rule_indexs.append(pop_index)
+                                other_rule_acc.append(rule.useful_accuracy)
+                            pop_index += 1
+                        #Select the rule to add to this model
+                        if len(other_rule_IDs) != 0:
+                            random_rule_ID = random.choices(other_rule_IDs, weights=[i for i in other_rule_acc],k=1)[0]
+                            #random_rule_ID = random.choice(other_rule_IDs) #the id of a new rule to add to this model
+                            #Get the index to this rule within the rule population 
+                            random_rule_index = other_rule_IDs.index(random_rule_ID) #error
+                            random_rule_pop_index = other_rule_indexs[random_rule_index]
+                            if mutate_type == 'S': # Swap
+                                rule_ID_index = self.rule_IDs.index(ruleID)
+                                self.rule_IDs.remove(ruleID)
+                                del self.rule_set[rule_ID_index] #remove the one rule currently in the model
+                                self.rule_IDs.append(random_rule_ID)
+                                self.rule_set.append(heros.rule_population.pop_set[random_rule_pop_index])
+                            elif mutate_type == 'A': # Addition
+                                self.rule_IDs.append(random_rule_ID)
+                                self.rule_set.append(heros.rule_population.pop_set[random_rule_pop_index])
 
-    def update_deletion_prob(self, deletion_prob):
-        """ Updates model deletion probability during deletion"""
-        self.deletion_prob = deletion_prob
 
     def show_model(self):
         """ Report basic information regarding this model. """
@@ -425,10 +405,12 @@ class MODEL:
         print("Rule IDs: " + str(self.rule_IDs))
         print("Fitness: " + str(self.fitness))
         print("Accuracy: " + str(self.accuracy))
+        #print("Useful Accuracy: " +str(self.useful_accuracy))
         print("Coverage: " + str(self.coverage))
         print("Birth Iteration: " + str(self.birth_iteration))
         print("Rule Count: " + str(len(self.rule_IDs))) 
         print("Deletion Prob: " + str(self.deletion_prob))
+
 
     def plot_rule_pop_network(self, feature_names, heros, weighting='useful_accuracy', display_micro=False, node_size=1000, edge_size=10, show=True, save=False, output_path=None, data_name=None):
         """ Plots a network visualization of the rule population with feature specificity across rules as node size and feature co-specificity 

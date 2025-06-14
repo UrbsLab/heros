@@ -9,6 +9,7 @@ class RULE_TRACK:
         if heros.track_performance > self.prediction_window:
             self.prediction_window = heros.track_performance
         if heros.outcome_type == 'class': #class outcome
+            """
             self.tracking_header = ["Iteration",
                             "Pred.Acc.Est.",
                             "Total Time",
@@ -22,7 +23,14 @@ class RULE_TRACK:
                             "Mate Time", 
                             "Delete Time", 
                             "Predict Time"]
+            """
+            self.tracking_header = ["Iteration",
+                            "Pred.Acc.Est.",
+                            "Unique Rule Count",
+                            "Rule Pop Size",
+                            "Total Time"]
         elif heros.outcome_type == 'quant':
+            """
             self.tracking_header = ["Iteration",
                             "Pred.Error.Est.",
                             "Total Time",
@@ -36,11 +44,16 @@ class RULE_TRACK:
                             "Mate Time", 
                             "Delete Time", 
                             "Predict Time"]
+            """
+            self.tracking_header = ["Iteration",
+                            "Pred.Error.Est.",
+                            "Total Time"]
         else:
             pass
 
         self.tracking_list = []
         self.tracking_entry = []
+
 
     def update_prediction_list(self,outcome_prediction,outcome_truth,heros):
         """ Updates a windowed list of the most recent instance predictions (i.e. whether those predictions were correct or not)"""
@@ -57,6 +70,7 @@ class RULE_TRACK:
             self.error_predict_list.append(abs(outcome_prediction - outcome_truth))
         else:
             pass
+
 
     def update_performance_tracking(self,iteration,heros):
         """ Adds algorithm performance tracking information for the current training iteration."""
@@ -78,6 +92,7 @@ class RULE_TRACK:
         else:
             pass
         # Create tracking entry
+        """
         self.tracking_entry = [iteration+1,
                           window_performance,
                           heros.timer.time_global,
@@ -91,21 +106,24 @@ class RULE_TRACK:
                           heros.timer.time_mating,
                           heros.timer.time_deletion,
                           heros.timer.time_prediction]
+        """
+        self.tracking_entry = [iteration+1,
+                          window_performance,
+                          len(heros.rule_population.pop_set),
+                          heros.rule_population.micro_pop_count,
+                          heros.timer.time_global]
         # Add new tracking entry to the tracking list
         self.tracking_list.append(self.tracking_entry)
+
 
     def get_performance_tracking_df(self):
         """ Returns performance tracking over all training iterations as a dataframe. """
         tracking_df = pd.DataFrame(self.tracking_list,columns=self.tracking_header)
         return tracking_df
     
+
     def print_tracking_entry(self):
         """ Prints the tracking information for the current training iteration. """
         self.tracking_entry = [round(num,3) for num in self.tracking_entry]
         report_df = pd.DataFrame([self.tracking_entry], columns=self.tracking_header,index=None)
         print(report_df)
-
-
-        #print(str(self.tracking_header))
-        #self.tracking_entry = [round(num,3) for num in self.tracking_entry]
-        #print(str(self.tracking_entry))

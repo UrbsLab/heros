@@ -38,7 +38,7 @@ def main(argv):
     parser.add_argument('--ff', dest='fitness_function', help='fitness function', type=str, default='pareto')
     parser.add_argument('--s', dest='subsumption', help='subsumption strategy', type=str, default='both')
     parser.add_argument('--rsl', dest='rsl', help='rule specificity limit', type=int, default=0)   
-    parser.add_argument('--ft', dest='feat_track', help='feature tracking mechanism', type=str, default='end')
+    parser.add_argument('--ft', dest='feat_track', help='feature tracking mechanism', type=str, default='None')
     parser.add_argument('--ng', dest='new_gen', help='proportion of max model population size', type=float, default=1.0)
     parser.add_argument('--mg', dest='merge_prob', help='probability of applying merge in model discovery', type=float, default=0.1)
     parser.add_argument('--pt', dest='rule_pop_init', help='type of population initialization (load, dt, or None)', type=str, default=None)
@@ -152,14 +152,16 @@ def main(argv):
     tracking_df.to_csv(outputPath+'/rule_pop_tracking.csv', index=False)
 
     #Save Plot Rule Pop Pareto Front
-    resolution = 500
-    plot_rules = True
-    color_rules = True
-    heros.get_rule_pareto_landscape(resolution, heros.rule_population, plot_rules, color_rules,show=True,save=True,output_path=outputPath)
+    if nu == 1: #updated 3/29/24
+        resolution = 500
+        plot_rules = True
+        color_rules = True
+        heros.get_rule_pareto_landscape(resolution, heros.rule_population, plot_rules, color_rules,show=True,save=True,output_path=outputPath)
 
     #Save Feature Tracking Scores
-    ft_df = heros.get_ft(feature_names)
-    ft_df.to_csv(outputPath+'/feature_tracking_scores.csv', index=False)
+    if feat_track != None:
+        ft_df = heros.get_ft(feature_names)
+        ft_df.to_csv(outputPath+'/feature_tracking_scores.csv', index=False)
 
     #Load/Process Testing Data
     test_data_path = full_data_path.replace("Train","Test")
@@ -344,10 +346,12 @@ def main(argv):
     model_pop_df = heros.get_model_pop()
     #Identify model indexes of all models on front
     model_on_front_indexes = []
+    model_on_front_rule_count = []
     # Loop through each row
     for index, row in model_pop_df.iterrows():
         if row['Model on Front'] == 1:
             model_on_front_indexes.append(index)
+            model_on_front_rule_count.append(row['Number of Rules'])
     #print(model_on_front_indexes)
     #For each one run prediction to get prediction accuracy and instance coverage on testing data
     model_accuracies = []
@@ -364,11 +368,14 @@ def main(argv):
     #Identify the model index with the highest prediction accuracy
     best_accuracy = 0
     best_coverage = 0
+    best_rule_count = np.inf
     best_model_index = 0
     for i in range(0,len(model_on_front_indexes)):
-        if model_accuracies[i] > best_accuracy and model_coverages[i] >= best_coverage:
+        if (model_accuracies[i] > best_accuracy and model_coverages[i] >= best_coverage) or (model_accuracies[i] >= best_accuracy and model_coverages[i] >= best_coverage and model_on_front_rule_count[i] < best_rule_count):
+        #if model_accuracies[i] > best_accuracy and model_coverages[i] >= best_coverage:
             best_accuracy = model_accuracies[i]
             best_coverage = model_coverages[i]
+            best_rule_count = model_on_front_rule_count[i]
             best_model_index = model_on_front_indexes[i]
             
     # Run evaluation for target model
@@ -411,11 +418,13 @@ def main(argv):
     #Save Plot Model Pop Pareto Front
     resolution = 500
     plot_models = True
-    heros.get_model_pareto_landscape(resolution, heros.model_population, plot_models, show=True,save=True,output_path=outputPath)
+    #heros.get_model_pareto_landscape(resolution, heros.model_population, plot_models, show=True,save=True,output_path=outputPath) #original first submission
+    heros.get_model_pareto_fronts(show=True,save=True,output_path=outputPath)
 
     #Save Plot Model Tracking
     top_models = heros.export_model_growth()
     top_models.to_csv(outputPath+'/model_tracking.csv', index=False)
+    
 
     # Create the plot
     fig, ax1 = plt.subplots()
@@ -447,11 +456,12 @@ def get_best_testing_model_on_front(heros,test_X,test_y,iter):
     model_pop_df = export_model_population(heros.model_population.pop_set_archive[iter])
     #Identify model indexes of all models on front
     model_on_front_indexes = []
-
+    model_on_front_rule_count = []
     # Loop through each row
     for index, row in model_pop_df.iterrows():
         if row['Model on Front'] == 1:
             model_on_front_indexes.append(index)
+            model_on_front_rule_count.append(row['Number of Rules'])
 
     #For each one run prediction to get prediction accuracy and instance coverage on testing data
     model_accuracies = []
@@ -469,11 +479,14 @@ def get_best_testing_model_on_front(heros,test_X,test_y,iter):
     #Identify the model index with the highest prediction accuracy
     best_accuracy = 0
     best_coverage = 0
+    best_rule_count = np.inf
     best_model_index = 0
     for i in range(0,len(model_on_front_indexes)):
-        if model_accuracies[i] > best_accuracy and model_coverages[i] >= best_coverage:
+        if (model_accuracies[i] > best_accuracy and model_coverages[i] >= best_coverage) or (model_accuracies[i] == best_accuracy and model_coverages[i] >= best_coverage and model_on_front_rule_count[i] < best_rule_count):
+        #if model_accuracies[i] > best_accuracy and model_coverages[i] >= best_coverage:
             best_accuracy = model_accuracies[i]
             best_coverage = model_coverages[i]
+            best_rule_count = model_on_front_rule_count[i]
             best_model_index = model_on_front_indexes[i]
     return best_model_index
 

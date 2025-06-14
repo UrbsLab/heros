@@ -20,19 +20,60 @@ class RULE_POP:
         self.ID_counter = 0 # A unique id given to each new rule discovered (that isn't in the current rule population).
         self.pop_set_archive = {}
         self.pop_set_hold = None
+        #Experimental
+        self.explored_rules = []
+        self.archive_discovered_rules = False
+
+
+    def add_new_explored_rules(self,rule):
+        """Stores the unique and essential information to reconstitute an explored rule without re-evaluation."""
+        rule_entry = [rule.condition_indexes, rule.condition_values, rule.action, rule.instance_outcome_count, rule.ID, rule.birth_iteration]
+        self.explored_rules.append(rule_entry)
+
+
+    def clear_explored_rules(self):
+        self.explored_rules = None
+
+
+    def rule_exists(self, target_rule):
+        """Checks the explored rules list to see if a given 'new' rule has been previously discovered and evaluated, returning that rule's reference in explored rules."""
+        #print('test')
+        #print(target_rule.condition_indexes)
+        #print(target_rule.condition_values)
+
+        for rule_summary in self.explored_rules:
+            if self.equals(target_rule,rule_summary):
+                #print(rule_summary[0])
+                #print(rule_summary[1])
+                return rule_summary
+        return None
+    
+
+    def equals(self,target_rule,rule_summary):
+        if sorted(target_rule.condition_indexes) == sorted(rule_summary[0]):
+            for i in range(len(target_rule.condition_indexes)): #final check of rule equality (condition_values)
+                position = rule_summary[0].index(target_rule.condition_indexes[i])
+                if not (target_rule.condition_values[i] == rule_summary[1][position]):
+                    return False
+            return True
+        return False
+    
 
     def archive_rule_pop(self,iteration):
         self.pop_set_archive[int(iteration)] = copy.deepcopy(self.pop_set)
+
 
     def change_rule_pop(self,iteration):
         self.pop_set_hold = copy.deepcopy(self.pop_set)
         self.pop_set = self.pop_set_archive[int(iteration)]
 
+
     def restore_rule_pop(self):
         self.pop_set = self.pop_set_hold
         self.pop_set_hold = None
 
-    def make_match_set(self, instance,heros,random):
+
+    def make_match_set(self, instance,heros,random,np):
         """ Makes a match set {M} and activates covering as needed to initialize the population. """
         # MATCHING ****************************************************
         heros.timer.matching_time_start() #matching time tracking
@@ -53,14 +94,27 @@ class RULE_POP:
                         do_covering = False
         heros.timer.matching_time_stop() #matching time tracking
         # COVERING ****************************************************
+        # While HEROS covering is not guaranteed to create a rule with the current instance class, it is activated whenever the correct set would be empty
         heros.timer.covering_time_start() #covering time tracking
         if do_covering:
-            new_rule = RULE()
-            new_rule.initialize_by_covering(set_numerosity_sum+1,instance_state,outcome_state,heros,random)
+            new_rule = RULE(heros)
+            new_rule.initialize_by_covering(set_numerosity_sum+1,instance_state,outcome_state,heros,random,np)
+            #self.debug_confirm_offspring_match(new_rule, instance,heros,'covering',None)
             if len(new_rule.condition_indexes) > 0: #prevents completely general rules from being added to the population
-                self.add_covered_rule_to_pop(new_rule,heros)
-                self.match_set.append(len(self.pop_set)-1)
+                #Check for duplicate rule in {P} - important since covering runs if {C} is empty, which can generate an existing rule in the match set
+                if self.archive_discovered_rules:
+                    rule_summary = self.rule_exists(new_rule)
+                    if rule_summary == None:
+                        self.evaluate_covered_rule(new_rule,outcome_state,heros,random)
+                    else:
+                        new_rule.reestablish_rule(rule_summary,heros)
+                else:
+                    self.evaluate_covered_rule(new_rule,outcome_state,heros,random)
+                if self.no_identical_rule_exists(new_rule,heros,'match_set'):
+                    self.add_rule_to_pop(new_rule)
+                    self.match_set.append(len(self.pop_set)-1)
         heros.timer.covering_time_stop() #covering time tracking
+
 
     def make_eval_match_set(self,instance_state,heros):
         """ Makes a match set {M} given an instance state. Used by predict function."""
@@ -69,31 +123,12 @@ class RULE_POP:
             if rule.match(instance_state,heros):
                 self.match_set.append(i)
 
-    def add_covered_rule_to_pop(self,new_rule,heros):
-        """ Adds a new rule to the population via covering: either as a new rule entry in the population or increasing the numerosity of a rule that already exists. """
-        heros.timer.covering_time_stop() #covering time tracking
-        heros.timer.rule_eval_time_start() #rule evaluation time tracking
-        if heros.outcome_type == 'class':
-            front_updated = new_rule.complete_rule_evaluation_class(heros) #only called if brand new rule being added to population
-        elif heros.outcome_type == 'quant':
-            front_updated = new_rule.complete_rule_evaluation_quant(heros) #only called if brand new rule being added to population
-        else:
-            pass
-        if heros.fitness_function == 'pareto' and front_updated:
-            self.global_fitness_update(heros)
-        heros.timer.rule_eval_time_stop() #rule evaluation time tracking
-        heros.timer.covering_time_start() #covering time tracking
-        #print("Add Covered Rule")
-        #new_rule.show_rule() #Debug
-        #Check if rule already in population and add to population
-        self.add_offspring_rule_to_pop(new_rule,heros)
-        #self.pop_set.append(new_rule)
-        #self.micro_pop_count += 1
 
     def global_fitness_update(self,heros):
         """ Relevant for pareto-front rule fitness. Updates the fitness of all rules in the population if the pareto front gets updated. """
         for rule in self.pop_set:
             rule.update_rule_fitness(heros)
+
 
     def correct_set_subsumption(self,heros):
         """ Applies correct set subsumption. The most general and accurate rule in the correct set is given the opportunity to subsume the others."""
@@ -135,27 +170,6 @@ class RULE_POP:
                     i -= 1
                 i += 1
 
-    def original_correct_set_subsumption(self,heros):
-        """ NOT USED: Applies original correct set subsumption. The most general and accurate rule in the correct set is given the opportunity to subsume the others."""
-        # Identify the most general and accurate rule in the correct set
-        candidate_subsumer = None
-        for rule_index in self.correct_set:
-            rule = self.pop_set[rule_index]
-            if candidate_subsumer is None or (rule.is_more_general(candidate_subsumer,heros) and rule.accuracy >= candidate_subsumer.accuracy):
-                candidate_subsumer = rule
-        # Check if the target 'subsumer' subsumes any other 
-        if candidate_subsumer != None:
-            i = 0
-            while i < len(self.correct_set):
-                rule_index = self.correct_set[i]
-                if candidate_subsumer.is_more_general(self.pop_set[rule_index],heros):
-                    candidate_subsumer.update_numerosity(self.pop_set[rule_index].numerosity)
-                    self.remove_macro_rule(rule_index)
-                    self.remove_from_match_set(rule_index)
-                    self.remove_from_correct_set(rule_index)
-                    self.remove_from_incorrect_set(rule_index)
-                    i -= 1
-                i += 1
 
     def remove_from_match_set(self,rule_index):
         """ Delete reference to rule in population, contained in self.match_set."""
@@ -166,6 +180,7 @@ class RULE_POP:
             if ref > rule_index:
                 self.match_set[j] -= 1
 
+
     def remove_from_correct_set(self,rule_index):
         """ Delete reference to rule in population, contained in self.correct_set."""
         if rule_index in self.correct_set:
@@ -174,6 +189,7 @@ class RULE_POP:
             ref = self.correct_set[j]
             if ref > rule_index:
                 self.correct_set[j] -= 1
+
 
     def remove_from_incorrect_set(self,rule_index):
         """ Delete reference to rule in population, contained in self.incorrect_set."""
@@ -184,60 +200,112 @@ class RULE_POP:
             if ref > rule_index:
                 self.incorrect_set[j] -= 1
 
-    def genetic_algorithm(self, instance, heros, random):
+
+    def debug_confirm_offspring_match(self, rule, instance,heros,step,parent_list):
+        instance_state = instance[0] #instance feature values
+        outcome_state = instance[1] #instance outcome value
+        if not rule.match(instance_state,heros):
+            print("------------------------------------------------")
+            print("Generated rule failed to match current instance! "+str(step))
+            print("Failed Offspring-----------------")
+            print(rule.condition_indexes)
+            print(rule.condition_values)
+            print(rule.action)
+            print("True instance states-----------------")
+            temp_val_list = []
+            for each in rule.condition_indexes:
+                temp_val_list.append(instance_state[each])
+            print(temp_val_list)
+            print("Parents-----------------")
+            print(parent_list[0].condition_indexes)
+            print(parent_list[0].condition_values)
+            print(parent_list[0].action)
+            print(parent_list[1].condition_indexes)
+            print(parent_list[1].condition_values)
+            print(parent_list[1].action)
+            print(1/0)
+
+
+    def genetic_algorithm(self, instance, heros, random,np):
         instance_state = instance[0] #instance feature values
         outcome_state = instance[1] #instance outcome value
         # PARENT SELECTION *****************************************
         heros.timer.selection_time_start() #parent selection time tracking
         parent_list = self.tournament_selection(heros,random)
         heros.timer.selection_time_stop() #parent selection time tracking
-        #self.show_rules(parent_list,"Parent") #Debug
         # INITIALIZE OFFSPRING *************************************
         heros.timer.mating_time_start() #mating time tracking
         offspring_list = []
         for parent_rule in parent_list:
-            new_rule = RULE()
+            new_rule = RULE(heros)
             new_rule.initialize_by_parent(parent_rule,heros)
             offspring_list.append(new_rule)
         # CROSSOVER OPERATOR **************************************
         if len(offspring_list) > 1: #crossover only applied between two parent rules
             if random.random() < heros.cross_prob:
-                offspring_list[0].uniform_crossover(offspring_list[1],heros,random)
+                offspring_list[0].uniform_crossover(offspring_list[1],heros,random,np)
+        #for offspring in offspring_list: #debug
+        #    self.debug_confirm_offspring_match(offspring, instance,heros,'crossover',parent_list)
         # MUTATION OPERATOR ***************************************
         for offspring in offspring_list:
-            offspring.mutation(instance_state,outcome_state,heros,random)
+            offspring.mutation(instance_state,outcome_state,heros,random,np)
+        #for offspring in offspring_list: #debug
+        #    self.debug_confirm_offspring_match(offspring, instance,heros,'mutation',parent_list)
         heros.timer.mating_time_stop() #mating time tracking
-        # EVALUATE OFFSPRING RULES ************************************
+        #Check for offspring duplication
+        if len(offspring_list) > 1:
+            if offspring_list[0].equals(offspring_list[1]): 
+                offspring_list.pop()
+                if len(offspring_list) > 1:
+                    print("ERROR: More than 2 expected offspring in GA")
+        # CHECK FOR DUPLICATE RULES IN {P} and EVALUATE Non-Duplicate Ruels
         front_updated = False
-        heros.timer.rule_eval_time_start() #rule evaluation time tracking
         for offspring in offspring_list:
-            if heros.outcome_type == 'class':
-                front_updated = offspring.complete_rule_evaluation_class(heros) #only called if brand new rule being added to population
-            elif heros.outcome_type == 'quant':
-                front_updated = offspring.complete_rule_evaluation_quant(heros) #only called if brand new rule being added to population
+            if self.archive_discovered_rules:
+                rule_summary = self.rule_exists(offspring)
+                if rule_summary == None:
+                    heros.timer.rule_eval_time_start() #rule evaluation time tracking
+                    front_changed = self.evaluate_offspring_rule(offspring,outcome_state,heros,random)
+                    if front_changed:
+                        front_updated = True
+                    heros.timer.rule_eval_time_stop() #rule evaluation time tracking
+                else:
+                    offspring.reestablish_rule(rule_summary,heros)
             else:
-                pass
-            if heros.fitness_function == 'pareto' and front_updated:
-                self.global_fitness_update(heros)
+                heros.timer.rule_eval_time_start() #rule evaluation time tracking
+                front_changed = self.evaluate_offspring_rule(offspring,outcome_state,heros,random)
+                if front_changed:
+                    front_updated = True
+                heros.timer.rule_eval_time_stop() #rule evaluation time tracking
+        final_offspring_list = []
+        if self.no_identical_rule_exists(offspring,heros,'pop_set'):
+            final_offspring_list.append(offspring)
+        # Update all rule fitness values if one or both offspring rules updated the pareto front
+        heros.timer.rule_eval_time_start() #rule evaluation time tracking
+        if heros.fitness_function == 'pareto' and front_updated: #new 3/29/25
+            self.global_fitness_update(heros) #Re-evaluates all rule fitness values in rule population
+            #In update fitness of two offspring rules that are not yet in the population
+            for offspring in final_offspring_list:
+                offspring.update_rule_fitness(heros)
         heros.timer.rule_eval_time_stop() #rule evaluation time tracking
-        #self.show_rules(offspring_list,"Offspring") #Debug
         # INSERT RULE(S) IN POPULATON (OPTIONAL GA SUBSUMPTION) ***************************
-        self.insert_offspring(parent_list, offspring_list,heros)
+        self.process_offspring(parent_list,final_offspring_list,heros)
+
 
     def tournament_selection(self,heros,random):
         """ Applies tournament selection to choose and return two parent rules. """
-        parent_options = copy.deepcopy(self.correct_set)
+        parent_options = copy.deepcopy(self.match_set)
         parent_list = []
-        if len(parent_options) == 1: #only one rule in {C}
-            parent_list = [self.pop_set[self.correct_set[0]]] #only one parent returned
-        elif len(parent_options) == 2: #only two rules in {C}
-            parent_list = [self.pop_set[self.correct_set[0]],self.pop_set[self.correct_set[1]]]
+        if len(parent_options) == 1: #only one rule in {M}
+            parent_list = [self.pop_set[self.match_set[0]]] #only one parent returned
+        elif len(parent_options) == 2: #only two rules in {M}
+            parent_list = [self.pop_set[self.match_set[0]],self.pop_set[self.match_set[1]]]
         else:
             while len(parent_list) < 2:
                 tournament_size = max(2,int(len(parent_options)*heros.theta_sel))
                 tournament_set = random.sample(parent_options,tournament_size)
                 best_fitness = 0
-                best_rule_index = self.correct_set[0]
+                best_rule_index = self.match_set[0]
                 for i in tournament_set:
                     if self.pop_set[i].fitness >= best_fitness:
                         best_fitness = self.pop_set[i].fitness
@@ -245,8 +313,9 @@ class RULE_POP:
                 parent_list.append(self.pop_set[best_rule_index])
                 parent_options.remove(best_rule_index)
         return parent_list
-    
-    def insert_offspring(self,parent_list,offspring_list,heros):
+
+
+    def process_offspring(self,parent_list,offspring_list,heros):
         """ Activates GA subsumption (if used), and then inserts offpring rules into population as needed. """
         if heros.subsumption == 'ga' or heros.subsumption == 'both': #apply subsumption and insert rule(s) as needed
             heros.timer.subsumption_time_start()
@@ -255,7 +324,8 @@ class RULE_POP:
             heros.timer.subsumption_time_stop()
         else: #insert rule(s) as needed following rule equality check
             for offspring in offspring_list:
-                self.add_offspring_rule_to_pop(offspring,heros) 
+                self.add_rule_to_pop(offspring)
+
 
     def ga_subsumption(self,offspring,parent_list,heros):
         """ Applies GA subsumption. """
@@ -267,30 +337,96 @@ class RULE_POP:
                     self.micro_pop_count += 1
                     parent.update_numerosity(1)
         if not offspring_subsumed:
-            self.add_offspring_rule_to_pop(offspring,heros)
+            self.add_rule_to_pop(offspring)
 
-    def add_offspring_rule_to_pop(self,offspring,heros):
-        """ Adds a new rule to the population either as a new rule entry in the population or increasing the numerosity of a rule that already exists. """
+    """
+    def add_covered_rule_to_pop(self,new_rule,outcome_state,heros,random): #old now
+        #Adds a new rule to the population via covering: either as a new rule entry in the population or increasing the numerosity of a rule that already exists. 
+        heros.timer.covering_time_stop() #covering time tracking
+        heros.timer.rule_eval_time_start() #rule evaluation time tracking
+        if heros.outcome_type == 'class':
+            front_updated = new_rule.complete_rule_evaluation_class(heros,random,outcome_state) #only called if brand new rule being added to population
+        elif heros.outcome_type == 'quant':
+            front_updated = new_rule.complete_rule_evaluation_quant(heros) #only called if brand new rule being added to population
+        else:
+            pass
+        if heros.fitness_function == 'pareto' and front_updated: #new 3/29/25
+            self.global_fitness_update(heros)
+        heros.timer.rule_eval_time_stop() #rule evaluation time tracking
+        heros.timer.covering_time_start() #covering time tracking
+    """
+
+    def evaluate_covered_rule(self,new_rule,outcome_state,heros,random):
+        heros.timer.covering_time_stop() #covering time tracking
+        heros.timer.rule_eval_time_start() #rule evaluation time tracking
+        if heros.outcome_type == 'class':
+            front_updated = new_rule.complete_rule_evaluation_class(heros,random,outcome_state) #only called if brand new rule being added to population
+        elif heros.outcome_type == 'quant':
+            front_updated = new_rule.complete_rule_evaluation_quant(heros) #only called if brand new rule being added to population
+        else:
+            pass
+        if heros.fitness_function == 'pareto' and front_updated: 
+            self.global_fitness_update(heros)
+        heros.timer.rule_eval_time_stop() #rule evaluation time tracking
+        heros.timer.covering_time_start() #covering time tracking
+
+
+    def evaluate_offspring_rule(self,new_rule,outcome_state,heros,random):
+        heros.timer.rule_eval_time_start() #rule evaluation time tracking
+        front_updated = False
+        if heros.outcome_type == 'class':
+            front_updated = new_rule.complete_rule_evaluation_class(heros,random,outcome_state) #only called if brand new rule being added to population
+        elif heros.outcome_type == 'quant':
+            front_updated = new_rule.complete_rule_evaluation_quant(heros) #only called if brand new rule being added to population
+        else:
+            print("Error: Outcome type not found.")
+        heros.timer.rule_eval_time_stop() #rule evaluation time tracking
+        return front_updated
+
+        
+    def no_identical_rule_exists(self,new_rule,heros,where):
         identical_rule = None
         heros.timer.rule_equality_time_start() #rule equality time tracking
-        identical_rule = self.find_identical_rule(offspring)
+        if where == 'pop_set':
+            identical_rule = self.search_pop_for_identical_rule(new_rule)
+        elif where == 'match_set': 
+            identical_rule = self.search_match_set_for_identical_rule(new_rule)
+        else:
+            print('Error: Location for identical rule search not found.')
         heros.timer.rule_equality_time_stop() #rule equality time tracking
         if identical_rule != None: #Identical rule found
             identical_rule.update_numerosity(1) #virtual copy of new rule added
-        else: #new/original rule evaluated then added to population
-            #print("Add Offspring Rule")
-            #offspring.show_rule() #Debug
-            offspring.assign_ID(self.ID_counter)
-            self.pop_set.append(offspring)
-            self.ID_counter += 1 #every time a new rule gets added to the pop (that isn't in the current pop) it is assigned a new unique ID
-        self.micro_pop_count += 1
+            self.micro_pop_count += 1
+            return False
+        else:
+            return True
 
-    def find_identical_rule(self,new_rule):
+
+    def search_pop_for_identical_rule(self,new_rule):
         """ Identifies if an identical rule already exists in the population. """
         for rule in self.pop_set:
             if new_rule.equals(rule): 
                 return rule
         return None
+
+
+    def search_match_set_for_identical_rule(self,new_rule):
+        """ Identifies if an identical rule already exists in the current match set. """
+        for each in self.match_set:
+            if new_rule.equals(self.pop_set[each]):
+                return self.pop_set[each]
+        return None
+
+
+    def add_rule_to_pop(self,new_rule):
+        """ Add new and novel rule to population, updating key relevant parameters. """
+        new_rule.assign_ID(self.ID_counter)
+        self.pop_set.append(new_rule)
+        self.ID_counter += 1 #every time a new rule gets added to the pop (that isn't in the current pop) it is assigned a new unique ID
+        self.micro_pop_count += 1
+        if self.archive_discovered_rules:
+            self.add_new_explored_rules(new_rule)
+
 
     def make_correct_set(self,outcome_state,heros):
         """ Makes a correct set {C}"""
@@ -309,6 +445,7 @@ class RULE_POP:
             else:
                 pass
 
+
     def update_rule_parameters(self,heros):
         """ Updates all relevant rule parameters for rules in the current match set. """
         match_set_numerosity_sum = 0
@@ -316,29 +453,22 @@ class RULE_POP:
             match_set_numerosity_sum += self.pop_set[rule_index].numerosity
         for rule_index in self.match_set:
             self.pop_set[rule_index].update_ave_match_set_size(match_set_numerosity_sum,heros)
-        """
-        for rule_index in self.match_set:
-            match_set_numerosity_sum += 1
-        for rule_index in self.match_set:
-            self.pop_set[rule_index].update_ave_match_set_size(match_set_numerosity_sum,heros)
-        """
+
 
     def deletion(self,heros,random):
         """ Applies probabalistic deletion to the rule population to maintain maximum population size."""
         heros.timer.deletion_time_start()
         while self.micro_pop_count > heros.pop_size:
-            #print('Deleting, MicroPopCount is '+str(self.micro_pop_count))
             self.delete_rule(random)
         heros.timer.deletion_time_stop()
     
+
     def delete_rule(self,random):
         """ Probabilistically identifies a rule to delete with roulette wheel selection, and deletes it at the micro-rule level."""
-        #mean_fitness = self.get_pop_fitness_sum() / float(self.micro_pop_count)
-        mean_fitness = None
         vote_sum = 0.0
         vote_list = []
         for rule in self.pop_set:
-            vote = rule.get_deletion_vote(mean_fitness)
+            vote = rule.get_deletion_vote()
             vote_sum += vote
             vote_list.append(vote)
         i = 0
@@ -346,9 +476,8 @@ class RULE_POP:
             rule.deletion_prob = vote_list[i] / vote_sum 
             i += 1
         choicePoint = vote_sum  * random.random()  # Determine the choice point
-        #print('choicepoint: '+str(choicePoint))
         new_sum = 0.0
-        for i in range(len(vote_list)): #RYAN- implement more efficiently
+        for i in range(len(vote_list)): 
             rule = self.pop_set[i]
             new_sum = new_sum + vote_list[i]
             if new_sum > choicePoint:  # Select classifier for deletion
@@ -359,6 +488,7 @@ class RULE_POP:
                     self.remove_macro_rule(i)
                 return
 
+
     def get_pop_fitness_sum(self):
         """ Returns the sum of the fitnesses of all rules in the population. """
         fitness_sum = 0.0
@@ -366,15 +496,18 @@ class RULE_POP:
             fitness_sum += rule.fitness *rule.numerosity
         return fitness_sum 
     
+
     def remove_macro_rule(self,rule_index):
         """ Removes the given (macro-) rule from the population. """
         self.pop_set.pop(rule_index)
     
+
     def clear_sets(self):
         """ Clears out references in the match and correct sets for the next learning iteration. """
         self.match_set = []
         self.correct_set = []
         self.incorrect_set = []
+
 
     def order_rule_conditions(self):
         """ Order the rule conditions by increasing feature index; keeping the ordering consistent between condition_indexes and condition_values."""
@@ -391,13 +524,14 @@ class RULE_POP:
             rule.condition_indexes = list(sorted_list1)
             rule.condition_values = list(sorted_list2)
 
-    def load_rule_population(self, pop_df, heros):
+
+    def load_rule_population(self, pop_df, heros, random):
         """ Load a HEROS rule population data frame, then instantiates and evaluates all rules.
             Each specified rule must have a condition and action at minimum. """
         rule_count = pop_df.shape[0] #rows in dataframe
         for rule_row in range(rule_count): #for each rule in the dataframe
             # Initialize the rule
-            loaded_rule = RULE()
+            loaded_rule = RULE(heros)
             # Set the rule condition
             loaded_rule.condition_indexes = ast.literal_eval(pop_df.loc[rule_row,'Condition Indexes'])
             loaded_rule.condition_values = ast.literal_eval(pop_df.loc[rule_row,'Condition Values'])
@@ -422,16 +556,17 @@ class RULE_POP:
             loaded_rule.birth_iteration = 0
             # Evaluate loaded rule
             if heros.outcome_type == 'class':
-                front_updated = loaded_rule.complete_rule_evaluation_class(heros) #only called if brand new rule being added to population
+                front_updated = loaded_rule.complete_rule_evaluation_class(heros,random,None) #only called if brand new rule being added to population
             elif heros.outcome_type == 'quant':
                 front_updated = loaded_rule.complete_rule_evaluation_quant(heros) #only called if brand new rule being added to population
         # Update all rule fitness values (if pareto front rule fitness used)
-        if heros.fitness_function == 'pareto':
+        if heros.fitness_function == 'pareto': #new 3/29/25
             self.global_fitness_update(heros)
         # Add rule to the population
         self.pop_set.append(loaded_rule)
         self.ID_counter += 1 #every time a new rule gets added to the pop (that isn't in the current pop) it is assigned a new unique ID
         self.micro_pop_count += 1
+
 
     def export_rule_population(self):
         """ Prepares and exports a dataframe capturing the rule population."""
@@ -477,10 +612,12 @@ class RULE_POP:
         pop_df = pd.DataFrame(pop_list,columns=column_names)
         return pop_df
 
+
     def show_rules(self,rule_list,name):
         """ Print condition of rules for debugging."""
         for target_rule in rule_list:
             target_rule.show_rule_short(name)
+
 
     def multiplex6_delete_test(self):
         temp_pop = []
@@ -491,6 +628,7 @@ class RULE_POP:
                     if 0 in rule.condition_indexes and 1 in rule.condition_indexes:
                         temp_pop.append(rule)
         self.pop_set = temp_pop
+
 
     def plot_rule_pop_heatmap(self, feature_names, heros, weighting='useful_accuracy', specified_filter=None, display_micro=False, show=True, save=False, output_path=None):
         """ Plots a clustered heatmap of the rule population based on what features are specified vs. generalized in each rule.
@@ -574,6 +712,7 @@ class RULE_POP:
             plt.savefig(output_path+'/clustered_rule_pop_heatmap.png', bbox_inches="tight")
         if show:
             plt.show()
+
 
     def plot_rule_pop_network(self, feature_names, weighting='useful_accuracy', display_micro=False, node_size=1000, edge_size=10, show=True, save=False, output_path=None):
         """ Plots a network visualization of the rule population with feature specificity across rules as node size and feature co-specificity 

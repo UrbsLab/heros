@@ -47,7 +47,8 @@ def main(argv):
     phase1_checkpoints = ['500', '1000','10000','100000','200000','post_compact']
     phase2_checkpoints = ['5', '10', '50', '100','200']
     gametes_datasets = ['A_uni_4add', 'B_univariate','C_2way_epistasis','D_2way_epi_2het','E_uni_4het','F_3way_epistasis']
-    mux_datasets = ['A_multiplexer_6_bit_500_inst','B_multiplexer_11_bit_5000_inst','C_multiplexer_20_bit_10000_inst','D_multiplexer_37_bit_10000_inst','E_multiplexer_70_bit_20000_inst','F_multiplexer_135_bit_20000_inst']
+    mux_datasets = ['A_multiplexer_6_bit_500_inst','B_multiplexer_11_bit_5000_inst','C_multiplexer_20_bit_10000_inst','D_multiplexer_37_bit_10000_inst','E_multiplexer_70_bit_20000_inst']
+    #mux_datasets = ['A_multiplexer_6_bit_500_inst','B_multiplexer_11_bit_5000_inst','C_multiplexer_20_bit_10000_inst','D_multiplexer_37_bit_10000_inst','E_multiplexer_70_bit_20000_inst','F_multiplexer_135_bit_20000_inst']
     algorithms = ['ExSTraCS','HEROS']
     #'HEROS_multiplexer_cv', 'HEROS_multiplexer_cv_acc_init', 'HEROS_multiplexer_cv_acc_init_nu10', 'HEROS_gametes_cv', 'HEROS_gametes_cv_acc_init'
     #'ExSTraCS_multiplexer_cv', 'ExSTraCS_multiplexer_cv_nu10', 'ExSTraCS_gametes_cv'
@@ -585,7 +586,8 @@ def run_analysis(basename, exp_names,base_path,significance_metrics,paths,p_val,
 
 def run_analysis_mux(basename, exp_names,base_path,significance_metrics,paths,p_val,sig_digits_dict,specdataname):
     #header = ['Dataset','Scenario','Test Acc.', 'Test Cover', 'Rule Count', 'Run Time','Ideal Solution']
-    ideal_counts = {'A_multiplexer_6_bit_500_inst': 8,'B_multiplexer_11_bit_5000_inst': 16,'C_multiplexer_20_bit_10000_inst':32,'D_multiplexer_37_bit_10000_inst':64,'E_multiplexer_70_bit_20000_inst':128,'F_multiplexer_135_bit_20000_inst':256} #ideal number of rules for each MUX solution
+    ideal_counts = {'A_multiplexer_6_bit_500_inst': 8,'B_multiplexer_11_bit_5000_inst': 16,'C_multiplexer_20_bit_10000_inst':32,'D_multiplexer_37_bit_10000_inst':64,'E_multiplexer_70_bit_20000_inst':128} #ideal number of rules for each MUX solution
+    #ideal_counts = {'A_multiplexer_6_bit_500_inst': 8,'B_multiplexer_11_bit_5000_inst': 16,'C_multiplexer_20_bit_10000_inst':32,'D_multiplexer_37_bit_10000_inst':64,'E_multiplexer_70_bit_20000_inst':128,'F_multiplexer_135_bit_20000_inst':256} #ideal number of rules for each MUX solution
     #Initialize results list
     table_list = []
     #initialize base list

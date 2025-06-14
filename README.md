@@ -218,7 +218,6 @@ Please email Ryan.Urbanowicz@cshs.org for any inquiries related to HEROS.
 
 Commercial entities or for commercial use of the Software: please contact CSTechTransfer@cshs.org for licensing opportunities.
 
-
 ***
 <a id="item-ten"></a>
 ## Acknowledgements

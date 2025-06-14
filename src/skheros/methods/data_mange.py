@@ -58,9 +58,6 @@ class DATA_MANAGE:
         self.instance_state = self.train_data[0][self.instance_index] #gives the list of feature values for the current instance (i.e. instance 'state')
         self.outcome_state = self.train_data[1][self.instance_index] #gives the outcome value for the current instance (i.e. outcome 'state)
         self.instance_ids = self.train_data[2] #stores all instance ids 
-        if heros.verbose:
-            self.report_data(heros) # Debug
-
         #EXPERT KNOWLEGE HANDLING *******************************************************
         self.ek_index_rank = None
         self.ek_weights = None
@@ -73,9 +70,13 @@ class DATA_MANAGE:
             self.ek_index_rank =sorted(range(len(ek)), key=lambda x: ek[x], reverse=True)
             # Generate EK weights *************************************************
             self.transform_ek_to_weights(ek)
+        if heros.verbose:
+            self.report_data(heros) # Debug
+
 
     def clear_data_from_memory(self):
         self.train_data = None
+
 
     def transform_ek_to_weights(self,ek):
         """ Transform expert knowledge scores into rule specification probability weights"""
@@ -93,6 +94,7 @@ class DATA_MANAGE:
         ek_sum = sum(self.ek_weights)
         self.ek_weights = [x / ek_sum for x in self.ek_weights]
 
+
     def update_class_attributes(self, y):
         """ Update classification outcome attributes for algorithm reference """
         for i in y:
@@ -103,11 +105,10 @@ class DATA_MANAGE:
             else:
                 self.class_counts[i] += 1
                 self.class_weights[i] += 1
-
         self.majority_class = max(self.class_counts, key=self.class_counts.get)
-
         for key in self.class_weights:
             self.class_weights[key] = 1 - (self.class_weights[key] / self.num_instances) # Classes with lower instance counts have higher weights
+
 
     def update_feature_attributes(self, X):
         """ """
@@ -126,6 +127,7 @@ class DATA_MANAGE:
 
         self.avg_feat_states = unique_state_count / self.num_feat
 
+
     def set_rule_specificity_limit(self, heros):
         """Determine and set the rule specificity limit."""
         if heros.rsl == 0:
@@ -135,6 +137,7 @@ class DATA_MANAGE:
                 limit += 1
                 unique_combinations = math.pow(self.avg_feat_states, limit)
             heros.rsl = min(limit, self.num_feat)
+
 
     def format_data(self, X, y, row_id):
         """Format training data: convert to np array, shuffle instances, and set NaNs as None."""
@@ -153,9 +156,11 @@ class DATA_MANAGE:
             features[i] = [None if np.isnan(x) else x for x in features[i]]
         return [features, labels, id]
 
+
     def get_instance(self):
         return (self.instance_state,self.outcome_state)
         
+
     def next_instance(self):
         if self.instance_index < self.num_instances-1:
             self.instance_index += 1
@@ -164,10 +169,12 @@ class DATA_MANAGE:
         else:
             self.reset_instance()
 
+
     def reset_instance(self):
         self.instance_index = 0
         self.instance_state = self.train_data[0][self.instance_index]
         self.outcome_state = self.train_data[1][self.instance_index]
+
 
     def report_data(self, heros):
         if heros.outcome_type == 'class':
@@ -186,6 +193,7 @@ class DATA_MANAGE:
             print("Categorical Feature Values: "+str(self.feat_c_values))
             print("Average States: "+str(self.avg_feat_states))
             print("Rule Specificity Limit: "+str(heros.rsl))
+            print("Expert Knowledge Weights Used: "+str(heros.use_ek))
             print("--------------------------------------------------------------------")
         elif heros.outcome_type == 'quant':
             print("Data Manage Summary: ------------------------------------------------")
@@ -201,6 +209,7 @@ class DATA_MANAGE:
             print("Categorical Feature Values: "+str(self.feat_c_values))
             print("Average States: "+str(self.avg_feat_states))
             print("Rule Specificity Limit: "+str(heros.rsl))
+            print("Expert Knowledge Weights Used: "+str(heros.use_ek))
             print("Outcome Ranked: "+str(self.outcome_ranked)) 
             print("--------------------------------------------------------------------")
         else:
