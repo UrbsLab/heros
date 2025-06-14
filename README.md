@@ -1,13 +1,13 @@
-# scikit-heros
+# HEROS
 
 **Table of contents:**
  - [Introduction](#item-one)
  - [Installation](#item-two)
  - [Input Data](#item-three)
- - [Using scikit-FIBERS](#item-four)
+ - [Using HEROS](#item-four)
  - [Hyperparameters](#item-five)
  - [Algorithm History](#item-six)
- - [Citing scikit-FIBERS](#item-seven)
+ - [Citing HEROS](#item-seven)
  - [Futher Documentation](#item-eight)
  - [Contact](#item-nine)
  - [Acknowledgements](#item-ten)
@@ -21,26 +21,26 @@ To date we have only validated HEROS functionality on binary classification prob
 
 A schematic detailing how the HEROS algorithm works is given below:
 
-![alttext](https://github.com/UrbsLab/scikit-heros/blob/main/images/HEROS_1.0_Square_Schematic_white_back.png?raw=true)
+![alttext](https://github.com/UrbsLab/heros/blob/main/images/HEROS_1.0_Square_Schematic_white_back.png?raw=true)
 
 
 ***
 <a id="item-two"></a>
 ## Installation
-scikit-heros can currently only be installed by cloning this repository. Make sure that you have also installed all prerequisite packages included in requirements.txt prior to running (Note: this list may need updating - so if you get errors, check first that you have necessary packages installed)). 
+HEROS can currently only be installed by cloning this repository. Make sure that you have also installed all prerequisite packages included in requirements.txt prior to running (Note: this list may need updating - so if you get errors, check first that you have necessary packages installed). 
 
 
 ### Clone Respository
 ```
-git clone --single-branch https://github.com/UrbsLab/scikit-heros
-cd scikit-heros
+git clone --single-branch https://github.com/UrbsLab/heros
+cd heros
 pip install -r requirements.txt
 ```
 
 ***
 <a id="item-three"></a>
 ## Input Data
-scikit-heros's fit() method takes 'X', an array-like {n_samples, n_features} object of training instances, as well as 'y', an array-like {n_samples} object of training labels, like other standard scikit-learn classification algorithms.   
+HEROS's fit() method takes 'X', an array-like {n_samples, n_features} object of training instances, as well as 'y', an array-like {n_samples} object of training labels, like other standard scikit-learn classification algorithms.   
 
 ### Specifying Feature Types (Categorical vs. Quantiative)
 The fit() method can (and should) also be passed 'cat_feat_indexes', an array-like max({n_features}) object of feature indexes in 'X' that are to be treated as categorical variables (where all others will be treated as quantitative by default).
@@ -56,11 +56,11 @@ Lastly, the fit() method can optionally be passed 'pop_df', a dataframe object, 
 
 ***
 <a id="item-four"></a>
-## Using scikit-heros
+## Using HEROS
 
 ### Demonstration Notebook
-A Jupyter Notebooks has been included to demonstrate how scikit-heros (and it's functions) can be applied to train, evaluate, and apply models.
-* [DEMO Notebook](https://github.com/UrbsLab/scikit-heros/blob/main/HEROS_Demo_Notebook.ipynb)
+A Jupyter Notebooks has been included to demonstrate how HEROS (and it's functions) can be applied to train, evaluate, and apply models.
+* [DEMO Notebook](https://github.com/UrbsLab/heros/blob/main/HEROS_Demo_Notebook.ipynb)
 
 This notebook is currently set up to run by downloading this repository and running the included notebook. 
 
@@ -103,7 +103,7 @@ To get predicitions with the second option we would make this one change:
 predictions = heros.predict(X_test)
 ```
 
-An example of the third option is given in the [DEMO Notebook](https://github.com/UrbsLab/scikit-heros/blob/main/HEROS_Demo_Notebook.ipynb).
+An example of the third option is given in the [DEMO Notebook](https://github.com/UrbsLab/heros/blob/main/HEROS_Demo_Notebook.ipynb).
 
 HEROS can alternatively return prediction probabilities using the following: 
 ```
@@ -122,7 +122,7 @@ NOTE: The documentation below is currently under construction!!!!!!!!!!!!!
 ***
 <a id="item-five"></a>
 ## Hyperparameters
-While scikit-heros has a number of available hyperparameters only a few can have a significant impact on algorithm performance (see first table below). It's important to set *outcome_type* to the appropriate data outcome, where 'class' is used for binary or multi-class outcomes, and 'quant' is used for quantiative outcomes (i.e. regression). In general, setting *iterations* and *pop_size* to larger integers is expected to improve training performance, but will require longer Phase I run times, and the same is true for *model_iterations* and *model_pop_size* with respect to Phase II. The optional parameter *use_ek* indicates if Phase I will utilize expert knowledge covering (as opposed to random covering), but this also requires that a list of expert knowledge weights are passed to the fit() function for training. 
+While HEROS has a number of available hyperparameters only a few can have a significant impact on algorithm performance (see first table below). It's important to set *outcome_type* to the appropriate data outcome, where 'class' is used for binary or multi-class outcomes, and 'quant' is used for quantiative outcomes (i.e. regression). In general, setting *iterations* and *pop_size* to larger integers is expected to improve training performance, but will require longer Phase I run times, and the same is true for *model_iterations* and *model_pop_size* with respect to Phase II. The optional parameter *use_ek* indicates if Phase I will utilize expert knowledge covering (as opposed to random covering), but this also requires that a list of expert knowledge weights are passed to the fit() function for training. 
 
 | Hyperparameter | Description | Type/Options | Default Value |
 | -------------- | ----------- | ------------- | ------------- |
@@ -194,10 +194,10 @@ Most recently, in 2024, we released [Survival-LCS](https://github.com/UrbsLab/su
 
 ***
 <a id="item-seven"></a>
-## Citing scikit-heros
-The manuscript for scikit-heros has been submitted for review.
+## Citing HEROS
+The manuscript for HEROS has been submitted for review.
 
-If you use scikit-heros in a scientific publication, please consider citing the following paper (once available):
+If you use HEROS in a scientific publication, please cite the following paper (once available):
 
 Gabe Lipschutz-Villa, Harsh Bandhey, Malek Kamoun, Ryan J. Urbanowicz (Submitted). [Rule-based Machine Learning: Separating Rule and Rule-Set Pareto-Optimization for Interpretable Noise-Agnostic Modeling](Not_yet_available)
 
@@ -209,12 +209,14 @@ Not yet available
 ***
 <a id="item-eight"></a>
 ## Futher Documentation:
-Further code documentation regarding the scikit-heros API is under development
+Further code documentation regarding the HEROS API is under development
 
 ***
 <a id="item-nine"></a>
 ## Contact
-Please email Ryan.Urbanowicz@cshs.org for any inquiries related to scikit-heros.
+Please email Ryan.Urbanowicz@cshs.org for any inquiries related to HEROS.
+
+Commercial entities or for commercial use of the Software: please contact CSTechTransfer@cshs.org for licensing opportunities.
 
 
 ***
