@@ -2,15 +2,21 @@ import copy
 
 class COMPACT:
     def __init__(self,heros):
-
         self.original_pop_size = len(heros.rule_population.pop_set)
         if heros.verbose:
             print("--------------------------------------------------------------------")
             print("Original Population Size: "+str(self.original_pop_size))
+        self.original_pop_copy = copy.deepcopy(heros.rule_population.pop_set)
+
+
+    def clear_pop_copy(self):
+        self.original_pop_copy = None
+
 
     def basic_rule_cleaning(self,heros):
         """ Removes obviously bad rules from the population based on having a useful accuracy <= 0. """
         index = 0
+        sufficient_rule_pop_remain = True
         for i in range(len(heros.rule_population.pop_set)):
             rule = heros.rule_population.pop_set[index]
             if rule.useful_accuracy <= 0:
@@ -20,9 +26,16 @@ class COMPACT:
                 index += 1
         if heros.verbose:
             print("Post-Cleaning Population Size: "+str(len(heros.rule_population.pop_set)))
+        if len(heros.rule_population.pop_set) < 2: #Phase 1 failed to find quality rules, so there is no need to do phase 2.
+            sufficient_rule_pop_remain = False
+            heros.rule_population.pop_set = self.original_pop_copy # restore original rule popululation (which will be used by default as the final model)
+            print("Phase 2 skipped due to insufficient number of quality rules discovered following rule cleaning (i.e. < 2)")
+        return sufficient_rule_pop_remain
+
 
     def custom_sort_key(self, obj):
         return (len(obj.condition_indexes),-obj.useful_accuracy)
+
 
     def subsumption_compation(self,heros):
         """ A simple subsumption-based rule compaction strategy. Sorts rule population by increasing specificity and decreasing useful accuracy.
@@ -81,10 +94,17 @@ class COMPACT:
                         other_rules_remain = False
             master_index = current_level_index_end + 1 #set to the start of the next specificity level
         if heros.verbose:
-            print("Post-Subsumption Compaction Population Size: "+str(len(heros.rule_population.pop_set)))
             subsumption_history = dict(sorted(subsumption_history.items()))
             for key in subsumption_history:
                 print(str(subsumption_history[key])+ ' rules subsumed with a specificity of '+str(key))
+            print("Post-Subsumption Compaction Population Size: "+str(len(heros.rule_population.pop_set)))
+        sufficient_rule_pop_remain = True        
+        if len(heros.rule_population.pop_set) < 2: #Phase 1 failed to find quality rules, so there is no need to do phase 2.
+            sufficient_rule_pop_remain = False
+            heros.rule_population.pop_set = self.original_pop_copy # restore original rule popululation (which will be used by default as the final model)
+            print("Phase 2 skipped due to insufficient number of quality rules discovered following rule compaction (i.e. < 2)")
+        return sufficient_rule_pop_remain
+
 
     def subsumes(self,current_level_rule,next_level_rule,heros):
         """ Determines if 'self' rule meets conditions for subsuming the 'other_rule'. A rule is a subsumer if:
@@ -102,6 +122,7 @@ class COMPACT:
         else:
             return True
         
+
     def is_more_general_compaction(self,current_level_rule,next_level_rule,heros):
         """ Checks the conditions determining if current_level_rule is more general than next_level_rule as defined by being a candidate subsumer.
         (1) next_level_rule specifies at least the same subset of features as current_level_rule

@@ -9,7 +9,7 @@ class FEAT_TRACK:
     def __init__(self,heros):
         self.ft_scores = np.array([[0.0]*heros.env.num_feat for i in range(heros.env.num_instances)]) #feature tracking score array
 
-    #ideas: divide rule scores by the number of features specified in rule (discribute credit for the accuracy)
+
     def get_correct_set_scores(self,heros):
         """ Generate a feature score list based on the correct set of the current instance"""
         correct_score_list = np.array([0.0]*heros.env.num_feat)
@@ -21,6 +21,7 @@ class FEAT_TRACK:
                 correct_score_list[feat] += heros.rule_population.pop_set[rule_index].useful_accuracy
         return correct_score_list, correct_rule_count
 
+
     def get_incorrect_set_scores(self,heros):
         """ Generate a feature score list based on the incorrect set of the current instance"""
         incorrect_score_list = np.array([0.0]*heros.env.num_feat)
@@ -31,6 +32,7 @@ class FEAT_TRACK:
             for feat in heros.rule_population.pop_set[rule_index].condition_indexes:
                 incorrect_score_list[feat] += heros.rule_population.pop_set[rule_index].useful_accuracy
         return incorrect_score_list, incorrect_rule_count
+
 
     def update_ft_scores_new(self,outcome_prediction,action,heros):
         """ Updates feature tracking scores for current instance. """
@@ -53,6 +55,7 @@ class FEAT_TRACK:
                     update = 0
                 self.ft_scores[heros.env.instance_index][feat] += update
 
+
     def update_ft_scores(self,outcome_prediction,action,heros):
         """ Updates feature tracking scores for current instance. """
         # Make correct set score lists
@@ -61,6 +64,7 @@ class FEAT_TRACK:
         for feat in range(heros.env.num_feat):
             self.ft_scores[heros.env.instance_index][feat] += correct_score_list[feat]
 
+
     def update_ft_scores_wh(self,outcome_prediction,action,heros):
         """ Updates feature tracking scores for current instance. """
         # Make correct set score lists
@@ -68,6 +72,7 @@ class FEAT_TRACK:
         # Update feature tracking scores for this instance
         for feat in range(heros.env.num_feat):
             self.ft_scores[heros.env.instance_index][feat] += heros.beta * (correct_score_list[feat] - self.ft_scores[heros.env.instance_index][feat])
+
 
     def batch_calculate_ft_scores(self,heros):
         """ Calculates feature tracking scores of all instances in the training dataset based on a fixed final rule population. """
@@ -86,12 +91,14 @@ class FEAT_TRACK:
                 self.ft_scores[instance_index][feat] += correct_score_list[feat]
             heros.rule_population.clear_sets()
 
+
     def export_ft_scores(self,heros,feature_names):
         """ Prepares and exports a dataframe capturing the feature tracking scores."""
         #columns = list(range(heros.env.num_feat))
         ft_df = pd.DataFrame(self.ft_scores, columns=feature_names)
         ft_df['row_id'] = heros.env.instance_ids
         return ft_df 
+    
     
     def plot_clustered_ft_heatmap(self, ft_df, feature_names, show=True, save=False, output_path=None):
         """ Generates a clustered heatmap of feature tracking scores. Scores values are scaled within rows between 0 and 1 for 

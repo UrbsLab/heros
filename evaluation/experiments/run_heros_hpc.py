@@ -46,7 +46,7 @@ def main(argv):
     parser.add_argument('--ff', dest='fitness_function', help='fitness function', type=str, default='pareto')
     parser.add_argument('--s', dest='subsumption', help='subsumption strategy', type=str, default='both')
     parser.add_argument('--rsl', dest='rsl', help='rule specificity limit', type=int, default=0)   
-    parser.add_argument('--ft', dest='feat_track', help='feature tracking mechanism', type=str, default='end')
+    parser.add_argument('--ft', dest='feat_track', help='feature tracking mechanism', type=str, default='None')
     parser.add_argument('--ng', dest='new_gen', help='proportion of max model population size', type=float, default=1.0)
     parser.add_argument('--mg', dest='merge_prob', help='probability of applying merge in model discovery', type=float, default=0.1)
     parser.add_argument('--pt', dest='rule_pop_init', help='type of population initialization (load, dt, or None)', type=str, default='None')

@@ -187,6 +187,83 @@ def main(argv):
             plt.ylabel("Rule Count")
             plt.savefig(data_level_path+'/boxplot_rule_count_all.png', bbox_inches="tight")
 
+    # Identify how many ideal MUX rules were identified at end of phase 1 population (pre and post compaction)
+    if 'multiplexer' in outputPath: #only do if we are evaluating MUX problem
+        mux_output_folders = {'A_multiplexer_6_bit_500_inst':6,'B_multiplexer_11_bit_5000_inst':11,'C_multiplexer_20_bit_10000_inst':20,'D_multiplexer_37_bit_10000_inst':37,'E_multiplexer_70_bit_20000_inst':70}
+        header = ['Dataset','Seed','CV','Ideal Count','Ideal Proportion']
+        resultsList = []
+        for entry in os.listdir(outputPath): #for each subfolder within target dataset folder
+            if os.path.isdir(os.path.join(outputPath,entry)):
+                data_level_path = os.path.join(outputPath,entry)
+                for i in range(0,random_seeds):
+                    seed_level_path = os.path.join(data_level_path,'seed_'+str(i))
+                    dataframes = []
+                    for j in range(1,cv_partitions+1):
+                        cv_level_path = os.path.join(seed_level_path,'cv_'+str(j))
+                        file_path = cv_level_path+'/rule_pop.csv' #load rule population file
+                        #Load Eval File
+                        df = pd.read_csv(file_path)
+                        # Get ideal rule set list
+                        ideal_rules = gen_ideal_rules(mux_output_folders[entry])
+                        ideal_rule_count = len(ideal_rules)
+                        found_ideal_rules = 0
+                        #Check Rule Pop for number and proportion of ideal rules
+                        for index, row in df.iterrows():
+                            c_index = row['Condition Indexes']
+                            c_values = row['Condition Values']
+                            outcome = row['Action']
+                            combined_rule = [c_index,c_values,int(outcome)]
+                            if combined_rule in ideal_rules:
+                                found_ideal_rules += 1
+                        found_ideal_proportion = found_ideal_rules / float(ideal_rule_count)
+                        tempList = [entry, i, j, found_ideal_rules,found_ideal_proportion]
+                        resultsList.append(tempList)
+        df_results = pd.DataFrame(resultsList,columns=header)
+        df_results.to_csv(outputPath+'/phase1_mux_ideal_success.csv', index=False) 
+        #Make quick average summary file
+        header = ['Dataset','Ideal Count','Ideal Proportion']
+        resultsList = []
+        for entry in os.listdir(outputPath): #for each subfolder within target dataset folder
+            if entry != 'phase1_mux_ideal_success.csv' and entry != 'phase1_mux_ideal_success_average.csv':
+                average_count = df_results.loc[df_results['Dataset'] == entry, 'Ideal Count'].mean()
+                average_proportion = df_results.loc[df_results['Dataset'] == entry, 'Ideal Proportion'].mean()
+                resultsList.append([entry,average_count,average_proportion])
+        df_results = pd.DataFrame(resultsList,columns=header)
+        df_results.to_csv(outputPath+'/phase1_mux_ideal_success_average.csv', index=False) 
+
+
+def gen_ideal_rules(mux):
+    address_bits = {6:2, 11:3, 20:4, 37:5, 70:6, 135:7}
+    ideal_list = []
+    register_bits = mux - address_bits[mux]
+    print(register_bits)
+    for i in range(0,register_bits): #each unique index list
+        #ZERO OUTCOME
+        index_list = []
+        value_list = []
+        #Build index list
+        for j in range(0,address_bits[mux]):
+            index_list.append(j)
+        index_list.append(i+address_bits[mux])
+        #Build value list
+        value_list = (int_to_binary_list(i,address_bits[mux]))
+        value_list.append(0)
+        ideal_list.append([str(index_list),str(value_list),0])
+        #ONE OUTCOME
+        value_list = []
+        #Build value list
+        value_list = (int_to_binary_list(i,address_bits[mux]))
+        value_list.append(1)
+        ideal_list.append([str(index_list),str(value_list),1])
+
+    return ideal_list
+
+
+def int_to_binary_list(num, n):
+    """Convert an integer to an n-digit binary list of 0s and 1s."""
+    return [int(bit) for bit in format(num, f'0{n}b')]
+
 
 if __name__=="__main__":
     sys.exit(main(sys.argv))
+

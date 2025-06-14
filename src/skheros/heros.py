@@ -11,12 +11,10 @@ from .methods.feature_tracking import FEAT_TRACK
 from .methods.rule_tracking import RULE_TRACK
 from .methods.rule_prediction import RULE_PREDICTION
 from .methods.rule_compaction import COMPACT
-
 from .methods.model_population import MODEL_POP
-from .methods.model_pareto_fitness import MODEL_PARETO
 from .methods.model_prediction import MODEL_PREDICTION
-import pickle #temporary testing
-import inspect #temporary testing
+#import pickle #temporary testing
+#import inspect #temporary testing
 
 class HEROS(BaseEstimator, TransformerMixin):
     def __init__(self, outcome_type='class',iterations=100000,pop_size=1000,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,fitness_function='pareto',
@@ -288,6 +286,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         self.timer.phase1_time_start()
         self.timer.init_time_start() #initialization time tracking
         random.seed(self.random_state) # Set random seed/state
+        np.random.seed(self.random_state)
         # Data Preparation
         X, y, row_id, cat_feat_indexes, pop_df, ek = self.check_inputs(X, y, row_id, cat_feat_indexes, pop_df, ek) #check loaded data
         self.env = DATA_MANAGE(X, y, row_id, cat_feat_indexes, ek, self) #initialize the data environment; data formatting, summary statistics, and expert knowledge preparation
@@ -297,7 +296,8 @@ class HEROS(BaseEstimator, TransformerMixin):
         # Initialize Objects
         self.iteration = 0
         self.rule_population = RULE_POP() # Initialize rule sets
-        if self.fitness_function == 'pareto':
+        #if self.fitness_function == 'pareto' or self.nu == 1: #new 3/29/25
+        if self.fitness_function == 'pareto': #new 3/29/25
             self.rule_pareto = RULE_PARETO()
         else:
             self.rule_pareto = None
@@ -311,9 +311,9 @@ class HEROS(BaseEstimator, TransformerMixin):
 
         # Initialize Rule Population (if specified)
         if self.rule_pop_init == 'load': # Initialize rule population based on loaded rule population
-            self.rule_population.load_rule_population(pop_df,self)
+            self.rule_population.load_rule_population(pop_df,self,random)
         elif self.rule_pop_init == 'dt': # Train and utilize decision tree models to initialize rule population (based on individual tree 'branches')
-            print("To implement")
+            print("Not yet implemented.")
             pass
         else: # No rule population initialization other than standard LCS-algorithm-style 'covering' mechanism.
             pass
@@ -324,6 +324,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             instance = self.env.get_instance()
             #print('Iteration: '+str(self.iteration)+' RulePopSize: '+str(len(self.rule_population.pop_set)))
             # Run a single training iteration focused on the current training instance
+            #print(instance)
             self.run_iteration(instance)
             # Evaluation tracking ***************************************************
             if (self.iteration + 1) % self.track_performance == 0:
@@ -333,7 +334,8 @@ class HEROS(BaseEstimator, TransformerMixin):
             #Pause learning to conduct a complete evaluation of the current rule population
             if self.stored_rule_iterations != None and (self.iteration + 1) in self.stored_rule_iterations:
                 #Archive current rule population
-                print('archiving'+str(self.iteration+1))
+                if self.verbose:
+                    print('Archiving: '+str(self.iteration+1))
                 self.rule_population.archive_rule_pop(self.iteration+1)
                 self.timer.archive_rule_pop(self.iteration+1)
             # Increment iteration and training instance
@@ -343,80 +345,99 @@ class HEROS(BaseEstimator, TransformerMixin):
         # RULE COMPACTION *********************************************
         self.timer.compaction_time_start()
         compact = COMPACT(self)
-        compact.basic_rule_cleaning(self)
-        if self.compaction == 'sub':
-            compact.subsumption_compation(self)
+        sufficient_rule_pop_remain = True
+        sufficient_rule_pop_remain = compact.basic_rule_cleaning(self)
+        if self.compaction == 'sub' and sufficient_rule_pop_remain:
+            sufficient_rule_pop_remain = compact.subsumption_compation(self)
+        compact.clear_pop_copy()
         self.timer.compaction_time_stop()
 
         # BATCH FEATURE TRACKING **************************************
         if self.feat_track == 'end':
             self.FT.batch_calculate_ft_scores(self)
         self.timer.phase1_time_stop()
-        print("HEROS (Phase 1) run complete!")
+        if self.verbose:
+            print("HEROS (Phase 1) run complete!")
+            print("Number of Unique Rules Identified: "+str(len(self.rule_population.explored_rules)))
+            #print(self.rule_population.explored_rules)
 
         # (HEROS PHASE 2) RUN RULE-SET-LEARNING TRAINING ITERATIONS  ********************************************************************
         self.timer.phase2_time_start()
-        if self.model_iterations != 0:
+        if self.model_iterations > 1: #Apply Phase II
             # Initialize model population and 
             self.model_population = MODEL_POP() # Initialize rule sets
-            if self.fitness_function == 'pareto':
-                self.model_pareto = MODEL_PARETO()
-            else:
-                self.model_pareto = None
             self.model_iteration = 0
-            self.model_population.initialize_model_population(self,random,self.model_pop_init)
+            if not sufficient_rule_pop_remain: #abort Phase II and use Phase I rule population as final phase II model. 
+                self.model_population.skip_phase2(self)
+                self.model_population.get_target_model(0) #the 'model' object with the best accuracy, then coverage, then lowest rule count (assumes prior sorting)
+                self.timer.phase2_time_stop()
+                self.timer.update_global_time()
+                if self.verbose:
+                    print("HEROS (Phase 2) skipped - Returned entire rule population pre-cleaning/compaction as final model!")
+                    print("Random Seed Check - End: "+ str(random.random()))
 
-            # RUN MODEL-LEARNING TRAINING ITERATIONS **************************************************************
-            while self.model_iteration < self.model_iterations:
-                print("Iteration: "+str(self.model_iteration))
-                # GENETIC ALGORITHM 
-                target_offspring_count = int(self.model_pop_size*self.new_gen) #Determine number of offspring to generate
-                front_updated_global = False
-                while len(self.model_population.offspring_pop) < target_offspring_count: #Generate offspring until we hit the target number
-                    # Parent Selection
-                    parent_list = self.model_population.select_parent_pair(self.theta_sel,random)
-                    # Generate Offspring - clone, crossover, mutation, evaluation, add to population
-                    front_updated = self.model_population.generate_offspring(self.model_iteration,parent_list,random,self)
-                    if not front_updated_global: # check if the front was updated ever during the generation of this offspring population
-                        front_updated_global = front_updated
-                # Add Offspring Models to Population
-                self.model_population.add_offspring_into_pop()
-                if self.fitness_function == 'pareto' and front_updated_global:
-                    self.model_population.global_fitness_update(self)
-                #Bin Deletion
-                self.model_population.probabilistic_model_deletion(self,random)
-                #Model Performance Tracking
-                self.top_models.append(self.model_population.get_max())
-                #Pause learning to conduct a complete evaluation of the current rule population
-                if self.stored_model_iterations != None and (self.model_iteration + 1) in self.stored_model_iterations:
-                    #Archive current rule population
-                    self.model_population.sort_model_pop()
-                    self.model_population.identify_models_on_front(self) #For evaluating all models on the front.
-                    self.model_population.archive_model_pop(self.model_iteration+1)
-                    self.timer.archive_model_pop(self.model_iteration+1)
-                #Next Iteration
-                self.model_iteration += 1
-            #Sort the model population first by accuracy and then by number of rules in model.
-            self.model_population.sort_model_pop()
-            self.model_population.identify_models_on_front(self) #For evaluating all models on the front.
-            self.model_population.get_target_model(0) #the 'model' object with the best accuracy, then coverage, then lowest rule count (assumes prior sorting)
-            self.timer.phase2_time_stop()
-            self.timer.update_global_time()
-            print("HEROS (Phase 2) run complete!")
-            print("Random Seed Check - End: "+ str(random.random()))
+            else: #Run Phase 2 normally
+                self.model_population.initialize_model_population(self,random,self.model_pop_init)
+                # RUN MODEL-LEARNING TRAINING ITERATIONS **************************************************************
+                while self.model_iteration < self.model_iterations:
+                    if self.verbose:
+                        print("Iteration: "+str(self.model_iteration))
+                    #Apply NSGAII-like fast non dominated sorting of models into ranked fronts of models
+                    fronts = self.model_population.fast_non_dominated_sort(self)
+                    #Calculate crowding distances
+                    crowding_distances = {sol: d for front in fronts for sol, d in self.model_population.calculate_crowding_distance(front).items()}
+                    # GENETIC ALGORITHM 
+                    target_offspring_count = int(self.model_pop_size*self.new_gen) #Determine number of offspring to generate
+                    try_catch = 0
+                    while len(self.model_population.offspring_pop) < target_offspring_count and try_catch < 100: #Generate offspring until we hit the target number
+                        parent1 = self.model_population.binary_tournament_selection(crowding_distances,random)
+                        parent2 = self.model_population.binary_tournament_selection(crowding_distances,random)
+                        parent_list = [parent1,parent2]
+                        models_found = self.model_population.generate_offspring(self.model_iteration,parent_list,random,self)
+                        if not models_found:
+                            try_catch += 1
+                    # Add Offspring Models to Population
+                    self.model_population.add_offspring_into_pop()
+                    #Apply NSGAII-like fast non dominated sorting of models into ranked fronts of models
+                    fronts = self.model_population.fast_non_dominated_sort(self)
+                    #Calculate crowding distances
+                    crowding_distances = {sol: d for front in fronts for sol, d in self.model_population.calculate_crowding_distance(front).items()}
+                    #Model Deletion
+                    self.model_population.model_deletion(self,fronts,crowding_distances)
+                    #Model Performance Tracking
+                    self.top_models.append(self.model_population.get_max())
+                    #Pause learning to conduct a complete evaluation of the current rule population
+                    if self.stored_model_iterations != None and (self.model_iteration + 1) in self.stored_model_iterations:
+                        #Archive current rule population
+                        self.model_population.sort_model_pop()
+                        self.model_population.identify_models_on_front() #For evaluating all models on the front.
+                        self.model_population.archive_model_pop(self.model_iteration+1)
+                        self.timer.archive_model_pop(self.model_iteration+1)
+                    #Next Iteration
+                    self.model_iteration += 1
+                #Sort the model population first by accuracy and then by number of rules in model.
+                self.model_population.sort_model_pop()
+                self.model_population.identify_models_on_front() #For evaluating all models on the front.
+                self.model_population.get_target_model(0) #the 'model' object with the best accuracy, then coverage, then lowest rule count (assumes prior sorting)
+                self.timer.phase2_time_stop()
+                self.timer.update_global_time()
+                if self.verbose:
+                    print("HEROS (Phase 2) run complete!")
+                    print("Number of Unique Models Identified: "+str(len(self.model_population.explored_models)))
+                    print("Random Seed Check - End: "+ str(random.random()))
+
         self.env.clear_data_from_memory()
         return self
 
-
     def run_iteration(self,instance):
         # Make 'Match Set', {M}
-        self.rule_population.make_match_set(instance,self,random)
+        self.rule_population.make_match_set(instance,self,random,np)
 
         # Track Training Accuracy
         outcome_prediction = None
         if self.track_performance > 0:
             self.timer.prediction_time_start()
-            prediction = RULE_PREDICTION(self, self.rule_population)
+            prediction = RULE_PREDICTION(self, self.rule_population,random)
             outcome_prediction = prediction.get_prediction()
             self.tracking.update_prediction_list(outcome_prediction,instance[1],self)
             self.timer.prediction_time_stop()
@@ -432,21 +453,24 @@ class HEROS(BaseEstimator, TransformerMixin):
         # Correct Set Subsumption (New implementation)
         if self.subsumption == 'c' or self.subsumption == 'both':
             self.timer.subsumption_time_start()
-            self.rule_population.correct_set_subsumption(self)
+            if len(self.rule_population.correct_set) > 0:
+                self.rule_population.correct_set_subsumption(self)
             self.timer.subsumption_time_stop()
 
         # Update Feature Tracking
         if self.feat_track == 'add':
             self.timer.feature_track_time_start()
-            self.FT.update_ft_scores(outcome_prediction,instance[1],self)
+            if len(self.rule_population.correct_set) > 0:
+                self.FT.update_ft_scores(outcome_prediction,instance[1],self)
             self.timer.feature_track_time_stop()
         elif self.feat_track == 'wh':
             self.timer.feature_track_time_start()
-            self.FT.update_ft_scores_wh(outcome_prediction,instance[1],self)
+            if len(self.rule_population.correct_set) > 0:
+                self.FT.update_ft_scores_wh(outcome_prediction,instance[1],self)
             self.timer.feature_track_time_stop()
 
         # Apply Genetic Algorithm To Generate Offspring Rules
-        self.rule_population.genetic_algorithm(instance,self,random)
+        self.rule_population.genetic_algorithm(instance,self,random,np)
 
         # Apply Rule Deletion
         self.rule_population.deletion(self,random)
@@ -486,7 +510,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             for instance in range(num_instances):
                 instance_state = X[instance]
                 self.rule_population.make_eval_match_set(instance_state,self)
-                prediction = RULE_PREDICTION(self, self.rule_population)
+                prediction = RULE_PREDICTION(self, self.rule_population,random)
                 outcome_prediction = prediction.get_prediction()
                 prediction_list.append(outcome_prediction)
                 self.rule_population.clear_sets()
@@ -500,7 +524,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             for instance in range(num_instances):
                 instance_state = X[instance]
                 self.model_population.make_eval_match_set(instance_state,self)
-                prediction = MODEL_PREDICTION(self, self.model_population)
+                prediction = MODEL_PREDICTION(self, self.model_population,random)
                 outcome_prediction = prediction.get_prediction()
                 prediction_list.append(outcome_prediction)
                 self.model_population.clear_sets()
@@ -540,7 +564,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             for instance in range(num_instances):
                 instance_state = X[instance]
                 self.rule_population.make_eval_match_set(instance_state,self)
-                prediction = RULE_PREDICTION(self, self.rule_population)
+                prediction = RULE_PREDICTION(self, self.rule_population,random)
                 outcome_proba = prediction.get_prediction_proba()
                 prediction_proba_list.append(outcome_proba)
                 self.rule_population.clear_sets()
@@ -554,7 +578,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             for instance in range(num_instances):
                 instance_state = X[instance]
                 self.model_population.make_eval_match_set(instance_state,self)
-                prediction = MODEL_PREDICTION(self, self.model_population)
+                prediction = MODEL_PREDICTION(self, self.model_population,random)
                 outcome_proba = prediction.get_prediction_proba()
                 prediction_proba_list.append(outcome_proba)
                 self.model_population.clear_sets()
@@ -593,7 +617,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             for instance in range(num_instances):
                 instance_state = X[instance]
                 self.rule_population.make_eval_match_set(instance_state,self)
-                prediction = RULE_PREDICTION(self, self.rule_population)
+                prediction = RULE_PREDICTION(self, self.rule_population,random)
                 outcome_range = prediction.get_prediction_range()
                 prediction_range_list.append(outcome_range)
                 self.rule_population.clear_sets()
@@ -607,7 +631,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             for instance in range(num_instances):
                 instance_state = X[instance]
                 self.model_population.make_eval_match_set(instance_state,self)
-                prediction = MODEL_PREDICTION(self, self.model_population)
+                prediction = MODEL_PREDICTION(self, self.model_population,random)
                 outcome_range = prediction.get_prediction_range()
                 prediction_range_list.append(outcome_range)
                 self.model_population.clear_sets()
@@ -646,7 +670,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             for instance in range(num_instances):
                 instance_state = X[instance]
                 self.rule_population.make_eval_match_set(instance_state,self)
-                prediction = RULE_PREDICTION(self, self.rule_population)
+                prediction = RULE_PREDICTION(self, self.rule_population,random)
                 outcome_coverage = prediction.get_if_covered()
                 prediction_covered_list.append(outcome_coverage)
                 self.rule_population.clear_sets()
@@ -660,7 +684,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             for instance in range(num_instances):
                 instance_state = X[instance]
                 self.model_population.make_eval_match_set(instance_state,self)
-                prediction = MODEL_PREDICTION(self, self.model_population)
+                prediction = MODEL_PREDICTION(self, self.model_population,random)
                 outcome_coverage = prediction.get_if_covered()
                 prediction_covered_list.append(outcome_coverage)
                 self.model_population.clear_sets()
@@ -703,17 +727,17 @@ class HEROS(BaseEstimator, TransformerMixin):
 
     def get_clustered_ft_heatmap(self,feature_names, show, save, output_path):
         ft_df = self.FT.export_ft_scores(self,feature_names)
-        print(ft_df)
         ft_df = ft_df.drop('row_id', axis=1)
         self.FT.plot_clustered_ft_heatmap(ft_df, feature_names, show, save, output_path)
 
     def get_performance_tracking(self):
         return self.tracking.get_performance_tracking_df()
     
-    def get_model_pareto_landscape(self,resolution, rule_population, plot_rules, show, save, output_path):
+    def get_model_pareto_fronts(self, show, save, output_path):
         """ """
-        self.model_pareto.plot_pareto_landscape(resolution, rule_population, plot_rules, self, show, save, output_path)
-    
+        fronts = self.model_population.get_all_model_fronts()
+        self.model_population.plot_model_pareto_fronts(fronts, show, save, output_path)
+
     def get_runtimes(self):
         return self.timer.report_times()
     
