@@ -41,9 +41,6 @@ class MODEL_PARETO:
         if original_front == self.model_front:
             return False
         else:
-            print("Front Update") #debug
-            print(original_front) #debug
-            print(self.model_front) #debug
             return True
 
     def dominates(self,p,q,objectives):
@@ -67,65 +64,70 @@ class MODEL_PARETO:
 
     def get_pareto_fitness(self,candidate_metric_1,candidate_metric_2, landscape,heros):
         """ Calculate model fitness releative to the model pareto front. Only set up for two objectives. """
-        # First handle simple special cases
+        penalty_weight = 0.01
+        ### SPECIAL CASE HANDLING -------------------------------------------------------------------------------------------------------------------------------------------
+        ## Special Case 1: Only one point on front, both with zero values (i.e. no front exists) (unlikely special case if working on data with no/very low signal)
         if len(self.model_front_scaled) == 1 and self.model_front_scaled[0][0] == 0.0 and self.model_front_scaled[0][1] == 0.0:
-            return None #Handles unlikely special case where the only point on the front has zero accuracy and zero rules.
+            return None 
+        ## Pareto Landscape Plotting Special Cases:Handles special cases when calculating fitness landscape for visualization---------
         if landscape: # Special cases when calculating fitness landscape for visualization (points that will never be models)
+            ## Special Case 2: #Accuray is greater than 1 on front plot and rule count is <= the maximum found (top left of front)
             if candidate_metric_1 > 1.0 and candidate_metric_2 <= self.model_front_scaled[-1][1]: 
-                return 1.0 #Accuray is greater than 1 on front plot and rule count is <= the maximum found (top left of front)
+                return 1.0
+            ## Special Case 3: #Rule Count is less than the minimum found and accuracy is >= the mimimum found (left top of front)
             if candidate_metric_2 / float(self.metric_limits[1]) < self.model_front_scaled[0][1] and candidate_metric_1 >= self.model_front_scaled[0][0]:
-                return 1.0 #Rule Count is less than the minimum found and accuracy is >= the mimimum found (left top of front)
+                return 1.0 
+            ## Special Case 4: # Point lies just beyond the front but not into the previously captured extremes.
             if candidate_metric_1 > self.model_front_scaled[0][0] and candidate_metric_2 / float(self.metric_limits[1]) < self.model_front_scaled[-1][1] and self.point_beyond_front(candidate_metric_1,candidate_metric_2 / float(self.metric_limits[1])):
-                return 1.0 # Point lies just beyond the front but not into the previously captured extremes.
+                return 1.0 
+        #------------------------------------------------------------------------------------------------------------------------------
+        ## Special Case 5: Point is at minimum fitness point (i.e. both target metrics minimized - least optimal)(i.e. 0 accuracy and highest rule count)
         if candidate_metric_1 == 0.0 and candidate_metric_2 == self.metric_limits[1]:
-            return 0.0 #Worst fitness combination (i.e. 0 accuracy and highest rule count)
+            return 0.0 
+        ## Special Case 6: Point is on the front (returns optimal fitness when nu=1, and slightly penalized fitness for less accurate front points when nu>1)
         elif (candidate_metric_1,candidate_metric_2) in self.model_front: # models on the front return an ideal fitness
-            return 1.0
-        elif candidate_metric_1 == self.metric_limits[0]: #model has the maximum accuracy (possibly update)
-            return 1.0
-        #elif candidate_metric_2 <= self.model_front_scaled[0][1]:
-        #    return candidate_metric_1 / self.model_front_scaled[0][0]
-        
-        #if landscape: # Special cases when calculating fitness landscape for visualization
-        #    if candidate_metric_1 > 1.0 or candidate_metric_2 / float(self.metric_limits[1]) < self.model_front_scaled[0][1]:
-        #        return 1.0 #Special case where accuray is greater than 1 or rule count is less than 1
-        #    if candidate_metric_1 > self.model_front_scaled[0][0] and candidate_metric_2 / float(self.metric_limits[1]) < self.model_front_scaled[-1][1] and self.point_beyond_front(candidate_metric_1,candidate_metric_2 / float(self.metric_limits[1])):
-        #        return 1.0 
-        #if candidate_metric_1 == 0.0 and candidate_metric_2 == self.metric_limits[1]:
-        #    return 0.0
-        #elif (candidate_metric_1,candidate_metric_2) in self.model_front: # models on the front return an ideal fitness
-        #    return 1.0
-        #elif candidate_metric_1 == self.metric_limits[0]:
-        #    return 1.0
-        #elif candidate_metric_2 == self.metric_limits[1]: #model has the maximum value of one objective
-        #    return 1.0
-        else:
+            if heros.nu > 1: # Apply pressure to maximize model accuracy #NEW
+                fitness_penalty = (penalty_weight*(1.0-(candidate_metric_1/self.metric_limits[0]))) #NEW
+                return  1.0 - fitness_penalty #NEW
+            else: #NEW
+                return 1.0
+        ## Special Case 7: Point has maximum metric 1 (i.e. balanced accuracy) i.e. on the front edge (dotted line), but not on the front itself.
+        elif candidate_metric_1 == self.metric_limits[0]: 
+            rule_count_overage = candidate_metric_2 - self.metric_limits[1]
+            fitness_penalty = penalty_weight*rule_count_overage/heros.pop_size 
+            return 1.0 - fitness_penalty
+
+        ### TYPICAL CASE HANDLING ----------------------------------------------------------------------------------------------------------------------------------------------
+        ## All other points have fitness calculated based on the distance from the point to the nearest point on the pareto front (or front edge)
+        else: 
             scaled_candidate_metric_2 = candidate_metric_2 / float(self.metric_limits[1])
             model_objectives = (candidate_metric_1,scaled_candidate_metric_2)
             
-
             # Find the closest distance between the model and the pareto front (tempfront ordered by increasing accuracy, i.e. metric 1)
             temp_front = []
-            #temp_front = [(self.model_front_scaled[0][0],0.0)] #min bin size boundary (horizontal not vertical)
             for front_point in self.model_front_scaled:
                 temp_front.append(front_point)
             temp_front.append((self.model_front_scaled[-1][0],scaled_candidate_metric_2)) #max accuracy boundary
 
             min_distance = float('inf')
+            min_at_last_segment = False 
             for i in range(len(temp_front) - 1):
                 segment_start = temp_front[i]
                 segment_end = temp_front[i + 1]
                 distance = self.point_to_segment_distance(model_objectives, segment_start, segment_end)
-                min_distance = min(min_distance, distance)
-            pareto_fitness = 1 - min_distance
+                # Check if the current distance is the new minimum
+                if distance < min_distance: 
+                    min_distance = distance
+                    min_at_last_segment = (i == len(temp_front) - 2)  # Check if it's the last segment
+            if min_at_last_segment:
+                rule_count_overage = candidate_metric_2 - self.metric_limits[1]
+                fitness_penalty = penalty_weight * rule_count_overage / heros.pop_size 
+                pareto_fitness = (1 - min_distance) - fitness_penalty
+                if pareto_fitness < 0:
+                    pareto_fitness = (1 - min_distance) * penalty_weight
+            else:
+                pareto_fitness = 1 - min_distance
             if heros.nu > 1: # Apply pressure to maximize model accuracy
-                """
-                # Apply fitness penalty to models that fall under the diagonal to the max specificity front point (model slope is less than slope to that front point)
-                model_slope = self.slope((0.0,0.0),model_objectives)
-                front_point_slope = self.slope((0.0,0.0),self.model_front_scaled[0])
-                if model_slope < front_point_slope:
-                    pareto_fitness = pareto_fitness / float(heros.nu)
-                """
                 pareto_fitness = pareto_fitness * pow(candidate_metric_1 , heros.nu)
             return pareto_fitness
         
@@ -229,9 +231,16 @@ class MODEL_PARETO:
             return 1
         else:
             return 2
-        
 
-    def plot_pareto_landscape(self, resolution, model_population, plot_models, heros, show=True, save=False, output_path=None, data_name=None):
+    def is_model_on_front(self,candidate_metric_1,candidate_metric_2):
+        #
+        candidate_model = (candidate_metric_1,candidate_metric_2)
+        if candidate_model in self.model_front:
+            return True
+        else:
+            return False
+
+    def plot_pareto_landscape(self, resolution, model_population, plot_models, heros, show=True, save=False, output_path=None):
         # Generate fitness landscape ******************************
         x = np.linspace(0.00,1.00*self.metric_limits[1],resolution) #model size
         y = np.linspace(0.00,1.00,resolution) #accuracy
@@ -287,7 +296,7 @@ class MODEL_PARETO:
         plt.legend(loc='upper left', bbox_to_anchor=(1.25, 1), fontsize='small')
         plt.subplots_adjust(right=0.75)
         if save:
-            plt.savefig(output_path+'/'+data_name+'_pareto_fitness_landscape_models.png', bbox_inches="tight")
+            plt.savefig(output_path+'/pareto_fitness_landscape_models.png', bbox_inches="tight")
         if show:
             plt.show()
 
@@ -299,14 +308,12 @@ class MODEL_PARETO:
             for i in range(len(model_population.pop_set)):
                 model = model_population.pop_set[i]
                 master_metric_1_list.append(model.accuracy) 
-                #master_metric_2_list.append(len(model.rule_set)/float(self.metric_limits[1]))
                 master_metric_2_list_noscale.append(len(model.rule_set))
         max_rule_set_size = max(master_metric_2_list_noscale)
 
         # Generate fitness landscape ******************************
         x = np.linspace(0.00,1.00*max_rule_set_size,resolution) #model size
         y = np.linspace(0.00,1.00,resolution) #accuracy
-        #X,Y = np.meshgrid(x,y)
         Z = [[None for _ in range(resolution)] for _ in range(resolution)]
         for i in range(len(x)):
             for j in range(len(y)):
@@ -319,9 +326,7 @@ class MODEL_PARETO:
             metric_1_front_list[i] = float(model[0])
             metric_2_front_list_temp[i] = float(model[1])
             i+=1
-        print(metric_2_front_list_temp)
         metric_2_front_list = [value / float(max_rule_set_size) for value in metric_2_front_list_temp]
-        print(metric_2_front_list)
         # Plot Setup *********************************************
         plt.figure(figsize=(10,6)) #(10, 8))
         plt.imshow(Z, extent=[0.00, 1.00, 0.00, 1.00], interpolation='nearest', origin='lower', cmap='magma', aspect='auto') #cmap='viridis' 'magma', alpha=0.6
@@ -341,9 +346,6 @@ class MODEL_PARETO:
         # Set the axis limits between 0 and 1
         plt.xlim(0.00, 1.00)
         plt.ylim(0.00, 1.00)
-        #custom_ticks = [0, 0.2, 0.4, 0.6, 0.8, 1.0]
-        #custom_labels = [int(x * self.metric_limits[1]) for x in [0, 0.2, 0.4, 0.6, 0.8, 1.0]]
-        #plt.xticks(custom_ticks, custom_labels)
         def create_x_tick_transform(multiplier):
             def x_tick_transform(x, pos):
                 return f"{x * multiplier:.1f}"  # Multiply by value and convert to an integer

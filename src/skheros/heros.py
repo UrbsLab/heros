@@ -8,8 +8,8 @@ from .methods.data_mange import DATA_MANAGE
 from .methods.rule_population import RULE_POP
 from .methods.rule_pareto_fitness import RULE_PARETO
 from .methods.feature_tracking import FEAT_TRACK
-from .methods.performance_tracking import PERF_TRACK
-from .methods.prediction import PREDICTION
+from .methods.rule_tracking import RULE_TRACK
+from .methods.rule_prediction import RULE_PREDICTION
 from .methods.rule_compaction import COMPACT
 
 from .methods.model_population import MODEL_POP
@@ -20,7 +20,7 @@ import inspect #temporary testing
 
 class HEROS(BaseEstimator, TransformerMixin):
     def __init__(self, outcome_type='class',iterations=100000,pop_size=1000,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,fitness_function='pareto',
-                 subsumption='both',use_ek=False,rsl=None,feat_track='add',model_iterations=500,model_pop_size=100,new_gen=1.0,merge_prob=0.1,pop_init_type=None,compaction=None,track_performance=0,random_state=None,verbose=False):
+                 subsumption='both',rsl=0,feat_track='add',model_iterations=500,model_pop_size=100, model_pop_init = 'target_acc', new_gen=1.0,merge_prob=0.1,rule_pop_init=None,compaction='sub',track_performance=0,stored_rule_iterations=None,stored_model_iterations=None,random_state=None,verbose=False):
         """
         A Scikit-Learn compatible implementation of the 'Heuristic Evolutionary Rule Optimization System' (HEROS) Algorithm.
         ..
@@ -35,18 +35,21 @@ class HEROS(BaseEstimator, TransformerMixin):
         :param theta_sel: The fraction of the correct set to be included in tournament selection (must be float from 0 - 1)
         :param fitness_function: The fitness function used to globally evaluate rules (must be 'accuracy' or 'pareto') 
         :param subsumption: Specify subsumption strategy(s) to apply (must be 'ga', 'c', 'both', or None)
-        :param use_ek: Use expert knowlege weights for each feature during rule population initialization (Must be boolean; True or False)
-        :param rsl: Rule specificity limit, automatically determined when None, or specified as a positive integer (Must be None or a positive integer)
+        :param rsl: Rule specificity limit, automatically determined when 0, or specified as a positive integer (Must be 0 or a positive integer)
         :param feat_track: Activates a specified feature tracking mechanism which tracks estimated feature importance for individual instances (Must be None or 'add' or 'wh' or 'end')
-        :param model_iterations: The number of model training cycles to run (Must None or a  nonnegative integer)
+        :param model_iterations: The number of model training cycles to run (Must 0 or a nonnegative integer)
         :param model_pop_size: Maximum model population size. (Must be nonnegative integer)
+        :param model_pop_init: model population initialization method (Must be 'random', 'probabilistic', 'bootstrap', or 'target_acc')
         :param new_gen: Proportion of maximum pop size used to generate an model offspring population each generation (must be float from 0 - 1)
         :param merge_prob: The probablity of the merge operator being used during model offspring generation (must be float from 0 - 1)
-        :param pop_init_type: Specifies type of population initiailzation (if any) (Must be 'load' or 'dt', or None)
+        :param rule_pop_init: Specifies type of population initiailzation (if any) (Must be 'load' or 'dt', or None)
         :param compaction: Specifies type of rule-compaciton to apply at end of rule population training (if any) (Must be 'sub' or None)
         :param track_performance: Activates performance tracking when > 0. Value indicates how many iteration steps to wait to gather tracking data (Must be 0 or a positive integer)
+        :param stored_rule_iterations: specifies iterations where a copy of the rule population is stored (Must be positive integers separated by commas or None)
+        :param stored_model_iterations: specifies iterations where a copy of the model population is stored (Must be positive integers separated by commas or None)
         :param random_state: the seed value needed to generate a random number
         :param verbose: Boolean flag to run in 'verbose' mode - display run details
+        :param init: model population initialization method 
         """
         # Basic run parameter checks
         if not outcome_type == 'class' and not outcome_type == 'quant':
@@ -78,20 +81,17 @@ class HEROS(BaseEstimator, TransformerMixin):
         if not fitness_function == 'accuracy' and not fitness_function == 'pareto':
             raise Exception("'fitness_function' param must be 'accuracy', or 'pareto'")
 
-        if not subsumption == 'ga' and not subsumption == 'c' and not subsumption == 'both' and not subsumption == None:
+        if not subsumption == 'ga' and not subsumption == 'c' and not subsumption == 'both' and not subsumption is None and not subsumption == 'None':
             raise Exception("'subsumption' param must be 'ga', or 'c', or 'both', or None")
-                
-        if not use_ek == True and not use_ek == False and not use_ek == 'True' and not use_ek == 'False':
-            raise Exception("'use_ek' param must be a boolean, i.e. True or False")
 
-        if not self.check_is_int(rsl) and not rsl == None:
-            raise Exception("'rsl' param must be a positive int or None")
+        if not self.check_is_int(rsl) and not rsl == 0:
+            raise Exception("'rsl' param must be zero or a positive int")
 
-        if not feat_track == 'add' and not feat_track == 'wh' and not feat_track == 'end' and not feat_track == None:
+        if not feat_track == 'add' and not feat_track == 'wh' and not feat_track == 'end' and not feat_track is None and not feat_track == 'None':
             raise Exception("'feat_track' param must be 'add', or 'wh', or 'end', or None")
         
-        if not model_iterations == None and (not self.check_is_int(model_iterations) or model_iterations < 10):
-            raise Exception("'model_iterations' param must be non-negative integer >= 10, or None")
+        if not model_iterations == 0 and (not self.check_is_int(model_iterations) or model_iterations < 5):
+            raise Exception("'model_iterations' param must be non-negative integer >= 5, or 0")
 
         if not self.check_is_int(model_pop_size) or model_pop_size < 20:
             raise Exception("'model_pop_size' param must be non-negative integer >= 20")
@@ -102,16 +102,16 @@ class HEROS(BaseEstimator, TransformerMixin):
         if not self.check_is_float(merge_prob) or merge_prob < 0 or merge_prob > 1:
             raise Exception("'merge_prob' param must be float from 0 - 1")
 
-        if not pop_init_type == 'load' and not pop_init_type == 'dt' and not pop_init_type == None:
-            raise Exception("'pop_init_type' param must be 'load', 'dt', or None")
+        if not rule_pop_init == 'load' and not rule_pop_init == 'dt' and not rule_pop_init is None and not rule_pop_init == 'None':
+            raise Exception("'rule_pop_init' param must be 'load', 'dt', or None")
 
-        if not compaction == 'sub' and not compaction == None:
+        if not compaction == 'sub' and not compaction is None and not compaction == 'None':
             raise Exception("'compaction' param must be 'sub', or None")
         
         if not self.check_is_int(track_performance) or track_performance < 0:
             raise Exception("'track_performance' param must be non-negative integer")
         
-        if not self.check_is_int(random_state) and not random_state == None:
+        if not self.check_is_int(random_state) and not random_state is None and not random_state == 'None':
             raise Exception("'random_state' param must be an int or None")
 
         if not verbose == True and not verbose == False and not verbose == 'True' and not verbose == 'False':
@@ -128,32 +128,31 @@ class HEROS(BaseEstimator, TransformerMixin):
         self.theta_sel = float(theta_sel)
         self.fitness_function = str(fitness_function)
         self.subsumption = str(subsumption)
-        if use_ek == 'True' or use_ek == True:
-            self.use_ek = True
-        if use_ek == 'False' or use_ek == False:
-            self.use_ek = False
-        if rsl == 'None' or rsl == None:
-            self.rsl = None
-        else:
-            self.rsl = int(rsl)
-        if feat_track == 'None' or feat_track == None:
+        self.rsl = int(rsl)
+        if feat_track == 'None' or feat_track is None:
             self.feat_track = None
         else:
             self.feat_track = str(feat_track)
-        if model_iterations == None or model_iterations == 'None':
-            self.model_iterations = None
-        else:
-            self.model_iterations = int(model_iterations)
+        self.model_iterations = int(model_iterations)
         self.model_pop_size = int(model_pop_size)
+        self.model_pop_init = model_pop_init
         self.new_gen = float(new_gen)
         self.merge_prob = float(merge_prob)
-        self.pop_init_type = str(pop_init_type)
-        if compaction == 'None' or compaction == None:
+        self.rule_pop_init = str(rule_pop_init)
+        if compaction == 'None' or compaction is None:
             self.compaction = None
         else:
             self.compaction = str(compaction)
         self.track_performance = int(track_performance)
-        if random_state == 'None' or random_state == None:
+        if stored_rule_iterations == 'None' or stored_rule_iterations is None:
+            self.stored_rule_iterations = None
+        else:
+            self.stored_rule_iterations = [int(value) for value in stored_rule_iterations.split(',')]
+        if stored_model_iterations == 'None' or stored_model_iterations is None:
+            self.stored_model_iterations = None
+        else:
+            self.stored_model_iterations = [int(value) for value in stored_model_iterations.split(',')]
+        if random_state == 'None' or random_state is None:
             self.random_state = None
         else:
             self.random_state = int(random_state)
@@ -162,7 +161,9 @@ class HEROS(BaseEstimator, TransformerMixin):
         if verbose == 'False' or verbose == False:
             self.verbose = False
 
+        self.use_ek = False #internal parameter - set to False by default, but switched to true of ek scores passed to fit()
         self.y_encoding = None
+        self.top_models = [] #for tracking model performance increase over iterations
 
     @staticmethod
     def check_is_int(num):
@@ -185,12 +186,13 @@ class HEROS(BaseEstimator, TransformerMixin):
         """
         return isinstance(num, list)
     
-    def check_inputs(self, X, y, cat_feat_indexes, pop_df, ek): 
+    def check_inputs(self, X, y, row_id, cat_feat_indexes, pop_df, ek): 
         """
         Function to check if X, y, pop_df, and ek inputs to fit are valid.
         
         :param X: None or array-like {n_samples, n_features} Training instances of quantitative features.
         :param y: array-like {n_samples} Training labels of the outcome variable.
+        :param row_id: array-like{n_samples} Unique instance lables for each row
         :param cat_feat_indexes: array-like max({n_features}) A list of feature indexes 
                 in 'X' that should be treated as categorical variables (all others treated 
                 as quantitative). An empty list or None indicates all features should be 
@@ -198,26 +200,34 @@ class HEROS(BaseEstimator, TransformerMixin):
         :param pop_df: None or pandas data frame of HEROS-formatted rule population
         :param ek: None or np.ndarray or list
         """
+        # Validate list of instance ID's 
+
+        self.row_id = row_id
+        if not self.check_is_list(self.row_id) and not self.row_id is None:
+            unique_count = len(set(row_id))
+            if len(row_id) != unique_count:
+                raise Exception("'row_id' param must be a list of unique row/instance identifiers or None")
+            
         # Validate list of feature indexes to treat as categorical
-        if cat_feat_indexes == 'None' or cat_feat_indexes == None:
+        if cat_feat_indexes == 'None' or cat_feat_indexes is None:
             self.cat_feature_indexes = None
         else:
             self.cat_feature_indexes = cat_feat_indexes
-        if not self.check_is_list(cat_feat_indexes) and not cat_feat_indexes == None:
+        if not self.check_is_list(cat_feat_indexes) and not cat_feat_indexes is None:
             raise Exception("'cat_feat_indexes' param must be a list of integer column indexes (for 'X') or None")
         if self.check_is_list(cat_feat_indexes):
             for each in cat_feat_indexes:
                 if not self.check_is_int(each):
                     raise Exception("All values in 'cat_feat_indexes' must be an integer that is a column index in 'X'")
         # Validate the prior HEROS rule population for algorithm initialization
-        if not isinstance(pop_df, pd.DataFrame) and not pop_df == None:
+        if not isinstance(pop_df, pd.DataFrame) and not pop_df is None:
             raise Exception("'pop_df' param must be either None or a DataFame that is formatted to store a HEROS rule population")
-        if self.pop_init_type == 'load' and not isinstance(pop_df, pd.DataFrame):
-            raise Exception("'pop_df' must be provided to fit() when pop_init_type = 'load'")
-        if self.pop_init_type != 'load' and not pop_df == None:
-            raise Exception("'pop_df' provided but pop_init_type was not set to 'load'")
+        if self.rule_pop_init == 'load' and not isinstance(pop_df, pd.DataFrame):
+            raise Exception("'pop_df' must be provided to fit() when rule_pop_init = 'load'")
+        if self.rule_pop_init != 'load' and not pop_df is None:
+            raise Exception("'pop_df' provided but rule_pop_init was not set to 'load'")
         # Validate expert knowledge scores (if specified)
-        if not (isinstance(ek, np.ndarray)) and not (isinstance(ek, list)) and ek != None:
+        if not (isinstance(ek, np.ndarray)) and not (isinstance(ek, list)) and not ek is None:
             raise Exception("'ek' param must be None or list/ndarray")
         if isinstance(ek,np.ndarray):
             ek = ek.tolist()
@@ -249,66 +259,9 @@ class HEROS(BaseEstimator, TransformerMixin):
                     pass
             if not np.isreal(y).all():
                 raise ValueError("All values in y must be numeric after encoding.")
-        return X, y, cat_feat_indexes, pop_df, ek
+        return X, y, row_id, cat_feat_indexes, pop_df, ek
 
-    def check_picklability(self, obj, name="root"):
-        """
-        This method attempts to pickle an object and identifies specific attributes or elements
-        that cause pickling to fail. It recursively checks the picklability of the object's 
-        attributes, methods, and collection elements.
-
-        Args:
-            obj: The object to test for picklability.
-            name (str): The name of the object or its attribute for tracking during recursion.
-        
-        Returns:
-            bool: True if the object can be pickled, False otherwise.
-        """
-        try:
-            # Try to pickle the object
-            pickle.dumps(obj)
-            print(f"The object '{name}' is picklable.")
-            return True
-        except pickle.PicklingError:
-            print(f"PicklingError: The object '{name}' of type {type(obj)} cannot be pickled.")
-        except TypeError as e:
-            print(f"TypeError: The object '{name}' of type {type(obj)} cannot be pickled. Error: {e}")
-        except Exception as e:
-            print(f"An unexpected error occurred while pickling '{name}': {e}")
-        
-        # If we reach this point, pickling failed, so we inspect the object further.
-
-        # If the object is a class instance, check its attributes
-        if hasattr(obj, '__dict__'):
-            print(f"Checking attributes of the object '{name}'...")
-            for attr_name, attr_value in obj.__dict__.items():
-                self.check_picklability(attr_value, f"{name}.{attr_name}")
-
-        # If the object is a collection (list, tuple, set, or dict), check its elements
-        elif isinstance(obj, (list, tuple, set)):
-            print(f"Checking elements of the {type(obj).__name__} '{name}'...")
-            for idx, item in enumerate(obj):
-                self.check_picklability(item, f"{name}[{idx}]")
-        
-        elif isinstance(obj, dict):
-            print(f"Checking key-value pairs of the dict '{name}'...")
-            for key, value in obj.items():
-                self.check_picklability(key, f"{name}[key: {key}]")
-                self.check_picklability(value, f"{name}[value for key: {key}]")
-
-        # If the object is a class, check its methods separately
-        elif inspect.isclass(obj):
-            print(f"Checking methods of the class '{name}'...")
-            for method_name, method in inspect.getmembers(obj, predicate=inspect.isfunction):
-                self.check_picklability(method, f"{name}.{method_name}")
-        
-        # Check instance methods if it's an instance of a class
-        elif inspect.ismethod(obj) or inspect.isfunction(obj):
-            print(f"Checking method '{name}'...")
-        
-        return False
-
-    def fit(self, X, y, cat_feat_indexes=None, pop_df=None, ek=None):
+    def fit(self, X, y, row_id=None, cat_feat_indexes=None, pop_df=None, ek=None):
         """
         Scikit-learn required function for supervised training of HEROS
 
@@ -316,6 +269,8 @@ class HEROS(BaseEstimator, TransformerMixin):
                 ALL INSTANCE FEATURES MUST BE NUMERIC OR NAN
         :param y: array-like {n_samples} Training labels (outcome). 
                 ALL INSTANCE OUTCOME LABELS MUST BE NUMERIC NOT NAN OR OTHER TYPE
+        :param row_id: array-like {n_samples} Row/instance labels
+                ALL INSTANCE LABELS MUST BE NUMERIC OR STRING NOT NAN OR OTHER TYPE
         :param cat_feat_indexes: array-like max({n_features}) A list of feature indexes 
                 in 'X' that should be treated as categorical variables (all others treated 
                 as quantitative). An empty list or None indicates all features should be 
@@ -329,15 +284,15 @@ class HEROS(BaseEstimator, TransformerMixin):
         :return: self
         """  
         self.timer = TIME_TRACK()
-        # ALGORITHM INITIALIZATION ***********************************************************
+        # (HEROS PHASE 1) ALGORITHM INITIALIZATION ***********************************************************
+        self.timer.phase1_time_start()
         self.timer.init_time_start() #initialization time tracking
         random.seed(self.random_state) # Set random seed/state
         # Data Preparation
-        X, y, cat_feat_indexes, pop_df, ek = self.check_inputs(X, y, cat_feat_indexes, pop_df, ek) #check loaded data
-        self.env = DATA_MANAGE(X, y, cat_feat_indexes, ek, self) #initialize the data environment; data formatting, summary statistics, and expert knowledge preparation
+        X, y, row_id, cat_feat_indexes, pop_df, ek = self.check_inputs(X, y, row_id, cat_feat_indexes, pop_df, ek) #check loaded data
+        self.env = DATA_MANAGE(X, y, row_id, cat_feat_indexes, ek, self) #initialize the data environment; data formatting, summary statistics, and expert knowledge preparation
         # Memory Cleanup
         X = None
-        #Xc = None
         y = None
         # Initialize Objects
         self.iteration = 0
@@ -352,13 +307,13 @@ class HEROS(BaseEstimator, TransformerMixin):
             self.FT = None
         
         # Initialize Learning Performance Tracking Objects
-        self.tracking = PERF_TRACK(self)
+        self.tracking = RULE_TRACK(self)
 
         # Initialize Rule Population (if specified)
-        if self.pop_init_type == 'load': # Initialize rule population based on loaded rule population
+        if self.rule_pop_init == 'load': # Initialize rule population based on loaded rule population
             self.rule_population.load_rule_population(pop_df,self)
-        elif self.pop_init_type == 'dt': # Train and utilize decision tree models to initialize rule population (based on individual tree 'branches')
-            #print("To implement")
+        elif self.rule_pop_init == 'dt': # Train and utilize decision tree models to initialize rule population (based on individual tree 'branches')
+            print("To implement")
             pass
         else: # No rule population initialization other than standard LCS-algorithm-style 'covering' mechanism.
             pass
@@ -367,9 +322,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         while self.iteration < self.iterations:
             # Get current training instance
             instance = self.env.get_instance()
-            #print(len(self.rule_population.pop_set))
-            #print("Instance State: "+str(instance[0])) #Debug
-            #print("Instance Outcome: "+str(instance[1])) #Debug
+            #print('Iteration: '+str(self.iteration)+' RulePopSize: '+str(len(self.rule_population.pop_set)))
             # Run a single training iteration focused on the current training instance
             self.run_iteration(instance)
             # Evaluation tracking ***************************************************
@@ -377,12 +330,15 @@ class HEROS(BaseEstimator, TransformerMixin):
                 self.tracking.update_performance_tracking(self.iteration,self)
                 if self.verbose:
                     self.tracking.print_tracking_entry()
+            #Pause learning to conduct a complete evaluation of the current rule population
+            if self.stored_rule_iterations != None and (self.iteration + 1) in self.stored_rule_iterations:
+                #Archive current rule population
+                print('archiving'+str(self.iteration+1))
+                self.rule_population.archive_rule_pop(self.iteration+1)
+                self.timer.archive_rule_pop(self.iteration+1)
             # Increment iteration and training instance
             self.iteration += 1
             self.env.next_instance()
-
-            #if self.iteration > 50:
-            #    debug = 5/0
 
         # RULE COMPACTION *********************************************
         self.timer.compaction_time_start()
@@ -392,25 +348,23 @@ class HEROS(BaseEstimator, TransformerMixin):
             compact.subsumption_compation(self)
         self.timer.compaction_time_stop()
 
-        #self.rule_population.multiplex6_delete_test() #ONLY FOR testing FT for 6 bit multiplexer dataset
-
         # BATCH FEATURE TRACKING **************************************
         if self.feat_track == 'end':
             self.FT.batch_calculate_ft_scores(self)
-
+        self.timer.phase1_time_stop()
         print("HEROS (Phase 1) run complete!")
-        # RUN RULE-SET-LEARNING TRAINING ITERATIONS (HEROS PART 2) **************************************************************
-        # For now we'll implement HEROS to run PART 1 first (learning a rule-population), and then secondarily run PART 2, learning a rule-set-population
-        if self.model_iterations != None:
+
+        # (HEROS PHASE 2) RUN RULE-SET-LEARNING TRAINING ITERATIONS  ********************************************************************
+        self.timer.phase2_time_start()
+        if self.model_iterations != 0:
             # Initialize model population and 
             self.model_population = MODEL_POP() # Initialize rule sets
             if self.fitness_function == 'pareto':
                 self.model_pareto = MODEL_PARETO()
             else:
                 self.model_pareto = None
-
             self.model_iteration = 0
-            self.model_population.initialize_model_population(self,random)
+            self.model_population.initialize_model_population(self,random,self.model_pop_init)
 
             # RUN MODEL-LEARNING TRAINING ITERATIONS **************************************************************
             while self.model_iteration < self.model_iterations:
@@ -431,32 +385,28 @@ class HEROS(BaseEstimator, TransformerMixin):
                     self.model_population.global_fitness_update(self)
                 #Bin Deletion
                 self.model_population.probabilistic_model_deletion(self,random)
+                #Model Performance Tracking
+                self.top_models.append(self.model_population.get_max())
+                #Pause learning to conduct a complete evaluation of the current rule population
+                if self.stored_model_iterations != None and (self.model_iteration + 1) in self.stored_model_iterations:
+                    #Archive current rule population
+                    self.model_population.sort_model_pop()
+                    self.model_population.identify_models_on_front(self) #For evaluating all models on the front.
+                    self.model_population.archive_model_pop(self.model_iteration+1)
+                    self.timer.archive_model_pop(self.model_iteration+1)
+                #Next Iteration
                 self.model_iteration += 1
             #Sort the model population first by accuracy and then by number of rules in model.
             self.model_population.sort_model_pop()
+            self.model_population.identify_models_on_front(self) #For evaluating all models on the front.
+            self.model_population.get_target_model(0) #the 'model' object with the best accuracy, then coverage, then lowest rule count (assumes prior sorting)
+            self.timer.phase2_time_stop()
+            self.timer.update_global_time()
             print("HEROS (Phase 2) run complete!")
             print("Random Seed Check - End: "+ str(random.random()))
-
-        #self.check_picklability(self.env)
-        #self.check_picklability(self.FT)
-        #self.check_picklability(self.tracking)
-        #self.check_picklability(compact)
-        #self.check_picklability(self.rule_pareto)
-        #self.check_picklability(self.rule_population)
-        #self.check_picklability(self.model_population)
-        #self.check_picklability(self.model_pareto)
-
-            self.model_population.get_top_model() #the 'model' object with the best accuracy, then coverage, then lowest rule count
+        self.env.clear_data_from_memory()
         return self
 
-    #HEROS remaining todo list
-    # * fix bug where the same rule/ruleID can get added to a model more than once
-    # * update primary predict and predict_probas functions to use the top model/i.e. rules set, to make default predictions (see included run parameter, and change default)
-    # * make visualizations for model/rule -sets to facilitate interpretation
-    # * Reconsider how the model/rule-set is used to make predictions (i.e. voting scheme - what weights votes?, or ordered rule-set, or something else entirely)
-    # * at minimum we need to reconsider the model predict function in 'model.py' to differently handle tied votes - so that a set of rules can't be perfectly accurate just
-    #   based on what class is first in the dicitonary (and thus retuns a correct vote by circumstance)
-    # *when we implement a version of hereos that switches between phase 1 and 2 during learning, we'll need to add code to check for redundant rules with differnet rule IDs
 
     def run_iteration(self,instance):
         # Make 'Match Set', {M}
@@ -466,7 +416,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         outcome_prediction = None
         if self.track_performance > 0:
             self.timer.prediction_time_start()
-            prediction = PREDICTION(self, self.rule_population)
+            prediction = RULE_PREDICTION(self, self.rule_population)
             outcome_prediction = prediction.get_prediction()
             self.tracking.update_prediction_list(outcome_prediction,instance[1],self)
             self.timer.prediction_time_stop()
@@ -495,7 +445,6 @@ class HEROS(BaseEstimator, TransformerMixin):
             self.FT.update_ft_scores_wh(outcome_prediction,instance[1],self)
             self.timer.feature_track_time_stop()
 
-
         # Apply Genetic Algorithm To Generate Offspring Rules
         self.rule_population.genetic_algorithm(instance,self,random)
 
@@ -506,43 +455,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         self.rule_population.clear_sets()
 
 
-    #HEROS (PART 1) to do:
-        #to save run time, in complete rule evaluation, abandon the evaluation once the rule has failed to predict enough instances that the max useful accuracy it could get is 1.
-        #add other basic rule vizualizations of pop
-        #make a separate method for one time FT calculation over given rule-set and training instances. 
-        #add decision tree initialization
-        #add adaptation to survival data analysis
-
-    #General HEROS Ideas:
-        #put a hard cap on numerosity (max of 2 or 3 to encourage rule diversity, but also provide deletion protection) - also to avoid missinterpretation of high numerosity in voting, etc (just by chance) - since numerosity being very high can be just due to when algorithme ends. 
-        # limit the number of decimal points in quantiative featuers and outcomes based on the original data values?
-        # add mechanim to optimize quanatiative boundaries (features -as large as possible without sacrificing performance)
-        # for useful accuracy and coverage (consider using rulematche instances to determine class ratios instead of global ratios.-more in line with quantitative outcomes)
-        # require all numerical data and leave data encoding and translating into human interpretable models to later phase of algorithm
-        # Individual rule fitness - consider taking feature range into account - given two rules, one with 
-        #consider removing numerosity - since we mostly want a diverse popoulation and not to converge rule pop (like previous systems)
-        #Alternate mode of traversing instances
-            #shuffle instances each iteration
-            #over time focus more on instances that are poorly predicted (based on feedback from rule-set learner)
-        #Rule set evolver strategies
-            # Greedy approach
-            # Rule compaction approach(s)
-            # Ordered rule-set evolved by a GA
-            # Voting rule set evovled by a GA
-        #Rule set objects have their own fitness, accuracy, etc, and rules - co-evolution feedback focuses on the best 
-        #Reconsider the role of averagematchsetsize and time since last GA in algorithm
-        #Reconsider the role of numerosity in part one of heros - is this still needed or should it be removed or limited to promote rule diversity, and not waste population real-estate.
-        #Consider rules to speecify a missing value - that can constitute a match
-        #consider a different deletion and deletion vote calculation strategy. 
-        #expand to allow multi-state outcomes (a rule can predicts more than one available class - but not all)
-        #Expand to time adaptive learning 
-        #explore if what we learned from pareto paper can be applied to guide the rule set discovery
-        #REACH-meta learner of what works well for different problems and datasets - to guide rule set learner?? could be a black box learner that works off images, ect. 
-        #PREDICTION; most ML algoriths require all features used to train model to make prediction, we could have rule-set indicate what data features (feature id list) are required to make predictions so user has the option to load dataset only with those featuers
-        #data loading, consider going back to one 'X' and having user load a categorical feature index parameter
-
-
-    def predict(self, X, top_rule_set=False):
+    def predict(self, X, whole_rule_pop=False, target_model=0, rule_pop_iter=None, model_pop_iter=None):
         """Scikit-learn required: Apply trained model to predict outcomes of instances. 
         Applicable to both classification and regression (i.e. quantitative outcome prediction).
 
@@ -566,16 +479,23 @@ class HEROS(BaseEstimator, TransformerMixin):
         num_instances = X.shape[0]
         prediction_list = []
         # Apply Prediction ******************************
-        if not top_rule_set:
+        if whole_rule_pop:
+            if rule_pop_iter != None:
+                self.rule_population.change_rule_pop(rule_pop_iter)
             # Whole final rule population used to make predictions based on standard LCS voting scheme
             for instance in range(num_instances):
                 instance_state = X[instance]
                 self.rule_population.make_eval_match_set(instance_state,self)
-                prediction = PREDICTION(self, self.rule_population)
+                prediction = RULE_PREDICTION(self, self.rule_population)
                 outcome_prediction = prediction.get_prediction()
                 prediction_list.append(outcome_prediction)
                 self.rule_population.clear_sets()
+            if rule_pop_iter != None:    
+                self.rule_population.restore_rule_pop()
         else:
+            if model_pop_iter != None:
+                self.model_population.change_model_pop(model_pop_iter)
+            self.model_population.get_target_model(target_model)
             #Top performing model (i.e. rule-set) is used to make predictions based on standard LCS voting scheme
             for instance in range(num_instances):
                 instance_state = X[instance]
@@ -584,9 +504,12 @@ class HEROS(BaseEstimator, TransformerMixin):
                 outcome_prediction = prediction.get_prediction()
                 prediction_list.append(outcome_prediction)
                 self.model_population.clear_sets()
+            if model_pop_iter != None:    
+                self.model_population.restore_model_pop()
         return np.array(prediction_list)
     
-    def predict_proba(self, X, top_rule_set=False):
+
+    def predict_proba(self, X, whole_rule_pop=False, target_model=0, rule_pop_iter=None, model_pop_iter=None):
         """Scikit-learn required: Apply trained model to get class prediction probabilities for instances. 
             Applicable to both classification and regression (i.e. quantitative outcome prediction).
 
@@ -610,16 +533,23 @@ class HEROS(BaseEstimator, TransformerMixin):
         num_instances = X.shape[0]
         prediction_proba_list = []
         # Apply Prediction ******************************
-        if not top_rule_set:
+        if whole_rule_pop:
+            if rule_pop_iter != None:
+                self.rule_population.change_rule_pop(rule_pop_iter)
             # Whole final rule population used to make predictions based on standard LCS voting scheme
             for instance in range(num_instances):
                 instance_state = X[instance]
                 self.rule_population.make_eval_match_set(instance_state,self)
-                prediction = PREDICTION(self, self.rule_population)
+                prediction = RULE_PREDICTION(self, self.rule_population)
                 outcome_proba = prediction.get_prediction_proba()
                 prediction_proba_list.append(outcome_proba)
                 self.rule_population.clear_sets()
+            if rule_pop_iter != None:    
+                self.rule_population.restore_rule_pop()
         else:
+            if model_pop_iter != None:
+                self.model_population.change_model_pop(model_pop_iter)
+            self.model_population.get_target_model(target_model)
             #Top performing model (i.e. rule-set) is used to make predictions based on standard LCS voting scheme
             for instance in range(num_instances):
                 instance_state = X[instance]
@@ -628,10 +558,12 @@ class HEROS(BaseEstimator, TransformerMixin):
                 outcome_proba = prediction.get_prediction_proba()
                 prediction_proba_list.append(outcome_proba)
                 self.model_population.clear_sets()
+            if model_pop_iter != None:    
+                self.model_population.restore_model_pop()
         return np.array(prediction_proba_list)
 
-    def predict_ranges(self, X, top_rule_set = False):
-        """Scikit-learn required: Apply trained model to get class prediction probabilities for instances.
+    def predict_ranges(self, X, whole_rule_pop=False, target_model=0, rule_pop_iter=None, model_pop_iter=None):
+        """Scikit-learn required: Apply trained model to get prediction probabilities for instances.
         Applicable only to regression (i.e. quantitative outcome prediction).
 
         Parameters
@@ -654,16 +586,23 @@ class HEROS(BaseEstimator, TransformerMixin):
         num_instances = X.shape[0]
         prediction_range_list = []
         # Apply Prediction ******************************
-        if not top_rule_set:
+        if whole_rule_pop:
+            if rule_pop_iter != None:
+                self.rule_population.change_rule_pop(rule_pop_iter)
             # Whole final rule population used to make predictions based on standard LCS voting scheme
             for instance in range(num_instances):
                 instance_state = X[instance]
                 self.rule_population.make_eval_match_set(instance_state,self)
-                prediction = PREDICTION(self, self.rule_population)
+                prediction = RULE_PREDICTION(self, self.rule_population)
                 outcome_range = prediction.get_prediction_range()
                 prediction_range_list.append(outcome_range)
                 self.rule_population.clear_sets()
+            if rule_pop_iter != None:    
+                self.rule_population.restore_rule_pop()
         else:
+            if model_pop_iter != None:
+                self.model_population.change_model_pop(model_pop_iter)
+            self.model_population.get_target_model(target_model)
             #Top performing model (i.e. rule-set) is used to make predictions based on standard LCS voting scheme
             for instance in range(num_instances):
                 instance_state = X[instance]
@@ -672,9 +611,11 @@ class HEROS(BaseEstimator, TransformerMixin):
                 outcome_range = prediction.get_prediction_range()
                 prediction_range_list.append(outcome_range)
                 self.model_population.clear_sets()
+            if model_pop_iter != None:    
+                self.model_population.restore_model_pop()
         return np.array(prediction_range_list)
 
-    def predict_covered(self, X, top_rule_set = False):
+    def predict_covered(self, X, whole_rule_pop=False, target_model=0, rule_pop_iter=None, model_pop_iter=None):
         """Scikit-learn required: Apply trained model to get class prediction probabilities for instances.
         Applicable only to regression (i.e. quantitative outcome prediction).
 
@@ -696,28 +637,36 @@ class HEROS(BaseEstimator, TransformerMixin):
                     raise Exception("X must be fully numeric")
         # Initialize Key Objects ************************
         num_instances = X.shape[0]
-        prediction_range_list = []
+        prediction_covered_list = []
         # Apply Prediction ******************************
-        if not top_rule_set:
+        if whole_rule_pop:
+            if rule_pop_iter != None:
+                self.rule_population.change_rule_pop(rule_pop_iter)
             # Whole final rule population used to make predictions based on standard LCS voting scheme
             for instance in range(num_instances):
                 instance_state = X[instance]
                 self.rule_population.make_eval_match_set(instance_state,self)
-                prediction = PREDICTION(self, self.rule_population)
-                outcome_range = prediction.get_if_covered()
-                prediction_range_list.append(outcome_range)
+                prediction = RULE_PREDICTION(self, self.rule_population)
+                outcome_coverage = prediction.get_if_covered()
+                prediction_covered_list.append(outcome_coverage)
                 self.rule_population.clear_sets()
+            if rule_pop_iter != None:    
+                self.rule_population.restore_rule_pop()
         else:
+            if model_pop_iter != None:
+                self.model_population.change_model_pop(model_pop_iter)
+            self.model_population.get_target_model(target_model)
             #Top performing model (i.e. rule-set) is used to make predictions based on standard LCS voting scheme
             for instance in range(num_instances):
                 instance_state = X[instance]
                 self.model_population.make_eval_match_set(instance_state,self)
                 prediction = MODEL_PREDICTION(self, self.model_population)
-                outcome_range = prediction.get_if_covered()
-                prediction_range_list.append(outcome_range)
+                outcome_coverage = prediction.get_if_covered()
+                prediction_covered_list.append(outcome_coverage)
                 self.model_population.clear_sets()
-        return np.array(prediction_range_list)
-
+            if model_pop_iter != None:    
+                self.model_population.restore_model_pop()
+        return np.array(prediction_covered_list)
 
     def get_pop(self):
         """ Return a dataframe of the rule population. """
@@ -725,36 +674,98 @@ class HEROS(BaseEstimator, TransformerMixin):
         pop_df = self.rule_population.export_rule_population()
         return pop_df
     
-    def get_ft(self):
+    def get_ft(self,feature_names):
         """ Return a dataframe of the ft scores. """
-        ft_df = self.FT.export_ft_scores(self)
+        ft_df = self.FT.export_ft_scores(self,feature_names)
         return ft_df 
     
     def get_model_pop(self):
         """ Return a dataframe of the model population. """
         pop_df = self.model_population.export_model_population()
         return pop_df
-
-    def get_top_model_rules(self):
-        """ Return a dataframe of the top model rule-set. """
-        set_df = self.model_population.export_top_model()
-        return set_df
     
-    def get_indexed_model_rules(self,index):
+    def get_model_rules(self,index=0):
         """ Return a dataframe of the top model rule-set. """
         set_df = self.model_population.export_indexed_model(index)
         return set_df
 
-    def get_rule_pop_heatmap(self,feature_names, weighting, specified_filter, display_micro, show, save, output_path,data_name):
+    def get_rule_pop_heatmap(self,feature_names, weighting, specified_filter, display_micro, show, save, output_path):
         """ """
-        self.rule_population.plot_rule_pop_heatmap(feature_names, self, weighting, specified_filter, display_micro, show, save, output_path, data_name)
+        self.rule_population.plot_rule_pop_heatmap(feature_names, self, weighting, specified_filter, display_micro, show, save, output_path)
 
-
-
-    def get_rule_pareto_landscape(self,resolution, rule_population, plot_rules, color_rules, show, save, output_path, data_name):
+    def get_rule_pop_network(self, feature_names, weighting, display_micro, node_size, edge_size, show, save, output_path):
         """ """
-        self.rule_pareto.plot_pareto_landscape(resolution, rule_population, plot_rules, color_rules, self, show, save, output_path, data_name)
+        self.rule_population.plot_rule_pop_network(feature_names, weighting, display_micro, node_size, edge_size, show, save, output_path)
 
-    def get_model_pareto_landscape(self,resolution, rule_population, plot_rules, show, save, output_path, data_name):
+    def get_rule_pareto_landscape(self,resolution, rule_population, plot_rules, color_rules, show, save, output_path):
         """ """
-        self.model_pareto.plot_pareto_landscape(resolution, rule_population, plot_rules, self, show, save, output_path, data_name)
+        self.rule_pareto.plot_pareto_landscape(resolution, rule_population, plot_rules, color_rules, self, show, save, output_path)
+
+    def get_clustered_ft_heatmap(self,feature_names, show, save, output_path):
+        ft_df = self.FT.export_ft_scores(self,feature_names)
+        print(ft_df)
+        ft_df = ft_df.drop('row_id', axis=1)
+        self.FT.plot_clustered_ft_heatmap(ft_df, feature_names, show, save, output_path)
+
+    def get_performance_tracking(self):
+        return self.tracking.get_performance_tracking_df()
+    
+    def get_model_pareto_landscape(self,resolution, rule_population, plot_rules, show, save, output_path):
+        """ """
+        self.model_pareto.plot_pareto_landscape(resolution, rule_population, plot_rules, self, show, save, output_path)
+    
+    def get_runtimes(self):
+        return self.timer.report_times()
+    
+    def export_model_growth(self):
+        """ Prepares and exports a dataframe capturing the top models at each iteration. """
+        pop_list = []
+        column_names = ['Rule IDs', 
+                        'Number of Rules',
+                        'Fitness', 
+                        'Accuracy',
+                        'Coverage', 
+                        'Birth Iteration', 
+                        'Deletion Probability']
+        for model in self.top_models: 
+            model_list = [str(model.rule_IDs), 
+                          len(model.rule_set), 
+                          model.fitness, 
+                          model.accuracy,
+                        model.coverage, 
+                        model.birth_iteration, 
+                        model.deletion_prob]
+            pop_list.append(model_list)
+        pop_df = pd.DataFrame(pop_list, columns = column_names)
+        return pop_df
+
+    def save_run_params(self,filename):
+        with open(filename, 'w') as file:
+            file.write(f"outcome_type: {self.outcome_type}\n")
+            file.write(f"iterations: {self.iterations}\n")
+            file.write(f"pop_size: {self.pop_size}\n")
+            file.write(f"cross_prob: {self.cross_prob}\n")
+            file.write(f"mut_prob: {self.mut_prob}\n")
+            file.write(f"nu: {self.nu}\n")
+            file.write(f"beta: {self.beta}\n")
+            file.write(f"theta_sel: {self.theta_sel}\n")
+            file.write(f"fitness_function: {self.fitness_function}\n")
+            file.write(f"subsumption: {self.subsumption}\n")
+            file.write(f"use_ek: {self.use_ek}\n")
+            file.write(f"rsl: {self.rsl}\n")
+            file.write(f"feat_track: {self.feat_track}\n")
+            file.write(f"model_iterations: {self.model_iterations}\n")
+            file.write(f"model_pop_size: {self.model_pop_size}\n")
+            file.write(f"model_pop_init: {self.model_pop_init}\n")
+            file.write(f"new_gen: {self.new_gen}\n")
+            file.write(f"merge_prob: {self.merge_prob}\n")
+            file.write(f"rule_pop_init: {self.rule_pop_init}\n")
+            file.write(f"compaction: {self.compaction}\n")
+            file.write(f"track_performance: {self.track_performance}\n")
+            file.write(f"stored_rule_iterations: {self.stored_rule_iterations}\n")
+            file.write(f"stored_model_iterations: {self.stored_model_iterations}\n")
+            file.write(f"random_state: {self.random_state}\n")
+            file.write(f"verbose: {self.verbose}\n")
+            if self.use_ek:
+                file.write(f"ek_weights: {self.env.ek_weights}\n")
+  

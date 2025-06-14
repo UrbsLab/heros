@@ -17,7 +17,20 @@ class RULE_POP:
         self.correct_set = []  # List of references to rules in population that make up correct set (i.e. rules with 'THEN' action matching current instance outcome)
         self.incorrect_set = [] # List of references to rules in population that make up incorrect set (i.e. rules with 'THEN' action not matching current instance outcome)
         self.micro_pop_count = 0 # Number of rules in the population defined by the sum of individual rule numerosities (aka 'micro' population count)
-        self.ID_counter = 0
+        self.ID_counter = 0 # A unique id given to each new rule discovered (that isn't in the current rule population).
+        self.pop_set_archive = {}
+        self.pop_set_hold = None
+
+    def archive_rule_pop(self,iteration):
+        self.pop_set_archive[int(iteration)] = copy.deepcopy(self.pop_set)
+
+    def change_rule_pop(self,iteration):
+        self.pop_set_hold = copy.deepcopy(self.pop_set)
+        self.pop_set = self.pop_set_archive[int(iteration)]
+
+    def restore_rule_pop(self):
+        self.pop_set = self.pop_set_hold
+        self.pop_set_hold = None
 
     def make_match_set(self, instance,heros,random):
         """ Makes a match set {M} and activates covering as needed to initialize the population. """
@@ -94,7 +107,7 @@ class RULE_POP:
         # Identify the most accurate and general rule in the correct set
         for rule_index in self.correct_set:
             rule = self.pop_set[rule_index]
-            if candidate_subsumer == None:
+            if candidate_subsumer is None:
                 if rule.accuracy == max_accuracy:
                     candidate_subsumer = rule
             else:
@@ -128,7 +141,7 @@ class RULE_POP:
         candidate_subsumer = None
         for rule_index in self.correct_set:
             rule = self.pop_set[rule_index]
-            if candidate_subsumer == None or (rule.is_more_general(candidate_subsumer,heros) and rule.accuracy >= candidate_subsumer.accuracy):
+            if candidate_subsumer is None or (rule.is_more_general(candidate_subsumer,heros) and rule.accuracy >= candidate_subsumer.accuracy):
                 candidate_subsumer = rule
         # Check if the target 'subsumer' subsumes any other 
         if candidate_subsumer != None:
@@ -221,7 +234,7 @@ class RULE_POP:
             parent_list = [self.pop_set[self.correct_set[0]],self.pop_set[self.correct_set[1]]]
         else:
             while len(parent_list) < 2:
-                tournament_size = int(len(parent_options)*heros.theta_sel)
+                tournament_size = max(2,int(len(parent_options)*heros.theta_sel))
                 tournament_set = random.sample(parent_options,tournament_size)
                 best_fitness = 0
                 best_rule_index = self.correct_set[0]
@@ -303,17 +316,25 @@ class RULE_POP:
             match_set_numerosity_sum += self.pop_set[rule_index].numerosity
         for rule_index in self.match_set:
             self.pop_set[rule_index].update_ave_match_set_size(match_set_numerosity_sum,heros)
+        """
+        for rule_index in self.match_set:
+            match_set_numerosity_sum += 1
+        for rule_index in self.match_set:
+            self.pop_set[rule_index].update_ave_match_set_size(match_set_numerosity_sum,heros)
+        """
 
     def deletion(self,heros,random):
         """ Applies probabalistic deletion to the rule population to maintain maximum population size."""
         heros.timer.deletion_time_start()
         while self.micro_pop_count > heros.pop_size:
+            #print('Deleting, MicroPopCount is '+str(self.micro_pop_count))
             self.delete_rule(random)
         heros.timer.deletion_time_stop()
     
     def delete_rule(self,random):
         """ Probabilistically identifies a rule to delete with roulette wheel selection, and deletes it at the micro-rule level."""
-        mean_fitness = self.get_pop_fitness_sum() / float(self.micro_pop_count)
+        #mean_fitness = self.get_pop_fitness_sum() / float(self.micro_pop_count)
+        mean_fitness = None
         vote_sum = 0.0
         vote_list = []
         for rule in self.pop_set:
@@ -325,6 +346,7 @@ class RULE_POP:
             rule.deletion_prob = vote_list[i] / vote_sum 
             i += 1
         choicePoint = vote_sum  * random.random()  # Determine the choice point
+        #print('choicepoint: '+str(choicePoint))
         new_sum = 0.0
         for i in range(len(vote_list)): #RYAN- implement more efficiently
             rule = self.pop_set[i]
@@ -387,12 +409,12 @@ class RULE_POP:
             else:
                 pass
             # Set the rule numerosity
-            if loaded_rule.numerosity == None:
+            if loaded_rule.numerosity is None:
                 loaded_rule.numerosity = 1
             else:
                 loaded_rule.numerosity = int(pop_df.loc[rule_row,'Numerosity'])
             # Set the rule average match set size
-            if loaded_rule.ave_match_set_size == None:
+            if loaded_rule.ave_match_set_size is None:
                 loaded_rule.ave_match_set_size = 1
             else:
                 loaded_rule.ave_match_set_size = float(pop_df.loc[rule_row,'Average Match Set Size'])
@@ -470,7 +492,7 @@ class RULE_POP:
                         temp_pop.append(rule)
         self.pop_set = temp_pop
 
-    def plot_rule_pop_heatmap(self, feature_names, heros, weighting='useful_accuracy', specified_filter=None, display_micro=False, show=True, save=False, output_path=None, data_name=None):
+    def plot_rule_pop_heatmap(self, feature_names, heros, weighting='useful_accuracy', specified_filter=None, display_micro=False, show=True, save=False, output_path=None):
         """ Plots a clustered heatmap of the rule population based on what features are specified vs. generalized in each rule.
             Hierarchical clustering is applied to rows (i.e. across rules), with feature order preserved. 
 
@@ -502,7 +524,7 @@ class RULE_POP:
                     for feat in feature_names:
                         if feat_index in rule.condition_indexes: #feature is specified in given rule
                             rule_spec_df.at[row,feat] = 1.0
-                            if weighting == None or weighting == 'None':
+                            if weighting is None or weighting == 'None':
                                 rule_weight_df.at[row,feat] = 1.0
                             elif weighting == 'useful_accuracy':
                                 rule_weight_df.at[row,feat] = float(rule.useful_accuracy)
@@ -517,7 +539,7 @@ class RULE_POP:
                 for feat in feature_names:
                     if feat_index in rule.condition_indexes: #feature is specified in given rule
                         rule_spec_df.at[row,feat] = 1.0
-                        if weighting == None or weighting == 'None':
+                        if weighting is None or weighting == 'None':
                             rule_weight_df.at[row,feat] = 1.0
                         elif weighting == 'useful_accuracy':
                             rule_weight_df.at[row,feat] = float(rule.useful_accuracy)
@@ -549,11 +571,11 @@ class RULE_POP:
         font_size = max(min_text_size, max_text_size - num_features // min_text_size)  # Adjust font size based on the number of features
         clustermap.ax_heatmap.set_xticklabels(clustermap.ax_heatmap.get_xticklabels(), rotation=90, fontsize=font_size)
         if save:
-            plt.savefig(output_path+'/'+data_name+'_clustered_rule_pop_heatmap.png', bbox_inches="tight")
+            plt.savefig(output_path+'/clustered_rule_pop_heatmap.png', bbox_inches="tight")
         if show:
             plt.show()
 
-    def plot_rule_pop_network(self, feature_names, weighting='useful_accuracy', display_micro=False, node_size=1000, edge_size=10, show=True, save=False, output_path=None, data_name=None):
+    def plot_rule_pop_network(self, feature_names, weighting='useful_accuracy', display_micro=False, node_size=1000, edge_size=10, show=True, save=False, output_path=None):
         """ Plots a network visualization of the rule population with feature specificity across rules as node size and feature co-specificity 
             across rules in the population as edge size.
         """
@@ -567,7 +589,7 @@ class RULE_POP:
             if display_micro:
                 base_score = base_score * rule.numerosity
             for feature_index in rule.condition_indexes:
-                if weighting == None or weighting == 'None':
+                if weighting is None or weighting == 'None':
                     feat_spec_count[feature_index] += base_score
                 elif weighting == 'useful_accuracy':
                     feat_spec_count[feature_index] += base_score * rule.useful_accuracy
@@ -579,7 +601,7 @@ class RULE_POP:
             for pair in combinations(rule.condition_indexes, 2):
                 # Ensure pairs are in sorted order to avoid duplicate pairs (e.g., (1, 2) and (2, 1))
                 pair = tuple(sorted(pair))
-                if weighting == None or weighting == 'None':
+                if weighting is None or weighting == 'None':
                     feat_cooccurrence_count[pair] += base_score
                 elif weighting == 'useful_accuracy':
                     feat_cooccurrence_count[pair] += base_score * rule.useful_accuracy
@@ -621,6 +643,6 @@ class RULE_POP:
         # Show the plot
         plt.axis('off')
         if save:
-            plt.savefig(output_path+'/'+data_name+'_rule_pop_network.png', bbox_inches="tight")
+            plt.savefig(output_path+'/rule_pop_network.png', bbox_inches="tight")
         if show:
             plt.show()

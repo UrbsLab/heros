@@ -66,45 +66,63 @@ class RULE_PARETO:
 
     def get_pareto_fitness(self,candidate_metric_1,candidate_metric_2, landscape,heros):
         """ Calculate rule fitness releative to the rule pareto front. Only set up for two objectives. """
-        # First handle simple special cases
+        penalty_weight = 0.01
+        ### SPECIAL CASE HANDLING -------------------------------------------------------------------------------------------------------------------------------------------
+        ## Special Case 1: Only one point on front, both with zero values (i.e. no front exists) (unlikely special case if working on data with no/very low signal)
         if len(self.rule_front_scaled) == 1 and self.rule_front_scaled[0][0] == 0.0 and self.rule_front_scaled[0][1] == 0.0:
             return None
-        if landscape: # Handles special cases when calculating fitness landscape for visualization
+        ## Pareto Landscape Plotting Special Cases:Handles special cases when calculating fitness landscape for visualization---------
+        if landscape: 
+            ## Special Case 2: Point is beyond one of the Pareto front edges (denoted by dotted line on viz)(return max fitness for viz)
             if candidate_metric_1 > 1.0 or candidate_metric_2 / float(self.metric_limits[1]) > 1.0:
                 return 1.0
+            ## Special Case 3: Front contains more than one solution and point is beyond front but not greater than either front edge (i.e. the optimal corner of the pareto front) (return max fitness for viz)
             if candidate_metric_1 > self.rule_front_scaled[0][0] and candidate_metric_2 / float(self.metric_limits[1]) > self.rule_front_scaled[-1][1] and self.point_beyond_front(candidate_metric_1,candidate_metric_2 / float(self.metric_limits[1])):
                 return 1.0 
+        #------------------------------------------------------------------------------------------------------------------------------
+        ## Special Case 4: Point is at minimum fitness point (i.e. both target metrics minimized - least optimal)
         if candidate_metric_1 == 0.0 and candidate_metric_2 == 0.0:
             return 0.0
+        ## Special Case 5: Point is on the front (returns optimal fitness when nu=1, and slightly penalized fitness for less accurate front points when nu>1)
         elif (candidate_metric_1,candidate_metric_2) in self.rule_front: # Rules on the front return an ideal fitness
-            return 1.0
+            if heros.nu > 1: # Apply pressure to maximize model accuracy 
+                fitness_penalty = (penalty_weight*(1.0-(candidate_metric_1/self.metric_limits[0]))) 
+                return  1.0 - fitness_penalty 
+            else: 
+                return 1.0
+        ## Special Case 6: Point has maximum metric 1 (i.e. useful accuracy) i.e. on the front edge (dotted line), but not on the front itself.
         elif candidate_metric_1 == self.metric_limits[0]:
-            return 1.0
-        #elif candidate_metric_2 == self.metric_limits[1]: #rule has the maximum value of one objective
-        #    return 1.0
+            fitness_penalty = (penalty_weight*(1.0-(candidate_metric_2/self.metric_limits[1]))) 
+            return  1.0 - fitness_penalty 
+        ### TYPICAL CASE HANDLING ----------------------------------------------------------------------------------------------------------------------------------------------
+        ## All other points have fitness calculated based on the distance from the point to the nearest point on the pareto front (or front edge)
         else:
             scaled_candidate_metric_2 = candidate_metric_2 / float(self.metric_limits[1])
             rule_objectives = (candidate_metric_1,scaled_candidate_metric_2)
             # Find the closest distance between the rule and the pareto front
             temp_front = [(0.0,self.rule_front_scaled[0][1])] #max coverage boundary
+            #temp_front = []
             for front_point in self.rule_front_scaled:
                 temp_front.append(front_point)
             temp_front.append((self.rule_front_scaled[-1][0],0.0)) #max accuracy boundary
             min_distance = float('inf')
+            min_at_last_segment = False 
             for i in range(len(temp_front) - 1):
                 segment_start = temp_front[i]
                 segment_end = temp_front[i + 1]
                 distance = self.point_to_segment_distance(rule_objectives, segment_start, segment_end)
-                min_distance = min(min_distance, distance)
-            pareto_fitness = 1 - min_distance
+                # Check if the current distance is the new minimum
+                if distance < min_distance: 
+                    min_distance = distance
+                    min_at_last_segment = (i == len(temp_front) - 2)  # Check if it's the last segment
+            if min_at_last_segment: 
+                fitness_penalty = (penalty_weight * (1.0 - (candidate_metric_2/self.metric_limits[1]))) 
+                pareto_fitness = (1 - min_distance) - fitness_penalty
+                if pareto_fitness < 0:
+                    pareto_fitness = (1 - min_distance) * penalty_weight
+            else:
+                pareto_fitness = 1 - min_distance
             if heros.nu > 1: # Apply pressure to maximize rule accuracy
-                """
-                # Apply fitness penalty to rules that fall under the diagonal to the max specificity front point (rule slope is less than slope to that front point)
-                rule_slope = self.slope((0.0,0.0),rule_objectives)
-                front_point_slope = self.slope((0.0,0.0),self.rule_front_scaled[0])
-                if rule_slope < front_point_slope:
-                    pareto_fitness = pareto_fitness / float(heros.nu)
-                """
                 pareto_fitness = pareto_fitness * pow(candidate_metric_1 , heros.nu)
             return pareto_fitness
         
@@ -210,7 +228,7 @@ class RULE_PARETO:
             return 2
 
 
-    def plot_pareto_landscape(self, resolution, rule_population, plot_rules, color_rules, heros, show=True, save=False, output_path=None, data_name=None):
+    def plot_pareto_landscape(self, resolution, rule_population, plot_rules, color_rules, heros, show=True, save=False, output_path=None):
         # Generate fitness landscape ******************************
         x = np.linspace(0,1.05*self.metric_limits[1],resolution) #coverage
         y = np.linspace(0,1.05,resolution) #accuracy
@@ -246,9 +264,6 @@ class RULE_PARETO:
         # Set the axis limits between 0 and 1
         plt.xlim(0, 1.05)
         plt.ylim(0, 1.05)
-        #custom_ticks = [0, 0.2, 0.4, 0.6, 0.8, 1.0]
-        #custom_labels = [int(x * self.metric_limits[1]) for x in [0, 0.2, 0.4, 0.6, 0.8, 1.0]]
-        #plt.xticks(custom_ticks, custom_labels)
         def create_x_tick_transform(multiplier):
             def x_tick_transform(x, pos):
                 return f"{x * multiplier:.1f}"  # Multiply by value and convert to an integer
@@ -284,97 +299,6 @@ class RULE_PARETO:
         plt.legend(loc='upper left', bbox_to_anchor=(1.25, 1), fontsize='small')
         plt.subplots_adjust(right=0.75)
         if save:
-            plt.savefig(output_path+'/'+data_name+'_pareto_fitness_landscape_rules.png', bbox_inches="tight")
+            plt.savefig(output_path+'/pareto_fitness_landscape_rules.png', bbox_inches="tight")
         if show:
             plt.show()
-
- 
-        """
-    def get_pareto_fitness_old(self,candidate_metric_1,candidate_metric_2):
-        # First handle simple special cases
-        if len(self.rule_front_scaled) == 1 and self.rule_front_scaled[0][0] == 0.0 and self.rule_front_scaled[0][1] == 0.0:
-            return None
-        elif candidate_metric_1 == 0.0 and candidate_metric_2 == 0.0:
-            return 0.0
-        elif (candidate_metric_1,candidate_metric_2) in self.rule_front: # Rules on the front return an ideal fitness
-            return 1.0
-        elif candidate_metric_1 == self.metric_limits[0]:
-            return 1.0
-        #elif candidate_metric_2 == self.metric_limits[1]: #rule has the maximum value of one objective
-        #    return 1.0
-        else:
-            scaled_candidate_metric_2 = candidate_metric_2 / float(self.metric_limits[1])
-            rule_objectives = (candidate_metric_1,scaled_candidate_metric_2)
-            # Calculate distance from pareto front origin (0,0) to the rule_objectives on the pareto front
-            rule_distance = self.euclidean_distance((0.0,0.0),rule_objectives)
-            # Calculate slope between pareto front origin (0,0) and the rule_objectives on the pareto front
-            rule_slope = self.slope((0.0,0.0),rule_objectives)
-            # Calculate distance from origin to pareto front line segment intercept based on rule_slope
-            line_coordinates = []
-            segment_index = None
-            if len(self.rule_front_scaled) == 1: #front is comprised of a single rule
-                # Identify the line segment (coordinates) of the pareto front where the target rule's slope will intersect the front.
-                front_point_slope = self.slope((0.0,0.0),self.rule_front_scaled[0])
-                if front_point_slope < rule_slope:
-                    line_coordinates = [self.rule_front_scaled[0],(self.rule_front_scaled[0][0],0.0)] #defines max accuracy horizontal line
-                elif front_point_slope > rule_slope:
-                    segment_index = 0
-                    line_coordinates = [(0.0,self.rule_front_scaled[0][1]),self.rule_front_scaled[0]] #defines max coverage vertical line
-                else:
-                    line_coordinates = None
-            else: #front is comprised of multiple rules
-                # Identify the line segment of the pareto front where the target rule's slope will intersect the front.
-                segment_index = 0 #starts with edge vertical line (max coverage)
-                front_point_slope = 0.0 #starts with horizontal line to maximum coverage
-                while rule_slope >= front_point_slope and segment_index < len(self.rule_front_scaled): #starts with rule on front with maximum coverage
-                    #if segment_index <= len(self.rule_front_scaled)-1:
-                    front_point_slope = self.slope((0.0,0.0),self.rule_front_scaled[segment_index])
-                    segment_index +=1 
-
-                #print(segment_index)
-                # Identify the line segment (coordinates) of the pareto front where the target rule's slope will intersect the front.
-                if segment_index == 0: #defines max coverage vertical line
-                    line_coordinates = [(0.0,self.rule_front_scaled[0][1]),self.rule_front_scaled[0]] #defines max coverage vertical line
-                elif segment_index == len(self.rule_front_scaled): #defines max accuracy horizontal line
-                    line_coordinates = [self.rule_front_scaled[0],(self.rule_front_scaled[0][0],0.0)] #defines max accuracy horizontal line
-                else:
-                    line_coordinates = [self.rule_front_scaled[segment_index-1],self.rule_front_scaled[segment_index]]
-            # Given the pair of front line coordinates and the slope of the rule line, identify the intercept point
-            if line_coordinates != None:
-                intercept = self.find_line_intercept(line_coordinates[0],line_coordinates[1],rule_slope)
-            else:
-                intercept = self.rule_front_scaled[0]
-            # Calculate the distance from the origin to that intercept
-            front_distance = self.euclidean_distance((0.0,0.0),intercept)
-            # Use the relative distance between the origin and the intercept to calculate the rule fitness based on how close it is to the pareto front
-            pareto_fitness = rule_distance / float(front_distance)
-            # Adjust this calculation to account for the different distances between the origin and points on the pareto front.
-            #pareto_fitness = pareto_pre_fitness * front_distance / max(self.front_diagonal_lengths)
-            if segment_index != None and segment_index == 0: # If rule is on intersect with max coverage line
-                pareto_fitness = pareto_fitness / float(heros.nu) #arbitrary penalty applied
-            if pareto_fitness > 1.0:
-                pareto_fitness = 1.0
-            return pareto_fitness
-
-    def find_line_intercept(self,point1,point2,rule_slope):
-        # Assumes point1 has the smaller accuracy
-        line_slope = self.slope(point1,point2)
-        if line_slope == 0.0:
-            if rule_slope == np.inf:
-                yIntercept = point1[0] 
-                xIntercept = 0.0
-            else:
-                yIntercept = point1[0] 
-                xIntercept = yIntercept/rule_slope
-        elif line_slope == np.inf:
-            if rule_slope == 0.0:
-                xIntercept = point1[1] 
-                yIntercept = 0.0
-            else:
-                xIntercept = point1[1]
-                yIntercept = xIntercept*rule_slope
-        else:
-            xIntercept = (point2[0] - line_slope*point2[1]) / float(rule_slope-line_slope)
-            yIntercept = rule_slope*xIntercept
-        return (yIntercept,xIntercept)
-    """
