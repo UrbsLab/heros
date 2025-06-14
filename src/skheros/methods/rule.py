@@ -17,6 +17,7 @@ class RULE:
         self.match_cover = 0 #number of training instances matched by this rule
         self.correct_cover = 0 #number of training instances that both matched and had the same action/outcome as this rule
         self.birth_iteration = None #iteration number when this rule was first introduced (or re-introduced) to the population
+        self.match_set = []
         # Non-standary metric parameters
         self.useful_accuracy = None
         self.useful_coverage = None
@@ -84,7 +85,7 @@ class RULE:
             value = instance_state[feat] #value of feature for current instance in dataset
             # Categorical feature ******************************************************
             if is_categorical: 
-                if value == None: # Missing value in the dataset (by default, missing values do not match specified rule conditions)
+                if value is None: # Missing value in the dataset (by default, missing values do not match specified rule conditions)
                     return False
                 elif value == self.condition_values[i]: #instance value matches condition value
                     pass
@@ -92,7 +93,7 @@ class RULE:
                     return False
             # Quanatiative feature ******************************************************
             else: 
-                if value == None: # Missing value in the dataset (by default, missing values do not match specified rule conditions)
+                if value is None: # Missing value in the dataset (by default, missing values do not match specified rule conditions)
                     return False
                 elif self.condition_values[i][0] <= value <= self.condition_values[i][1]: #instance value falls within condition value range
                     pass
@@ -435,8 +436,6 @@ class RULE:
     def generalize_condition(self,num_to_generalize,changed_features,random):
         """ Generalizes rule features for mutation and ensuring rule specificity limit is maintained. """
         temp_feature_pool = copy.deepcopy(self.condition_indexes)
-        #print("temp feature pool: "+str(temp_feature_pool))
-        #print("changed features: "+str(changed_features))
         for feat in changed_features:
             if feat in temp_feature_pool:
                 #print("feat: "+str(feat))
@@ -454,11 +453,13 @@ class RULE:
         front_updated = False #only actively used by pareto front rule-fitness
         train_data = heros.env.train_data
         heros.env.num_instances
+        self.match_set = []
         for instance_index in range(heros.env.num_instances):
             instance_state = train_data[0][instance_index] 
             outcome_state = train_data[1][instance_index]
             if self.match(instance_state,heros):
                 self.match_cover += 1
+                self.match_set.append(instance_state)
                 if self.action == outcome_state:
                     self.correct_cover += 1
         # Calculate rule accuracy ***************************
@@ -483,7 +484,7 @@ class RULE:
             front_updated = heros.rule_pareto.update_front(self.useful_accuracy,self.useful_coverage,['max','max']) 
             # Calculate and update the rule fitness
             self.fitness = heros.rule_pareto.get_pareto_fitness(self.useful_accuracy,self.useful_coverage, False,heros)
-            if self.fitness == None: #Pareto front only has (0,0) for useful_accuracy and useful_coverage
+            if self.fitness is None: #Pareto front only has (0,0) for useful_accuracy and useful_coverage
                 self.fitness = pow(self.accuracy, heros.nu)
             if front_updated: #all rule-fitnesses will be re-calculated externally
                 return True
@@ -545,7 +546,7 @@ class RULE:
             front_updated = heros.rule_pareto.update_front(self.useful_accuracy,self.useful_coverage,['max','max']) 
             # Calculate and update the rule fitness
             self.fitness = heros.rule_pareto.get_pareto_fitness(self.useful_accuracy,self.useful_coverage, False,heros)
-            if self.fitness == None: #Pareto front only has (0,0) for useful_accuracy and useful_coverage
+            if self.fitness is None: #Pareto front only has (0,0) for useful_accuracy and useful_coverage
                 self.fitness = pow(self.useful_accuracy, heros.nu)
             if front_updated: #all rule-fitnesses will be re-calculated externally
                 return True
@@ -553,20 +554,6 @@ class RULE:
             print("Fitness metric not available.")
         return False
     
-    """ incorporating error into rule prediction
-    # Convert sum of instance outcomes to an average (will serve as rule's )
-    self.prediction = self.prediction / float(self.match_cover)
-    # Based on this 
-    self.mean_absolute_error = 0
-    for instance_index in instance_match_list:
-        instance_state = train_data[0][instance_index] 
-        outcome_state = train_data[1][instance_index]
-        self.mean_absolute_error += abs(outcome_state - self.prediction)
-
-    self.mean_absolute_error = self.mean_absolute_error / float(self.match_cover)
-    scaled_mean_absolute_error = self.mean_absolute_error / float(heros.env.outcome_range[1] - heros.env.outcome_range[0]) #divide by max possible error
-    self.accuracy = 1 - scaled_mean_absolute_error
-    """
 
     def set_outcome_range_probability(self,heros):
         """ Calculate the probability that the quantitative outcome of a given instance in the training data will fall within the action range specified by this rule. """
@@ -581,7 +568,7 @@ class RULE:
     def update_rule_fitness(self,heros):
         """ Updates the rule fitness as a result of an update to the pareto front."""
         self.fitness = heros.rule_pareto.get_pareto_fitness(self.useful_accuracy,self.useful_coverage, False,heros)
-        if self.fitness == None: #Pareto front only has (0,0) for useful_accuracy and useful_coverage
+        if self.fitness is None: #Pareto front only has (0,0) for useful_accuracy and useful_coverage
             self.fitness = pow(self.accuracy, heros.nu)
 
     def subsumes(self,other_rule,heros):
@@ -639,15 +626,30 @@ class RULE:
     
     def get_deletion_vote(self,mean_fitness):
         """  Returns the vote for deletion of the rule. """
+
+        """ EARLY IMPLEMENTATION
         if self.fitness == 0.0:
             deletion_vote = self.ave_match_set_size * self.numerosity * mean_fitness / (0.001 / self.numerosity)
         else: #regular calculation
             deletion_vote = self.ave_match_set_size * self.numerosity * mean_fitness / (self.fitness / self.numerosity) #Ryan -consider a different strategy
         return deletion_vote
+        """
+        if self.fitness == 0.0:
+            deletion_vote = self.ave_match_set_size * self.numerosity / (0.001 / self.numerosity)
+        else: #regular calculation
+            deletion_vote = self.ave_match_set_size * self.numerosity / (self.fitness / self.numerosity) #Ryan -consider a different strategy
+        return deletion_vote
+
 
     def update_ave_match_set_size(self, match_set_numerosity_sum,heros):
         """ Applies Widrow-Hoff algorithm to update average match set size in which this rule also matches. """
         self.ave_match_set_size = self.ave_match_set_size + heros.beta * (match_set_numerosity_sum - self.ave_match_set_size)
+        
+    """ ORIGINAL IMPLEMENTATION
+    def update_ave_match_set_size(self, match_set_size, heros):
+        " Applies Widrow-Hoff algorithm to update average match set size in which this rule also matches. "
+        self.ave_match_set_size = self.ave_match_set_size + heros.beta * (match_set_size - self.ave_match_set_size)
+    """
 
     def update_numerosity(self, num):
         """ Updates the numerosity of the classifier. """

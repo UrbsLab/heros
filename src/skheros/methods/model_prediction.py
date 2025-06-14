@@ -1,6 +1,6 @@
 class MODEL_PREDICTION():
     def __init__(self,heros,model_population):
-        """ Returns a prediction when applying the entire rule population to a given training or testing instance. """
+        """ Returns a prediction when applying a mode/rule-set to a given training or testing instance. """
         self.prediction = None
         self.covered = None
         # Classification outcome object
@@ -16,8 +16,8 @@ class MODEL_PREDICTION():
                 for current_class in heros.env.classes:
                     self.vote[current_class] = 0.0
                 for rule_index in model_population.match_set:
-                    rule = model_population.top_rule_set[rule_index]
-                    self.vote[rule.action] += rule.useful_accuracy
+                    rule = model_population.target_rule_set[rule_index]
+                    self.vote[rule.action] += 1
                 # Calculate prediction probabilities for each class
                 proba_sum = 0
                 for k,v in sorted(self.vote.items()):
@@ -42,7 +42,7 @@ class MODEL_PREDICTION():
                     chosen_class = None
                     high_count = None
                     for current_class in best_class_list:
-                        if chosen_class == None or heros.env.class_counts[current_class] > high_count: # > is most similar to how model operates using a decision threshold
+                        if chosen_class is None or heros.env.class_counts[current_class] > high_count: # > is most similar to how model operates using a decision threshold
                             chosen_class = current_class
                             high_count = heros.env.class_counts[current_class]
                     self.prediction = chosen_class
@@ -50,13 +50,15 @@ class MODEL_PREDICTION():
                     self.prediction = best_class_list[0]
             else: #empty match set (rule population does not cover current instance)
                 self.prediction = heros.env.majority_class
+                for current_class in heros.env.classes:
+                    self.prediction_proba[current_class] = 0.0
                 self.covered = False
         elif heros.outcome_type == 'quant': #quantitative outcome
             if len(model_population.match_set) > 0: #at least one rule in match set (i.e. current instance is covered by the rule population)
                 self.covered = True
                 segment_range_list= [] # can include np.inf and -np.inf
                 for rule_index in model_population.match_set:
-                    rule = model_population.top_rule_set[rule_index]
+                    rule = model_population.target_rule_set[rule_index]
                     low = rule.action[0]
                     if not low in segment_range_list:
                         segment_range_list.append(low)
@@ -68,7 +70,7 @@ class MODEL_PREDICTION():
                     self.prediction_proba[(segment_range_list[i],segment_range_list[i+1])] = 0
                 # Calculate votes for each segment range
                 for rule_index in model_population.match_set:
-                    rule = model_population.top_rule_set[rule_index]
+                    rule = model_population.target_rule_set[rule_index]
                     low = rule.action[0]
                     high = rule.action[1]
                     for i in range(0,len(segment_range_list)-1):
@@ -78,23 +80,13 @@ class MODEL_PREDICTION():
                 self.prediction_range = max(self.prediction_proba,key=self.prediction_proba.get) #range given as a tuple
                 #Find rules that overlap with this best range segment and gather their predictions and performance weights
                 prediction_list = []
-                #weight_list = []
-                #numerosity_sum = 0
                 for rule_index in model_population.match_set:
-                    rule = model_population.top_rule_set[rule_index]
+                    rule = model_population.target_rule_set[rule_index]
                     low = rule.action[0]
                     high = rule.action[1]
                     if low <= self.prediction_range[0] and high >= self.prediction_range[1]: #rule's outcome range includes the best range segment
-                        prediction_list.append(rule.prediction)# * rule.numerosity)
-                        #weight_list.append(rule.fitness)
-                        #numerosity_sum += rule.numerosity
-                #weight_sum = sum(weight_list)
+                        prediction_list.append(rule.prediction)
                 self.prediction = sum(prediction_list)
-                #if weight_sum == 0: #prediction is the average of all rule predictions (numerosity represents virtual copies of rules)
-                #    self.prediction = sum(prediction_list) / float(numerosity_sum)
-                #else: #prediction is the fitness weighted average of all predictions
-                #    prediction_sum = sum(a * b for a, b in zip(prediction_list, weight_list))
-                #    self.prediction = prediction_sum / (weight_sum * numerosity_sum)
             else: #empty match set (rule population does not cover current instance)
                 self.prediction = sum(heros.env.outcome_ranked) / float(len(heros.env.outcome_ranked)) # Average of all training instance outcomes (default prediction)
                 self.prediction_range = (self.prediction - heros.env.outcome_sd, self.prediction + heros.env.outcome_sd)

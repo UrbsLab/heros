@@ -5,14 +5,11 @@ import numpy as np
 import math
         
 class DATA_MANAGE:
-    #def __init__(self, Xq, Xc, y, ek, heros):
-    def __init__(self, X, y, cat_feat_indexes, ek, heros):
-        """ """
-        #self.heros = heros
+    def __init__(self, X, y, row_id, cat_feat_indexes, ek, heros):
         np.random.seed(heros.random_state)
         # DATA HANDLING AND CHARACTERISTICS ***************************************************
         # Store number of each feature type (quantiative and categorical) 
-        if cat_feat_indexes == None or len(cat_feat_indexes) == 0: #all features are quantitative
+        if cat_feat_indexes is None or cat_feat_indexes == 'None' or len(cat_feat_indexes) == 0: #all features are quantitative
             self.num_q_feat = X.shape[1]
             self.num_c_feat = 0
         else:
@@ -56,24 +53,29 @@ class DATA_MANAGE:
         # Set rule specificity limit
         self.set_rule_specificity_limit(heros)
        # Format data (convert to numpy array, shuffle instances, and set NaN values to None)
-        self.train_data = self.format_data(X, y) #stores formatted dataset used in training as numpy array (self.train_data[0] = feature values, and self.train_data[1] = outcome values)
+        self.train_data = self.format_data(X, y, row_id) #stores formatted dataset used in training as numpy array (self.train_data[0] = feature values, and self.train_data[1] = outcome values)
         self.instance_index = 0 #instance index identifying what dataset instance is being focused on on a given iteration of the algorithm
         self.instance_state = self.train_data[0][self.instance_index] #gives the list of feature values for the current instance (i.e. instance 'state')
         self.outcome_state = self.train_data[1][self.instance_index] #gives the outcome value for the current instance (i.e. outcome 'state)
-        self.instance_ids = self.train_data[2]
+        self.instance_ids = self.train_data[2] #stores all instance ids 
         if heros.verbose:
             self.report_data(heros) # Debug
 
         #EXPERT KNOWLEGE HANDLING *******************************************************
         self.ek_index_rank = None
         self.ek_weights = None
-        if heros.use_ek: # Expert knowledge in the form of feature weights were provided
+        if not ek is None:
             if len(ek) != self.num_feat:
                 raise Exception("Length of expert knowledge list (i.e. 'ek' param) must be equal to the total number of features in the dataset and have the same feature order")
+            else:
+                heros.use_ek = True # Expert knowledge in the form of feature weights were provided
             # Generate EK index ranking ******************************************
             self.ek_index_rank =sorted(range(len(ek)), key=lambda x: ek[x], reverse=True)
             # Generate EK weights *************************************************
             self.transform_ek_to_weights(ek)
+
+    def clear_data_from_memory(self):
+        self.train_data = None
 
     def transform_ek_to_weights(self,ek):
         """ Transform expert knowledge scores into rule specification probability weights"""
@@ -126,7 +128,7 @@ class DATA_MANAGE:
 
     def set_rule_specificity_limit(self, heros):
         """Determine and set the rule specificity limit."""
-        if heros.rsl is None:
+        if heros.rsl == 0:
             limit = 1
             unique_combinations = math.pow(self.avg_feat_states, limit)
             while unique_combinations < self.num_instances:
@@ -134,9 +136,12 @@ class DATA_MANAGE:
                 unique_combinations = math.pow(self.avg_feat_states, limit)
             heros.rsl = min(limit, self.num_feat)
 
-    def format_data(self, X, y):
+    def format_data(self, X, y, row_id):
         """Format training data: convert to np array, shuffle instances, and set NaNs as None."""
-        instance_ids = np.arange(0, self.num_instances) #create instance IDs for rows/instances - used to identify corresponding feature tracking scores
+        if row_id is None:
+            instance_ids = np.arange(0, self.num_instances) #create instance IDs for rows/instances - used to identify corresponding feature tracking scores
+        else:
+            instance_ids = row_id
         formatted_data = np.insert(X, self.num_feat, y, axis=1)
         formatted_data = np.insert(formatted_data, self.num_feat+1, instance_ids, axis=1)
         shuffle_order = np.random.permutation(self.num_instances)
@@ -146,7 +151,6 @@ class DATA_MANAGE:
         id = shuffled_data[:, -1].tolist()
         for i in range(len(features)):
             features[i] = [None if np.isnan(x) else x for x in features[i]]
-            #labels[i] = None if np.isnan(labels[i]) else labels[i]
         return [features, labels, id]
 
     def get_instance(self):

@@ -33,11 +33,9 @@ class COMPACT:
         keep_going = True 
         master_index = 0 #keeps track of the index of the first rule in the current specificity level being examined
         while keep_going: #applied once per rule specificity level (examines all rules of this specificity as potential subsumers)
-            #print('masterindex:'+str(master_index))
             final_level_specificity = len(heros.rule_population.pop_set[len(heros.rule_population.pop_set)-1].condition_indexes)
             try:
                 current_level_specificity = len(heros.rule_population.pop_set[master_index].condition_indexes)
-                #print('currentlevelspecificity:'+str(current_level_specificity))
                 if current_level_specificity >= final_level_specificity:
                     break
             except: #current_level_specificity == final_level_specificity:
@@ -53,7 +51,6 @@ class COMPACT:
                     same_level = False
                 else: 
                     current_level_index_end += 1
-            #print('nextlevelspecificity:'+str(next_level_specificity))
             # Check if current level rules can subsume any later level rules
             for current_level_index in range(current_level_index_start,current_level_index_end+1): #for each rule of current specificity level
                 other_level_index = copy.deepcopy(current_level_index_end+1)

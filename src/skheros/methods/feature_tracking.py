@@ -18,8 +18,6 @@ class FEAT_TRACK:
             correct_rule_count += heros.rule_population.pop_set[rule_index].numerosity
             specificity = len(heros.rule_population.pop_set[rule_index].condition_indexes)
             for feat in heros.rule_population.pop_set[rule_index].condition_indexes:
-                #correct_score_list[feat] += heros.rule_population.pop_set[rule_index].useful_accuracy * heros.rule_population.pop_set[rule_index].numerosity / specificity\
-                #correct_score_list[feat] += heros.rule_population.pop_set[rule_index].fitness
                 correct_score_list[feat] += heros.rule_population.pop_set[rule_index].useful_accuracy
         return correct_score_list, correct_rule_count
 
@@ -31,7 +29,6 @@ class FEAT_TRACK:
             incorrect_rule_count += heros.rule_population.pop_set[rule_index].numerosity
             specificity = len(heros.rule_population.pop_set[rule_index].condition_indexes)
             for feat in heros.rule_population.pop_set[rule_index].condition_indexes:
-                #incorrect_score_list[feat] += heros.rule_population.pop_set[rule_index].useful_accuracy * heros.rule_population.pop_set[rule_index].numerosity / specificity
                 incorrect_score_list[feat] += heros.rule_population.pop_set[rule_index].useful_accuracy
         return incorrect_score_list, incorrect_rule_count
 
@@ -89,14 +86,14 @@ class FEAT_TRACK:
                 self.ft_scores[instance_index][feat] += correct_score_list[feat]
             heros.rule_population.clear_sets()
 
-    def export_ft_scores(self,heros):
+    def export_ft_scores(self,heros,feature_names):
         """ Prepares and exports a dataframe capturing the feature tracking scores."""
-        columns = list(range(heros.env.num_feat))
-        ft_df = pd.DataFrame(self.ft_scores, columns=columns)
-        ft_df['id'] = heros.env.instance_ids
+        #columns = list(range(heros.env.num_feat))
+        ft_df = pd.DataFrame(self.ft_scores, columns=feature_names)
+        ft_df['row_id'] = heros.env.instance_ids
         return ft_df 
     
-    def plot_clustered_ft_heatmap(self, ft_df, feature_names, show=True, save=False, output_path=None, data_name=None):
+    def plot_clustered_ft_heatmap(self, ft_df, feature_names, show=True, save=False, output_path=None):
         """ Generates a clustered heatmap of feature tracking scores. Scores values are scaled within rows between 0 and 1 for 
             hierarchical clustering between both rows and columns to determine clustering arrangment in plot. Scores values are 
             globally scaled (min/max out of all feature tracking scores) for displaying heatmap values on plot. 
@@ -126,6 +123,6 @@ class FEAT_TRACK:
         font_size = max(min_text_size, max_text_size - num_features // min_text_size)  # Adjust font size based on the number of features
         clustermap.ax_heatmap.set_xticklabels(clustermap.ax_heatmap.get_xticklabels(), rotation=90, fontsize=font_size)
         if save:
-            plt.savefig(output_path+'/'+data_name+'_clustered_ft_heatmap.png', bbox_inches="tight")
+            plt.savefig(output_path+'/clustered_ft_heatmap.png', bbox_inches="tight")
         if show:
             plt.show()
