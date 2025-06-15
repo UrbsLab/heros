@@ -1,4 +1,5 @@
 import pandas as pd
+import matplotlib.pyplot as plt
 
 class RULE_TRACK:
     def __init__(self, heros):
@@ -9,48 +10,17 @@ class RULE_TRACK:
         if heros.track_performance > self.prediction_window:
             self.prediction_window = heros.track_performance
         if heros.outcome_type == 'class': #class outcome
-            """
-            self.tracking_header = ["Iteration",
-                            "Pred.Acc.Est.",
-                            "Total Time",
-                            "Cover Time",
-                            "Equality Time", 
-                            "Match Time",
-                            "Eval Time", 
-                            "FT Time", 
-                            "Subsume Time",
-                            "Select Time", 
-                            "Mate Time", 
-                            "Delete Time", 
-                            "Predict Time"]
-            """
             self.tracking_header = ["Iteration",
                             "Pred.Acc.Est.",
                             "Unique Rule Count",
                             "Rule Pop Size",
                             "Total Time"]
         elif heros.outcome_type == 'quant':
-            """
-            self.tracking_header = ["Iteration",
-                            "Pred.Error.Est.",
-                            "Total Time",
-                            "Cover Time",
-                            "Equality Time", 
-                            "Match Time",
-                            "Eval Time", 
-                            "FT Time", 
-                            "Subsume Time",
-                            "Select Time", 
-                            "Mate Time", 
-                            "Delete Time", 
-                            "Predict Time"]
-            """
             self.tracking_header = ["Iteration",
                             "Pred.Error.Est.",
                             "Total Time"]
         else:
             pass
-
         self.tracking_list = []
         self.tracking_entry = []
 
@@ -88,25 +58,9 @@ class RULE_TRACK:
                 window_performance = sum(self.error_predict_list)/len(self.error_predict_list)
             else:
                 window_performance = None
-
         else:
             pass
         # Create tracking entry
-        """
-        self.tracking_entry = [iteration+1,
-                          window_performance,
-                          heros.timer.time_global,
-                          heros.timer.time_covering,
-                          heros.timer.time_rule_equality,
-                          heros.timer.time_matching,
-                          heros.timer.time_rule_eval,
-                          heros.timer.time_feature_track,
-                          heros.timer.time_subsumption,
-                          heros.timer.time_selection,
-                          heros.timer.time_mating,
-                          heros.timer.time_deletion,
-                          heros.timer.time_prediction]
-        """
         self.tracking_entry = [iteration+1,
                           window_performance,
                           len(heros.rule_population.pop_set),
@@ -127,3 +81,21 @@ class RULE_TRACK:
         self.tracking_entry = [round(num,3) for num in self.tracking_entry]
         report_df = pd.DataFrame([self.tracking_entry], columns=self.tracking_header,index=None)
         print(report_df)
+
+
+    def plot_rule_tracking(self,show=True, save=False, output_path=None):
+        tracking_df = self.get_performance_tracking_df()
+        # Plot Windowed Prediction Accuracy Estimates of HEROS Phase 1 Rule Population across learning iterations
+        fig, ax1 = plt.subplots()
+        ax1.plot(tracking_df['Iteration'], tracking_df["Pred.Acc.Est."], label='Balanced Prediction Accuracy Estimate', color='blue')
+        ax1.set_ylabel('Window-Estimated Training Accuracy', color='b')
+        ax1.tick_params(axis='y', labelcolor='b')
+        # Create a second y-axis sharing the same x-axis
+        ax2 = ax1.twinx()
+        ax2.plot(tracking_df['Iteration'], tracking_df['Unique Rule Count'], label="Unique Rule Count", color='red')
+        ax2.set_ylabel('Macro Population Size (Unique Rule Count)', color='r')
+        ax2.tick_params(axis='y', labelcolor='r')
+        if save:
+            plt.savefig(output_path+'/rule_tracking_line_graph.png', bbox_inches="tight")
+        if show:
+            plt.show()

@@ -1,8 +1,5 @@
 import math
-import logging
-#import pandas as pd
 import numpy as np
-import math
         
 class DATA_MANAGE:
     def __init__(self, X, y, row_id, cat_feat_indexes, ek, heros):

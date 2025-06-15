@@ -48,7 +48,7 @@ class TIME_TRACK:
 
     #Archive Model Pop Times
     def archive_model_pop(self,iteration):
-        self.model_time_archive[int(iteration)] = time.time() - self.time_start_phase2
+        self.model_time_archive[int(iteration)] = self.time_phase2
 
     # Phase 1 ************************************************************
     def phase1_time_start(self):

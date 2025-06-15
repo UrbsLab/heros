@@ -16,7 +16,6 @@ class RULE:
         self.match_cover = 0 #number of training instances matched by this rule
         self.correct_cover = 0 #number of training instances that both matched and had the same action/outcome as this rule
         self.birth_iteration = None #iteration number when this rule was first introduced (or re-introduced) to the population
-        #self.match_set = []
         if heros.outcome_type == 'class':
             self.instance_outcome_prop = {}
             for each in heros.env.classes:
@@ -785,3 +784,40 @@ class RULE:
         print(str(name)+" Rule-------------------------------------------")
         print("Condition Indexes: "+str(self.condition_indexes))
         print("Condition Values: "+str(self.condition_values))
+
+    def display_key_rule_info(self):
+        self.order_rule_conditions()
+        print("Condition:: Feature(s): "+str(self.condition_indexes)+" Value(s): "+str(self.condition_values)+", Action:: "+str(self.action)+ ", Outcome Probas:: "+str(self.instance_outcome_prop)+", Accuracy:: "+str(self.accuracy)+", Match Coverage:: "+str(self.match_cover)+", Numerosity:: "+str(self.numerosity))
+
+    def translate_rule(self,feature_names,heros):
+        #Order specified features in rule by original dataset order
+        self.order_rule_conditions()
+        translation = ''
+        if self.numerosity == 1:
+            translation = str(self.numerosity)+" rule asserts that IF: "
+        else:
+            translation = str(self.numerosity)+" rule copies assert that IF: "
+        for i in range(len(self.condition_indexes)):
+            if heros.env.feat_types[self.condition_indexes[i]] == 1: #categorical feature
+                translation += '('+str(feature_names[self.condition_indexes[i]])+' = '+str(self.condition_values[i])+')'
+            else: #quantiative feature
+                translation += '('+str(feature_names[self.condition_indexes[i]])+' is between '+str(self.condition_values[i][0])+'-'+str(self.condition_values[i][1])+')'
+            if i < (len(self.condition_indexes)-1):
+                translation += ' AND '
+        translation += " THEN: predict outcome '"+str(self.action)+"' with "+str(100 * self.instance_outcome_prop[self.action])+"% confidence based on "+str(self.match_cover)+' matching training instances ('+str(round(100*self.match_cover /float(heros.env.num_instances),2))+"% of training instances)."
+        print(translation)
+
+
+    def order_rule_conditions(self):
+        """ Order the rule conditions by increasing feature index; keeping the ordering consistent between condition_indexes and condition_values."""
+        list1 = self.condition_indexes
+        list2 = self.condition_values
+        # Combine the two lists using zip
+        combined = list(zip(list1, list2))
+        # Sort the combined list based on the first list's values
+        sorted_combined = sorted(combined, key=lambda x: x[0])
+        # Unzip the sorted list back into two separate lists
+        sorted_list1, sorted_list2 = zip(*sorted_combined)
+        # Convert the tuples back to lists
+        self.condition_indexes = list(sorted_list1)
+        self.condition_values = list(sorted_list2)
