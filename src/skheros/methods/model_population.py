@@ -2,9 +2,11 @@ import copy
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import seaborn as sns
 from scipy.cluster.hierarchy import linkage
 import networkx as nx
+import plotly.graph_objects as go
 from collections import defaultdict
 from itertools import combinations
 from .model import MODEL
@@ -800,6 +802,273 @@ class MODEL_POP:
             plt.savefig(output_path+'/clustered_rule_set_'+str(index)+'_heatmap.png', bbox_inches="tight")
         if show:
             plt.show()
+
+    def plot_rule_set_network_datapoint(self,
+                        x_instance,
+                        feature_names,
+                        best_model_index: int,
+                        heros,
+                        display_micro: bool = False,
+                        weighting: str = 'useful_accuracy',
+                        specified_filter: int = None,
+                        show: bool = True,
+                        save: bool = False,
+                        output_path: str = None,
+                        interactive: bool = True):
+        """
+        Build & draw either:
+        - interactive Plotly graph in-notebook (interactive=True), or
+        - static matplotlib shell layout (interactive=False).
+        """
+        # 1) Build match_set
+        self.get_target_model(best_model_index)
+        self.make_eval_match_set(x_instance, heros)
+        match_set = self.match_set
+        self.clear_sets()
+
+        if not match_set:
+            print("No matching rules for this instance.")
+            return
+
+        # 2) Build NetworkX graph
+        G = nx.DiGraph()
+        for i in match_set:
+            rule = self.target_rule_set[i]
+            rule_node = f"Rule {i}"
+            weight = float(getattr(rule, weighting, 1.0))
+
+            G.add_node(rule_node, type="rule", weight=weight, numerosity=rule.numerosity)
+
+            for feat_idx in rule.condition_indexes:
+                feat_name = feature_names[feat_idx]
+                if not G.has_node(feat_name):
+                    val = x_instance[feat_idx]
+                    G.add_node(feat_name,
+                            type="feature",
+                            label=f"{feat_name}={val:.2f}",
+                            value=val)
+                G.add_edge(rule_node, feat_name, weight=weight)
+
+        # 3) Optional filter
+        if specified_filter is not None:
+            to_remove = [
+                n for n, d in G.nodes(data=True)
+                if d['type']=="feature" and G.degree(n) < specified_filter
+            ]
+            G.remove_nodes_from(to_remove)
+
+        # 4A) Interactive via Plotly
+        if interactive:
+            # Position rules at x=0, features at x=1
+            rule_nodes = [n for n, d in G.nodes(data=True) if d['type']=="rule"]
+            feat_nodes = [n for n, d in G.nodes(data=True) if d['type']=="feature"]
+
+            pos = {n: (0, -i) for i, n in enumerate(rule_nodes)}
+            pos.update({n: (1, -i) for i, n in enumerate(feat_nodes)})
+
+            # Build edge traces
+            edge_x, edge_y, edge_w = [], [], []
+            for u, v, d in G.edges(data=True):
+                x0, y0 = pos[u]
+                x1, y1 = pos[v]
+                edge_x += [x0, x1, None]
+                edge_y += [y0, y1, None]
+                edge_w.append(d.get('weight', 0.5))
+
+            # compute a single, average width for the whole edge-trace
+            mean_w = sum(edge_w) / len(edge_w)
+            edge_width = max(1, 5 * mean_w)
+            edge_trace = go.Scatter(
+                x=edge_x, y=edge_y,
+                line=dict(width=edge_width, color='gray'),
+                hoverinfo='none',
+                mode='lines'
+            )
+
+            # Build node traces
+            node_x, node_y, node_text, node_color, node_size = [], [], [], [], []
+            for n, d in G.nodes(data=True):
+                x, y = pos[n]
+                node_x.append(x)
+                node_y.append(y)
+                if d['type']=="rule":
+                    node_text.append(f"{n}<br>Accuracy: {d['weight']:.2f}<br>Num: {d['numerosity']}")
+                    node_color.append('skyblue')
+                    node_size.append(20 + 5*d['numerosity'])
+                else:
+                    node_text.append(f"{n} = {d['value']:.2f}")
+                    node_color.append('lightgreen')
+                    node_size.append(15)
+
+            node_trace = go.Scatter(
+                x=node_x, y=node_y,
+                mode='markers+text',
+                text=[n for n in G.nodes()],
+                textposition="middle right",
+                marker=dict(size=node_size,
+                            color=node_color,
+                            line=dict(width=1, color='black')),
+                hovertext=node_text,
+                hoverinfo='text'
+            )
+
+            fig = go.Figure(
+                data=[edge_trace, node_trace],
+                layout=go.Layout(
+                    title=f"Rules → Features (Model #{best_model_index})",
+                    showlegend=False,
+                    xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                    yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                    margin=dict(l=20, r=20, t=40, b=20)
+                )
+            )
+            fig.show()
+            return fig
+
+        # 4B) Static via Matplotlib shell layout
+        plt.figure(figsize=(12, 8))
+        shells = [
+            [n for n,d in G.nodes(data=True) if d['type']=="rule"],
+            [n for n,d in G.nodes(data=True) if d['type']=="feature"]
+        ]
+        pos = nx.shell_layout(G, shells)
+
+        nx.draw_networkx_nodes(
+            G, pos,
+            nodelist=shells[0],
+            node_color="skyblue",
+            node_size=[300 + 50*G.nodes[n]['numerosity'] for n in shells[0]],
+            label="Rule"
+        )
+        nx.draw_networkx_nodes(
+            G, pos,
+            nodelist=shells[1],
+            node_color="lightgreen", node_size=200, label="Feature"
+        )
+        widths = [
+            max(0.5, d.get("weight", 0.5))
+            for *_, d in G.edges(data=True)
+        ]
+        nx.draw_networkx_edges(G, pos, width=widths, alpha=0.7)
+        labels = {n: G.nodes[n]['label'] for n in shells[1]}
+        nx.draw_networkx_labels(G, pos, labels, font_size=9)
+
+        plt.axis("off")
+        plt.title(f"Rules → Features (Model #{best_model_index})")
+        plt.legend(scatterpoints=1)
+        plt.tight_layout()
+
+        if save and output_path:
+            plt.savefig(f"{output_path}/rule_graph_model{best_model_index}.png")
+        if show:
+            plt.show()
+
+        return G
+
+
+    def plot_rule_set_heatmap_datapoint(self,
+                                    x_instance,
+                                    feature_names,
+                                    best_model_index: int,
+                                    heros,
+                                    display_micro: bool = False,
+                                    weighting: str = 'useful_accuracy',
+                                    specified_filter: int = None,
+                                    show: bool = True,
+                                    save: bool = False,
+                                    output_path: str = None):
+        """
+        Plot a heatmap (clustered if ≥2 rules) of only the rules in the selected model that match one test instance.
+        """
+        # 1) Build match_set on the best model
+        self.get_target_model(best_model_index)
+        self.make_eval_match_set(x_instance, heros)
+        match_set = self.match_set
+        self.clear_sets()
+
+        if not match_set:
+            print("No matching rules for this instance.")
+            return
+
+        # 2) Prepare DataFrames for exactly the matched rules
+        total_rows = sum(self.target_rule_set[i].numerosity for i in match_set) if display_micro else len(match_set)
+        rule_spec_df   = pd.DataFrame(0.0, index=range(total_rows), columns=feature_names)
+        rule_weight_df = pd.DataFrame(0.0, index=range(total_rows), columns=feature_names)
+
+        # 3) Fill in specificity & weights
+        row = 0
+        for i in match_set:
+            rule = self.target_rule_set[i]
+            copies = rule.numerosity if display_micro else 1
+            for _ in range(copies):
+                for feat_idx, feat_name in enumerate(feature_names):
+                    if feat_idx in rule.condition_indexes:
+                        rule_spec_df.iat[row, feat_idx] = 1.0
+                        if weighting in (None, 'None'):
+                            rule_weight_df.iat[row, feat_idx] = 1.0
+                        elif hasattr(rule, weighting):
+                            rule_weight_df.iat[row, feat_idx] = float(getattr(rule, weighting))
+                        else:
+                            raise ValueError("weighting must be None, 'useful_accuracy', or 'fitness'")
+                row += 1
+
+        # 4) Optional feature-frequency filter
+        if specified_filter is not None:
+            freqs = (rule_spec_df != 0).sum(axis=0)
+            keep = freqs >= specified_filter
+            rule_spec_df   = rule_spec_df.loc[:, keep]
+            rule_weight_df = rule_weight_df.loc[:, keep]
+
+        # 5) Plot: clustered if ≥2 rules, else plain heatmap
+        n_rules = rule_weight_df.shape[0]
+        if n_rules >= 2:
+            # hierarchical clustering
+            col_link = linkage(rule_spec_df.T.values, method='average', metric='euclidean')
+            row_link = linkage(rule_spec_df.values, method='average', metric='euclidean', optimal_ordering=True)
+
+            cg = sns.clustermap(
+                rule_weight_df,
+                row_linkage=row_link,
+                col_linkage=col_link,
+                cmap="viridis",
+                figsize=(10, max(4, n_rules * 0.2))
+            )
+            ax = cg.ax_heatmap
+        else:
+            # single-rule fallback
+            plt.figure(figsize=(10, 2))
+            ax = sns.heatmap(
+                rule_weight_df,
+                cmap="viridis",
+                cbar_kws={'label': weighting or "binary"},
+                linewidths=0.5,
+                linecolor="gray",
+                yticklabels=[f"Rule {match_set[0]}"]
+            )
+            plt.xlabel("Features")
+            plt.title(f"Single Matched Rule (Model #{best_model_index})")
+            if show:
+                plt.tight_layout()
+                plt.show()
+            return ax
+
+        # common formatting for clustered case
+        ax.set_xlabel("Features")
+        ax.set_ylabel("Matched Rules")
+        ax.set_yticks([])
+        ax.set_title(f"Rules Matching Instance (Model #{best_model_index})")
+
+        # adjust x-tick font size based on feature count
+        n_feats = rule_weight_df.shape[1]
+        size = max(4, 12 - n_feats // 5)
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=90, fontsize=size)
+
+        if save and output_path:
+            plt.savefig(f"{output_path}/matched_rules_model{best_model_index}.png", bbox_inches="tight")
+        if show:
+            plt.show()
+
+        return cg
 
 
     def plot_rule_set_network(self, feature_names, index, weighting='useful_accuracy', display_micro=False, node_size=1000, edge_size=10, show=True, save=False, output_path=None):

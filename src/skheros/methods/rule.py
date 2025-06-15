@@ -826,3 +826,16 @@ class RULE:
         # Convert the tuples back to lists
         self.condition_indexes = list(sorted_list1)
         self.condition_values = list(sorted_list2)
+    
+    def describe_conditions(self, feature_names):
+        """
+        Return a short English description of this rule's conditions,
+        e.g. "age and income" if those two features are specified.
+        """
+        if not self.condition_indexes:
+            return "applies to all instances"
+        feats = [feature_names[i] for i in self.condition_indexes]
+        if len(feats) == 1:
+            return feats[0]
+        # join with commas and 'and'
+        return ", ".join(feats[:-1]) + " and " + feats[-1]
