@@ -1,5 +1,6 @@
 import math
 import numpy as np
+import random
         
 class DATA_MANAGE:
     def __init__(self, X, y, row_id, cat_feat_indexes, ek, heros):
@@ -207,6 +208,11 @@ class DATA_MANAGE:
         self.instance_state = self.train_data[0][self.instance_index]
         self.outcome_state = self.train_data[1][self.instance_index]
 
+    def get_weighted_instance(self,heros):
+        instance_index = random.choices(list(range(self.num_instances)), weights = heros.training_weights)[0]
+        instance_state = self.train_data[0][instance_index]
+        outcome_state = self.train_data[1][instance_index]
+        return (instance_state, outcome_state)
 
     def report_data(self, heros):
         print("Data Manage Summary: ------------------------------------------------")

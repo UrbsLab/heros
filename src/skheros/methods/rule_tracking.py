@@ -25,6 +25,7 @@ class RULE_TRACK:
             pass
         self.tracking_list = []
         self.tracking_entry = []
+        self.alternations = []
 
 
     def update_prediction_list(self,outcome_prediction,outcome_truth,heros):
@@ -97,6 +98,22 @@ class RULE_TRACK:
         ax2.plot(tracking_df['Iteration'], tracking_df['Unique Rule Count'], label="Unique Rule Count", color='red')
         ax2.set_ylabel('Macro Population Size (Unique Rule Count)', color='r')
         ax2.tick_params(axis='y', labelcolor='r')
+
+        y_min, y_max = ax1.get_ylim()
+        label_y = y_max - 0.02 * (y_max - y_min)
+
+        for x in self.alternations:
+            ax1.axvline(x=x, color='green', linestyle=':', linewidth=1)
+            ax1.text(
+                x + 0.5,
+                label_y,
+                f"alt {self.alternations.index(x)}",
+                rotation=0,
+                va='top',
+                ha='right',
+                fontsize=8,
+                color='green'
+            )
         if save:
             plt.savefig(output_path+'/rule_tracking_line_graph.png', bbox_inches="tight")
         if show:

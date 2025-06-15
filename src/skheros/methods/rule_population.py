@@ -8,6 +8,7 @@ from scipy.cluster.hierarchy import linkage#, dendrogram, leaves_list
 import networkx as nx
 from collections import defaultdict
 from itertools import combinations
+import struct
 
 class RULE_POP:
     def __init__(self):
@@ -20,42 +21,52 @@ class RULE_POP:
         self.pop_set_archive = {}
         self.pop_set_hold = None
         #Experimental
-        self.explored_rules = []
-        self.archive_discovered_rules = False #True value is experimental
+        self.explored_rules = {}
+        self.archive_discovered_rules = True #True value is experimental
 
 
-    def add_new_explored_rules(self,rule):
+    def add_new_explored_rules(self,rule, heros):
         """Stores the unique and essential information to reconstitute an explored rule without re-evaluation."""
-        rule_entry = [rule.condition_indexes, rule.condition_values, rule.action, rule.instance_outcome_count, rule.ID, rule.birth_iteration]
-        self.explored_rules.append(rule_entry)
+        #rule_entry = [rule.condition_indexes, rule.condition_values, rule.action, rule.instance_outcome_count, rule.ID, rule.birth_iteration]
+        #self.explored_rules.append(rule_entry)
+        self.explored_rules[rule.encoding] = rule.instance_outcome_count
 
 
     def clear_explored_rules(self):
-        self.explored_rules = None
+        self.explored_rules = {}
 
 
-    def rule_exists(self, target_rule):
+    def rule_exists(self, target_rule, heros):
         """Checks the explored rules list to see if a given 'new' rule has been previously discovered and evaluated, returning that rule's reference in explored rules."""
         #print('test')
         #print(target_rule.condition_indexes)
         #print(target_rule.condition_values)
 
-        for rule_summary in self.explored_rules:
+        """ for rule_summary in self.explored_rules:
             if self.equals(target_rule,rule_summary):
                 #print(rule_summary[0])
                 #print(rule_summary[1])
                 return rule_summary
+        return None"""
+
+        encoded = target_rule.encode_rule_binary(heros.env.num_feat)
+        if encoded in self.explored_rules:
+            return self.decode_rule_binary(encoded, heros.env.num_feat)
+
         return None
+
     
 
-    def equals(self,target_rule,rule_summary):
+    
+
+    """def equals(self,target_rule,rule_summary):
         if sorted(target_rule.condition_indexes) == sorted(rule_summary[0]):
             for i in range(len(target_rule.condition_indexes)): #final check of rule equality (condition_values)
                 position = rule_summary[0].index(target_rule.condition_indexes[i])
                 if not (target_rule.condition_values[i] == rule_summary[1][position]):
                     return False
             return True
-        return False
+        return False"""
     
 
     def archive_rule_pop(self,iteration):
@@ -102,7 +113,7 @@ class RULE_POP:
             if len(new_rule.condition_indexes) > 0: #prevents completely general rules from being added to the population
                 #Check for duplicate rule in {P} - important since covering runs if {C} is empty, which can generate an existing rule in the match set
                 if self.archive_discovered_rules:
-                    rule_summary = self.rule_exists(new_rule)
+                    rule_summary = self.rule_exists(new_rule,heros)
                     if rule_summary == None:
                         self.evaluate_covered_rule(new_rule,outcome_state,heros,random)
                     else:
@@ -110,7 +121,7 @@ class RULE_POP:
                 else:
                     self.evaluate_covered_rule(new_rule,outcome_state,heros,random)
                 if self.no_identical_rule_exists(new_rule,heros,'match_set'):
-                    self.add_rule_to_pop(new_rule)
+                    self.add_rule_to_pop(new_rule,heros)
                     self.match_set.append(len(self.pop_set)-1)
         heros.timer.covering_time_stop() #covering time tracking
 
@@ -251,7 +262,7 @@ class RULE_POP:
         final_offspring_list = []
         for offspring in offspring_list:
             if self.archive_discovered_rules:
-                rule_summary = self.rule_exists(offspring)
+                rule_summary = self.rule_exists(offspring,heros)
                 if rule_summary == None:
                     heros.timer.rule_eval_time_start() #rule evaluation time tracking
                     front_changed = self.evaluate_offspring_rule(offspring,outcome_state,heros,random)
@@ -313,7 +324,8 @@ class RULE_POP:
             heros.timer.subsumption_time_stop()
         else: #insert rule(s) as needed following rule equality check
             for offspring in offspring_list:
-                self.add_rule_to_pop(offspring)
+                self.add_rule_to_pop(offspring,heros)
+                print("process")
 
 
     def ga_subsumption(self,offspring,parent_list,heros):
@@ -326,7 +338,7 @@ class RULE_POP:
                     self.micro_pop_count += 1
                     parent.update_numerosity(1)
         if not offspring_subsumed:
-            self.add_rule_to_pop(offspring)
+            self.add_rule_to_pop(offspring,heros)
 
     """
     def add_covered_rule_to_pop(self,new_rule,outcome_state,heros,random): #old now
@@ -407,14 +419,14 @@ class RULE_POP:
         return None
 
 
-    def add_rule_to_pop(self,new_rule):
+    def add_rule_to_pop(self,new_rule,heros):
         """ Add new and novel rule to population, updating key relevant parameters. """
-        new_rule.assign_ID(self.ID_counter)
+        new_rule.assign_ID(new_rule.encode_rule_binary(heros.env.num_feat))
         self.pop_set.append(new_rule)
         self.ID_counter += 1 #every time a new rule gets added to the pop (that isn't in the current pop) it is assigned a new unique ID
         self.micro_pop_count += 1
         if self.archive_discovered_rules:
-            self.add_new_explored_rules(new_rule)
+            self.add_new_explored_rules(new_rule,heros)
 
 
     def make_correct_set(self,outcome_state,heros):
@@ -759,3 +771,86 @@ class RULE_POP:
             plt.savefig(output_path+'/rule_pop_network.png', bbox_inches="tight")
         if show:
             plt.show()
+
+    """def decode_rule_binary(self, binary_str, num_features):
+        
+        Decodes a binary encoded rule string (compact version with only 2-bit int values, no float ranges).
+        
+        Returns:
+            [
+                condition_indexes: list[int],
+                condition_values: list[int],
+                action: int,
+                instance_outcome_count: dict[int, int]
+            ]
+        
+        instance_outcome_count = self.explored_rules[binary_str]
+        ptr = 0
+
+        # --- Step 1: Decode bitmask (num_features bits) ---
+        bitmask_str = binary_str[ptr:ptr + num_features]
+        condition_indexes = [i for i, b in enumerate(bitmask_str) if b == '1']
+        ptr += num_features
+
+        # --- Step 2: Decode type indicators (num_features bits) ---
+        type_indicators = binary_str[ptr:ptr + num_features]
+        ptr += num_features
+
+        # --- Step 3: Decode all condition values (2 bits each) ---
+        condition_values = []
+        for i in range(num_features):
+            val_binary = binary_str[ptr:ptr + 2]
+            val = int(val_binary, 2)
+            ptr += 2
+            condition_values.append(val)
+
+        # Filter only used condition values (based on bitmask)
+        used_condition_values = [condition_values[i] for i in condition_indexes]
+
+        # --- Step 4: Decode action (2 bits) ---
+        action_binary = binary_str[ptr:ptr + 2]
+        action = int(action_binary, 2)
+        ptr += 2
+
+        return [condition_indexes, used_condition_values, action, instance_outcome_count]"""
+    
+    def decode_rule_binary(self, binary_str, num_features):
+        """"
+        Decodes a binary encoded rule string (without outcome count).
+        Returns:
+            [
+                condition_indexes: list[int],
+                condition_values: list[int or tuple(float, float)],
+                action: int
+            ]
+        """
+        instance_outcome_count = self.explored_rules[binary_str]
+        ptr = 0  # bit pointer
+        # --- Step 1: Decode bitmask ---
+        bitmask_str = binary_str[ptr:ptr + num_features]
+        condition_indexes = [i for i, b in enumerate(bitmask_str) if b == '1']
+        ptr += num_features
+        # --- Step 2: Decode type indicators ---
+        type_indicators = binary_str[ptr:ptr + len(condition_indexes)]
+        ptr += len(condition_indexes)
+        # --- Step 3: Decode condition values ---
+        condition_values = []
+        for indicator in type_indicators:
+            if indicator == '0':
+                val_binary = binary_str[ptr:ptr + 32]
+                condition_values.append(int(val_binary, 2))
+                ptr += 32
+            elif indicator == '1':
+                min_binary = binary_str[ptr:ptr + 32]
+                max_binary = binary_str[ptr + 32:ptr + 64]
+                min_val = struct.unpack('>f', int(min_binary, 2).to_bytes(4, 'big'))[0]
+                max_val = struct.unpack('>f', int(max_binary, 2).to_bytes(4, 'big'))[0]
+                condition_values.append((min_val, max_val))
+                ptr += 64
+            #else:
+                #raise ValueError(f”Invalid type indicator: {indicator}“)
+        # --- Step 4: Decode action ---
+        action_binary = binary_str[ptr:ptr + 32]
+        action = int(action_binary, 2)
+        ptr += 32
+        return [condition_indexes, condition_values, action, instance_outcome_count]

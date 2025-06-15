@@ -1,4 +1,5 @@
 import copy
+import struct
 
 class RULE:
     def __init__(self,heros):
@@ -38,6 +39,7 @@ class RULE:
         self.ave_match_set_size = 1 #average size of the match sets in which this rule was included across all training instances - used in deletion to promote niching
         self.deletion_prob = None #probability of rule being selected for deletion
         self.prediction = None
+        #self.encoding = None
 
     def __eq__(self, other):
         return isinstance(other, RULE) and self.ID == other.ID
@@ -69,6 +71,7 @@ class RULE:
             self.quantitative_range_check_fix(self.action,outcome_state,random,np)  
         else:
             print("Error: Outcome type undefined.")
+        self.encoding = self.encode_rule_binary(heros.env.num_feat)
 
 
     def initialize_by_parent(self,parent_rule,heros):
@@ -86,6 +89,7 @@ class RULE:
         self.numerosity = 1 
         self.ave_match_set_size = copy.deepcopy(parent_rule.ave_match_set_size) 
         self.deletion_prob = None 
+        self.encoding = self.encode_rule_binary(heros.env.num_feat)
 
 
     def match(self, instance_state, heros):
@@ -514,14 +518,14 @@ class RULE:
 
     def reestablish_rule(self,rule_summary,heros):
         #[rule.condition_indexes, rule.condition_values, rule.action, rule.instance_outcome_count,rule.ID, rule.birth_iteration]
-        self.ID = rule_summary[4] #unique identifier for this rule (used in model evolution and does not guarantee global uniqueness)
-        self.birth_iteration = rule_summary[5]
+        #self.birth_iteration = rule_summary[5]
         self.condition_indexes = rule_summary[0] #list of feature indexes from the dataset that are 'specified' in this rule
         self.condition_values = rule_summary[1] #list of feature values or value-ranges corresponding to the feature indexes in self.feature_index_list
         self.instance_outcome_count = rule_summary[3]
         self.match_cover = sum(self.instance_outcome_count.values())
         # Assign class that yields highest rule accuracy - regardless of current target instance class
         self.instance_outcome_prop = copy.deepcopy(self.instance_outcome_count)
+        self.ID = self.encode_rule_binary(heros.env.num_feat)
         #Convert class counts first into class accuracies then into 'useful' accuracies to take class imbalance into account
         for each in self.instance_outcome_prop:
             self.instance_outcome_prop[each] /= self.match_cover
@@ -606,9 +610,12 @@ class RULE:
             if self.fitness is None: #Pareto front only has (0,0) for useful_accuracy and useful_coverage
                 self.fitness = pow(self.accuracy, heros.nu)
             if front_updated: #all rule-fitnesses will be re-calculated externally
+                self.encoding = self.encode_rule_binary(heros.env.num_feat)
                 return True
         else:
             print("Fitness metric not available.")
+        
+        self.encoding = self.encode_rule_binary(heros.env.num_feat)
         return False
     
 
@@ -746,6 +753,7 @@ class RULE:
                         return False #final check yields inequality
                 return True #rules are equivalent
         return False #initial or secondary checks yield inequality
+        #return self.encoding == other_rule.encoding
     
 
     def get_deletion_vote(self):
@@ -826,3 +834,71 @@ class RULE:
         # Convert the tuples back to lists
         self.condition_indexes = list(sorted_list1)
         self.condition_values = list(sorted_list2)
+
+    """def encode_rule_binary(self, num_features):
+        # --- 1. Bitmask ---
+        bitmask = ['0'] * num_features
+        for idx in self.condition_indexes:
+            bitmask[idx] = '1'
+        bitmask_str = ''.join(bitmask)
+
+        # --- 2. Type indicators + values ---
+        type_indicators = ['0'] * num_features  # all values are int → '0'
+        value_bits = ['00'] * num_features      # pre-fill with 2-bit zeros
+
+        # Sorted index-value pairs for consistent position
+        index_to_value = dict(zip(self.condition_indexes, self.condition_values))
+        for i in range(num_features):
+            if i in index_to_value:
+                val = index_to_value[i]
+                if not (0 <= val <= 3):
+                    raise ValueError(f"Value {val} at index {i} exceeds 2-bit range.")
+                value_bits[i] = format(val, '02b')  # 2 bits per int
+
+        type_str = ''.join(type_indicators)
+        values_str = ''.join(value_bits)
+
+        # --- 3. Action (assumed 2-bit) ---
+        if not (0 <= self.action <= 3):
+            raise ValueError(f"Action value {self.action} exceeds 2-bit range.")
+        action_bits = format(self.action, '02b')
+
+        # --- 4. Combine everything ---
+        full_binary_str = bitmask_str + type_str + values_str + action_bits
+        return full_binary_str"""
+    
+    def encode_rule_binary(self, num_features):
+        "Deterministically encodes a rule into a binary string."
+        # --- 1. Bitmask: fixed order for feature indexes ---
+        bitmask = ['0'] * num_features
+        for idx in sorted(self.condition_indexes):  # sort to ensure order
+            bitmask[idx] = '1'
+        bitmask_str = ''.join(bitmask)
+        # --- 2. Condition types and values ---
+        # Pair condition values with sorted condition indexes
+        sorted_pairs = sorted(zip(self.condition_indexes, self.condition_values), key=lambda x: x[0])
+        encoded_values = []
+        type_indicators = []
+        for _, value in sorted_pairs:
+            if isinstance(value, int):
+                type_indicators.append('0')
+                encoded_values.append(format(value, '032b'))
+            elif isinstance(value, tuple) and len(value) == 2:
+                type_indicators.append('1')
+                min_binary = format(struct.unpack('>I', struct.pack('>f', value[0]))[0], '032b')
+                max_binary = format(struct.unpack('>I', struct.pack('>f', value[1]))[0], '032b')
+                encoded_values.append(min_binary + max_binary)
+            #else:
+                #raise ValueError(f”Unsupported value type: {value}“)
+        type_str = ''.join(type_indicators)
+        # --- 3. Action: fixed 32-bit integer ---
+        action_binary = format(self.action, '032b')
+        # --- 4. Combine all sections into final binary string ---
+        full_binary_str = (
+            bitmask_str +
+            type_str +
+            ''.join(encoded_values) +
+            action_binary
+        )
+        # --- 5. Return the full binary string ---
+        return full_binary_str

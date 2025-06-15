@@ -173,6 +173,10 @@ class HEROS(BaseEstimator, TransformerMixin):
         self.use_ek = False #internal parameter - set to False by default, but switched to true of ek scores passed to fit()
         self.y_encoding = None
         #self.top_models = [] #for tracking model performance increase over iterations !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        self.curr_alt = 0
+        self.phase_one_limit = 5000
+        self.training_weights = []
+        self.phase_two_limit = 5
 
     @staticmethod
     def check_is_int(num):
@@ -336,10 +340,45 @@ class HEROS(BaseEstimator, TransformerMixin):
         else: # No rule population initialization other than standard LCS-algorithm-style 'covering' mechanism.
             pass
         self.timer.init_time_stop() #initialization time tracking
-        # RUN RULE-LEARNING TRAINING ITERATIONS **************************************************************
-        while self.iteration < self.iterations:
+        
+        if self.model_iterations > 1: #Apply Phase II
+            # Initialize model population and 
+            self.model_population = MODEL_POP() # Initialize rule sets
+            self.model_iteration = 0
+
+        while (self.iterations - self.iteration > 0) and (self.model_iterations - self.model_iteration > 0):
+            self.phase_one()
+
+            self.tracking.alternations.append(self.iteration)
+
+            if self.model_iteration == 0: 
+                self.model_population.initialize_model_population(self,random,self.model_pop_init)
+            self.phase_two()
+            self.model_population.model_alterations.append(self.model_iteration)
+            self.curr_alt += 1
+
+        #self.env.clear_data_from_memory()
+
+        #IMPLEMENT THAT IT JUMPS BACK ONCE ITERATIONS ARE RAN
+            
+        while (self.iterations - self.iteration > 0):
+            self.phase_one()
+        
+        while (self.model_iterations - self.model_iteration > 0):
+            self.phase_two()
+        return self
+    
+    def phase_one(self):
+
+        # CONVERGENCE ON NON-NEW DISCOVERY?? CHECKING WITH ARCHIVE
+
+        """ (HEROS PHASE 1) RUN RULE-LEARNING TRAINING ITERATIONS"""
+        for i in range(self.phase_one_limit):
             # Get current training instance
-            instance = self.env.get_instance()
+            if i % 2 == 0 or self.model_iteration == 0:
+                instance = self.env.get_instance()
+            else: 
+                instance = self.env.get_weighted_instance(self)
             #print('Iteration: '+str(self.iteration)+' RulePopSize: '+str(len(self.rule_population.pop_set)))
             # Run a single training iteration focused on the current training instance
             #print(instance)
@@ -364,10 +403,10 @@ class HEROS(BaseEstimator, TransformerMixin):
         # RULE COMPACTION *********************************************
         self.timer.compaction_time_start()
         compact = COMPACT(self)
-        sufficient_rule_pop_remain = True
-        sufficient_rule_pop_remain = compact.basic_rule_cleaning(self)
-        if self.compaction == 'sub' and sufficient_rule_pop_remain:
-            sufficient_rule_pop_remain = compact.subsumption_compation(self)
+        self.sufficient_rule_pop_remain = True
+        self.sufficient_rule_pop_remain = compact.basic_rule_cleaning(self)
+        if self.compaction == 'sub' and self.sufficient_rule_pop_remain:
+            self.sufficient_rule_pop_remain = compact.subsumption_compation(self)
         compact.clear_pop_copy()
         self.timer.compaction_time_stop()
 
@@ -380,13 +419,12 @@ class HEROS(BaseEstimator, TransformerMixin):
             print("Number of Unique Rules Identified: "+str(len(self.rule_population.explored_rules)))
             #print(self.rule_population.explored_rules)
 
-        # (HEROS PHASE 2) RUN RULE-SET-LEARNING TRAINING ITERATIONS  ********************************************************************
+    def phase_two(self):
+        """(HEROS PHASE 2) RUN RULE-SET-LEARNING TRAINING ITERATIONS  """
         self.timer.phase2_time_start()
+
         if self.model_iterations > 1: #Apply Phase II
-            # Initialize model population and 
-            self.model_population = MODEL_POP() # Initialize rule sets
-            self.model_iteration = 0
-            if not sufficient_rule_pop_remain: #abort Phase II and use Phase I rule population as final phase II model. 
+            if not self.sufficient_rule_pop_remain: #abort Phase II and use Phase I rule population as final phase II model. 
                 self.model_population.skip_phase2(self)
                 self.model_population.get_target_model(0) #the 'model' object with the best accuracy, then coverage, then lowest rule count (assumes prior sorting)
                 self.timer.phase2_time_stop()
@@ -397,8 +435,11 @@ class HEROS(BaseEstimator, TransformerMixin):
 
             else: #Run Phase 2 normally
                 self.model_population.initialize_model_population(self,random,self.model_pop_init)
+                models_prev = []
+                models = []
+                iter = 0 
                 # RUN MODEL-LEARNING TRAINING ITERATIONS **************************************************************
-                while self.model_iteration < self.model_iterations:
+                while iter < self.phase_two_limit and self.model_iteration < self.model_iterations:
                     #Apply NSGAII-like fast non dominated sorting of models into ranked fronts of models
                     fronts = self.model_population.fast_non_dominated_sort(self)
                     #Calculate crowding distances
@@ -437,9 +478,16 @@ class HEROS(BaseEstimator, TransformerMixin):
                         self.timer.archive_model_pop(self.model_iteration+1)
                     #Next Iteration
                     self.model_iteration += 1
-                #Sort the model population first by accuracy and then by number of rules in model.
+                    #Sort the model population first by accuracy and then by number of rules in model.
+                    self.model_population.identify_models_on_front() #For evaluating all models on the front.
+                    models = set(filter(lambda m: m.model_on_front == 1,self.model_population.pop_set))
+                    if models == models_prev:
+                        iter += 1
+                    else:
+                        iter = 0
+                    print(iter)
+                    models_prev = models
                 self.model_population.sort_model_pop()
-                self.model_population.identify_models_on_front() #For evaluating all models on the front.
                 self.model_population.get_target_model(0) #the 'model' object with the best accuracy, then coverage, then lowest rule count (assumes prior sorting)
                 self.timer.phase2_time_stop()
                 self.timer.update_global_time()
@@ -447,9 +495,24 @@ class HEROS(BaseEstimator, TransformerMixin):
                     print("HEROS (Phase 2) run complete!")
                     #print("Number of Unique Models Identified: "+str(len(self.model_population.explored_models)))
                     print("Random Seed Check - End: "+ str(random.random()))
-
-        #self.env.clear_data_from_memory()
-        return self
+                instance_weights = [0 for instance in self.env.train_data[0]]
+                
+                for i in range(len(self.env.train_data)):
+                    for model in models: 
+                        instance = self.env.train_data[0][i]
+                        self.model_population.get_target_model(self.model_population.pop_set.index(model))
+                        self.model_population.make_eval_match_set(instance,self)
+                        prediction = MODEL_PREDICTION(self, self.model_population,random)
+                        outcome_prediction = prediction.get_prediction()
+                        if prediction.covered == False: 
+                            instance_weights[i] += 1
+                        else: 
+                            if outcome_prediction == self.env.train_data[1][i]: 
+                                instance_weights[i] -= 1
+                            else: 
+                                instance_weights[i] += 1 
+                normalized_weights = [((weight + len(models))/(2 * len(models))) for weight in instance_weights]
+                self.training_weights = normalized_weights
 
     def run_iteration(self,instance):
         # Make 'Match Set', {M}
