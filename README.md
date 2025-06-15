@@ -265,7 +265,7 @@ Further code documentation regarding the HEROS API is under development
 ***
 <a id="item-nine"></a>
 ## License:
-TBD
+HEROS adopts a custom academic software license. Please review 'LICENSE' for details.
 
 ***
 <a id="item-ten"></a>
