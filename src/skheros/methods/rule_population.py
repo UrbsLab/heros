@@ -248,6 +248,7 @@ class RULE_POP:
                     print("ERROR: More than 2 expected offspring in GA")
         # CHECK FOR DUPLICATE RULES IN {P} and EVALUATE Non-Duplicate Ruels
         front_updated = False
+        final_offspring_list = []
         for offspring in offspring_list:
             if self.archive_discovered_rules:
                 rule_summary = self.rule_exists(offspring)
@@ -265,9 +266,9 @@ class RULE_POP:
                 if front_changed:
                     front_updated = True
                 heros.timer.rule_eval_time_stop() #rule evaluation time tracking
-        final_offspring_list = []
-        if self.no_identical_rule_exists(offspring,heros,'pop_set'):
-            final_offspring_list.append(offspring)
+
+            if self.no_identical_rule_exists(offspring,heros,'pop_set'):
+                final_offspring_list.append(offspring)
         # Update all rule fitness values if one or both offspring rules updated the pareto front
         heros.timer.rule_eval_time_start() #rule evaluation time tracking
         if heros.fitness_function == 'pareto' and front_updated: #new 3/29/25

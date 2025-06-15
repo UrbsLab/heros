@@ -43,6 +43,7 @@ class DATA_MANAGE:
             self.outcome_range[0] = y.min()
             self.outcome_range[1] = y.max()
             self.outcome_ranked = sorted(y)
+            self.outcome_mean = np.mean(self.outcome_ranked)
             self.outcome_sd = np.std(self.outcome_ranked, ddof=1) #calculates the 'sample' sample standard deviation # NEEDED?????
         else:
             pass
@@ -118,8 +119,8 @@ class DATA_MANAGE:
                         self.feat_c_values[feat].append(value)
                         unique_state_count += 1
             else: #quantitative
-                self.feat_q_range[feat][0] = np.min(X[:, feat])
-                self.feat_q_range[feat][1] = np.max(X[:, feat])
+                self.feat_q_range[feat][0] = np.nanmin(X[:, feat])
+                self.feat_q_range[feat][1] = np.nanmax(X[:, feat])
                 unique_state_count += 2 #Assumption/Estimate made here for quantitative features for calculating rule specificity limit
 
         self.avg_feat_states = unique_state_count / self.num_feat
@@ -137,6 +138,40 @@ class DATA_MANAGE:
 
 
     def format_data(self, X, y, row_id):
+        """Format training data: preserve data types, shuffle instances, and set NaNs as None."""
+        # Step 1: Determine instance IDs
+        if row_id is None:
+            instance_ids = list(range(self.num_instances))
+        else:
+            instance_ids = row_id
+
+        # Step 2: Convert X to list of rows (to preserve mixed data types)
+        X_list = X.tolist() if isinstance(X, np.ndarray) else X
+
+        # Step 3: Combine X, y, and instance_ids into a list of full rows
+        full_data = [
+            row[:self.num_feat] + [label] + [inst_id]
+            for row, label, inst_id in zip(X_list, y, instance_ids)
+        ]
+
+        # Step 4: Shuffle the combined data
+        shuffle_order = np.random.permutation(self.num_instances)
+        shuffled_data = [full_data[i] for i in shuffle_order]
+
+        # Step 5: Split into features, labels, and ids
+        features = [row[:-2] for row in shuffled_data]
+        labels = [row[-2] for row in shuffled_data]
+        ids = [row[-1] for row in shuffled_data]
+
+        # Step 6: Replace NaNs with None in feature columns (only floats can be NaN)
+        for i, row in enumerate(features):
+            features[i] = [None if isinstance(val, float) and np.isnan(val) else val for val in row]
+
+        return [features, labels, ids]
+
+
+
+    def format_data_old(self, X, y, row_id):
         """Format training data: convert to np array, shuffle instances, and set NaNs as None."""
         if row_id is None:
             instance_ids = np.arange(0, self.num_instances) #create instance IDs for rows/instances - used to identify corresponding feature tracking scores
@@ -174,40 +209,28 @@ class DATA_MANAGE:
 
 
     def report_data(self, heros):
+        print("Data Manage Summary: ------------------------------------------------")
+        print("Number of quantitative features: "+str(self.num_q_feat))
+        print("Number of categorical features: "+str(self.num_c_feat))
+        print("Total Features: "+str(self.num_feat))
+        print("Total Instances: "+str(self.num_instances))
+        print("Feature Types: "+str(self.feat_types))
+        print("Missing Values: "+str(self.missing_values))
+        print("Quantiative Feature Range: "+str(self.feat_q_range))
+        print("Categorical Feature Values: "+str(self.feat_c_values))
+        print("Average States: "+str(self.avg_feat_states))
+        print("Rule Specificity Limit: "+str(heros.rsl))
         if heros.outcome_type == 'class':
-            print("Data Manage Summary: ------------------------------------------------")
-            print("Number of quantitative features: "+str(self.num_q_feat))
-            print("Number of categorical features: "+str(self.num_c_feat))
-            print("Total Features: "+str(self.num_feat))
-            print("Total Instances: "+str(self.num_instances))
-            print("Feature Types: "+str(self.feat_types))
-            print("Missing Values: "+str(self.missing_values))
             print("Classes: "+str(self.classes))
             print("Class Counts: "+str(self.class_counts))
             print("Class Weights: "+str(self.class_weights))
             print("Majority Class: "+str(self.majority_class))
-            print("Quantiative Feature Range: "+str(self.feat_q_range))
-            print("Categorical Feature Values: "+str(self.feat_c_values))
-            print("Average States: "+str(self.avg_feat_states))
-            print("Rule Specificity Limit: "+str(heros.rsl))
-            print("Expert Knowledge Weights Used: "+str(heros.use_ek))
-            print("--------------------------------------------------------------------")
         elif heros.outcome_type == 'quant':
-            print("Data Manage Summary: ------------------------------------------------")
-            print("Number of quantitative features: "+str(self.num_q_feat))
-            print("Number of categorical features: "+str(self.num_c_feat))
-            print("Total Features: "+str(self.num_feat))
-            print("Total Instances: "+str(self.num_instances))
-            print("Feature Types: "+str(self.feat_types))
-            print("Missing Values: "+str(self.missing_values))
             print("Outcome Range: "+str(self.outcome_range)) 
+            print("Outcome Mean: "+str(self.outcome_mean))
             print("Outcome Standard Deviation: "+str(self.outcome_sd)) 
-            print("Quantiative Feature Range: "+str(self.feat_q_range))
-            print("Categorical Feature Values: "+str(self.feat_c_values))
-            print("Average States: "+str(self.avg_feat_states))
-            print("Rule Specificity Limit: "+str(heros.rsl))
-            print("Expert Knowledge Weights Used: "+str(heros.use_ek))
-            print("Outcome Ranked: "+str(self.outcome_ranked)) 
-            print("--------------------------------------------------------------------")
+            #print("Outcome Ranked: "+str(self.outcome_ranked)) 
         else:
             pass
+        print("Expert Knowledge Weights Used: "+str(heros.use_ek))
+        print("--------------------------------------------------------------------")

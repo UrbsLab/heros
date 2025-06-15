@@ -112,13 +112,21 @@ class HEROS(BaseEstimator, TransformerMixin):
         if not self.check_is_int(track_performance) or track_performance < 0:
             raise Exception("'track_performance' param must be non-negative integer")
         
-        if not model_tracking == True and not model_tracking == False and not model_tracking == 'True' and not model_tracking == 'False':
-            raise Exception("'verbose' param must be a boolean, i.e. True or False")
+        if model_tracking == 'True' or model_tracking == True:
+            model_tracking = True
+        if model_tracking == 'False' or model_tracking == False:
+            model_tracking = False
+        if not self.check_is_bool(model_tracking):
+            raise Exception("'model_tracking' param must be a boolean, i.e. True or False")
 
         if not self.check_is_int(random_state) and not random_state is None and not random_state == 'None':
             raise Exception("'random_state' param must be an int or None")
 
-        if not verbose == True and not verbose == False and not verbose == 'True' and not verbose == 'False':
+        if verbose == 'True' or verbose == True:
+            verbose = True
+        if verbose == 'False' or verbose == False:
+            verbose = False
+        if not self.check_is_bool(verbose):
             raise Exception("'verbose' param must be a boolean, i.e. True or False")
         
         #Initialize global variables
@@ -161,11 +169,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             self.random_state = None
         else:
             self.random_state = int(random_state)
-        if verbose == 'True' or verbose == True:
-            self.verbose = True
-        if verbose == 'False' or verbose == False:
-            self.verbose = False
-
+        self.verbose = verbose
         self.use_ek = False #internal parameter - set to False by default, but switched to true of ek scores passed to fit()
         self.y_encoding = None
         #self.top_models = [] #for tracking model performance increase over iterations !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -185,11 +189,18 @@ class HEROS(BaseEstimator, TransformerMixin):
         return isinstance(num, float)
 
     @staticmethod
-    def check_is_list(num):
+    def check_is_bool(obj):
         """
         :meta private:
         """
-        return isinstance(num, list)
+        return isinstance(obj, bool)
+    
+    @staticmethod
+    def check_is_list(obj):
+        """
+        :meta private:
+        """
+        return isinstance(obj, list)
     
     def check_inputs(self, X, y, row_id, cat_feat_indexes, pop_df, ek): 
         """
@@ -334,10 +345,11 @@ class HEROS(BaseEstimator, TransformerMixin):
             #print(instance)
             self.run_iteration(instance)
             # Evaluation tracking ***************************************************
-            if (self.iteration + 1) % self.track_performance == 0:
-                self.tracking.update_performance_tracking(self.iteration,self)
-                if self.verbose:
-                    self.tracking.print_tracking_entry()
+            if self.track_performance > 0:
+                if (self.iteration + 1) % self.track_performance == 0:
+                    self.tracking.update_performance_tracking(self.iteration,self)
+                    if self.verbose:
+                        self.tracking.print_tracking_entry()
             #Pause learning to conduct a complete evaluation of the current rule population
             if self.stored_rule_iterations != None and (self.iteration + 1) in self.stored_rule_iterations:
                 #Archive current rule population
