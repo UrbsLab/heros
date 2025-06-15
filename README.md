@@ -199,7 +199,7 @@ The manuscript for HEROS has been submitted for review.
 
 If you use HEROS in a scientific publication, please cite the following paper (once available):
 
-Gabe Lipschutz-Villa, Harsh Bandhey, Malek Kamoun, Ryan J. Urbanowicz (Submitted). [Rule-based Machine Learning: Separating Rule and Rule-Set Pareto-Optimization for Interpretable Noise-Agnostic Modeling](Not_yet_available)
+Gabe Lipschutz-Villa, Harsh Bandhey, Ruonan Yin, Malek Kamoun, Ryan J. Urbanowicz (Submitted). [Rule-based Machine Learning: Separating Rule and Rule-Set Pareto-Optimization for Interpretable Noise-Agnostic Modeling](Not_yet_available)
 
 BibTeX entry:
 ```bibtex
@@ -221,4 +221,10 @@ Commercial entities or for commercial use of the Software: please contact CSTech
 ***
 <a id="item-ten"></a>
 ## Acknowledgements
-The study was supported by Cedars Sinai Medical Center and NIH grants R01 AI173095, U01 AG066833 and P30 AG0373105. We thank Drs. John Holmes and Jason Moore for their mentorship and and research insights regarding rule-based machine learning for biomedicine, and Robert Zhang, who implemented scikit-ExSTraCS and prototyped an early batch-learning version of ExSTraCS.
+The study was supported by Cedars Sinai Medical Center and NIH grants R01 AI173095, U01 AG066833 and P30 AG0373105. Drs. John Holmes and Jason Moore for their mentorship and and research insights regarding rule-based machine learning for biomedicine, and Robert Zhang, who implemented scikit-ExSTraCS and prototyped an early batch-learning version of ExSTraCS. 
+
+### Algorithm/Code Contributors
+* Ryan J. Urbanowicz - Primary Conceptualization, Implementation, and Algorithm Design
+* Gabriel Lipschutz-Villa - Implementation and Testing of Phase II prototype, Phase II initialization methods, and unique rule encoding. 
+* Ruonan Yin - Design of Phase I Pareto-front distance calculation for fitness calculation.
+* Harsh Bandhey - Prototyping of Phase I rule initialization
