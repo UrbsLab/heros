@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 sys.path.append('/project/kamoun_shared/code_shared/scikit-heros/')
+#sys.path.append('/project/kamoun_shared/code_shared/new_heros/scikit-heros/')
 from src.skheros.heros import HEROS
 #from skheros.heros import HEROS #PIP INSTALL RUN
 

@@ -15,14 +15,13 @@ class RULE_POP:
         self.pop_set = []  # List rule objects making up the rule population
         self.match_set = []  # List of references to rules in population that make up a temporary match set (i.e. rules with 'IF' conditions matching current instance state)
         self.correct_set = []  # List of references to rules in population that make up correct set (i.e. rules with 'THEN' action matching current instance outcome)
-        self.incorrect_set = [] # List of references to rules in population that make up incorrect set (i.e. rules with 'THEN' action not matching current instance outcome)
         self.micro_pop_count = 0 # Number of rules in the population defined by the sum of individual rule numerosities (aka 'micro' population count)
         self.ID_counter = 0 # A unique id given to each new rule discovered (that isn't in the current rule population).
         self.pop_set_archive = {}
         self.pop_set_hold = None
         #Experimental
         self.explored_rules = []
-        self.archive_discovered_rules = False
+        self.archive_discovered_rules = False #True value is experimental
 
 
     def add_new_explored_rules(self,rule):
@@ -166,7 +165,6 @@ class RULE_POP:
                     self.remove_macro_rule(rule_index)
                     self.remove_from_match_set(rule_index)
                     self.remove_from_correct_set(rule_index)
-                    self.remove_from_incorrect_set(rule_index)
                     i -= 1
                 i += 1
 
@@ -189,16 +187,6 @@ class RULE_POP:
             ref = self.correct_set[j]
             if ref > rule_index:
                 self.correct_set[j] -= 1
-
-
-    def remove_from_incorrect_set(self,rule_index):
-        """ Delete reference to rule in population, contained in self.incorrect_set."""
-        if rule_index in self.incorrect_set:
-            self.incorrect_set.remove(rule_index)
-        for j in range(len(self.incorrect_set)):
-            ref = self.incorrect_set[j]
-            if ref > rule_index:
-                self.incorrect_set[j] -= 1
 
 
     def debug_confirm_offspring_match(self, rule, instance,heros,step,parent_list):
@@ -435,13 +423,9 @@ class RULE_POP:
             if heros.outcome_type == 'class':
                 if self.pop_set[rule_index].action == outcome_state:
                     self.correct_set.append(rule_index)
-                else:
-                    self.incorrect_set.append(rule_index)
             elif heros.outcome_type == 'quant':
                 if self.pop_set[rule_index].action[0] <= outcome_state <= self.pop_set[rule_index].action[1]:
                     self.correct_set.append(rule_index)
-                else:
-                    self.incorrect_set.append(rule_index)
             else:
                 pass
 
@@ -506,23 +490,12 @@ class RULE_POP:
         """ Clears out references in the match and correct sets for the next learning iteration. """
         self.match_set = []
         self.correct_set = []
-        self.incorrect_set = []
 
 
-    def order_rule_conditions(self):
+    def order_all_rule_conditions(self):
         """ Order the rule conditions by increasing feature index; keeping the ordering consistent between condition_indexes and condition_values."""
         for rule in self.pop_set:
-            list1 = rule.condition_indexes
-            list2 = rule.condition_values
-            # Combine the two lists using zip
-            combined = list(zip(list1, list2))
-            # Sort the combined list based on the first list's values
-            sorted_combined = sorted(combined, key=lambda x: x[0])
-            # Unzip the sorted list back into two separate lists
-            sorted_list1, sorted_list2 = zip(*sorted_combined)
-            # Convert the tuples back to lists
-            rule.condition_indexes = list(sorted_list1)
-            rule.condition_values = list(sorted_list2)
+            rule.order_rule_conditions()
 
 
     def load_rule_population(self, pop_df, heros, random):

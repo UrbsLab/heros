@@ -3,59 +3,44 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy.cluster.hierarchy import linkage
-#from sklearn.preprocessing import MinMaxScaler
 
-class FEAT_TRACK:
+class MODEL_FEAT_TRACK:
     def __init__(self,heros):
         self.ft_scores = np.array([[0.0]*heros.env.num_feat for i in range(heros.env.num_instances)]) #feature tracking score array
+        self.model_index = None
 
 
     def get_correct_set_scores(self,heros):
         """ Generate a feature score list based on the correct set of the current instance"""
         correct_score_list = np.array([0.0]*heros.env.num_feat)
         correct_rule_count = 0
-        for rule_index in heros.rule_population.correct_set:
-            correct_rule_count += heros.rule_population.pop_set[rule_index].numerosity
-            specificity = len(heros.rule_population.pop_set[rule_index].condition_indexes)
-            for feat in heros.rule_population.pop_set[rule_index].condition_indexes:
-                correct_score_list[feat] += heros.rule_population.pop_set[rule_index].useful_accuracy
+        for rule_index in heros.model_population.correct_set:
+            correct_rule_count += heros.model_population.target_rule_set[rule_index].numerosity
+            specificity = len(heros.model_population.target_rule_set[rule_index].condition_indexes)
+            for feat in heros.model_population.target_rule_set[rule_index].condition_indexes:
+                correct_score_list[feat] += heros.model_population.target_rule_set[rule_index].useful_accuracy
         return correct_score_list, correct_rule_count
+    
 
-
-    def update_ft_scores(self,outcome_prediction,action,heros):
-        """ Updates feature tracking scores for current instance. """
-        # Make correct set score lists
-        correct_score_list, correct_rule_count = self.get_correct_set_scores(heros)
-        # Update feature tracking scores for this instance
-        for feat in range(heros.env.num_feat):
-            self.ft_scores[heros.env.instance_index][feat] += correct_score_list[feat]
-
-
-    def update_ft_scores_wh(self,outcome_prediction,action,heros):
-        """ Updates feature tracking scores for current instance. """
-        # Make correct set score lists
-        correct_score_list, correct_rule_count = self.get_correct_set_scores(heros)
-        # Update feature tracking scores for this instance
-        for feat in range(heros.env.num_feat):
-            self.ft_scores[heros.env.instance_index][feat] += heros.beta * (correct_score_list[feat] - self.ft_scores[heros.env.instance_index][feat])
-
-
-    def batch_calculate_ft_scores(self,heros):
+    def batch_calculate_ft_scores(self,heros,index):
         """ Calculates feature tracking scores of all instances in the training dataset based on a fixed final rule population. """
+        # Get the target rule set for feature tracking score calculation
+        heros.model_population.get_target_model(index)
+        self.model_index = index
         for instance_index in range(heros.env.num_instances):
             # Get current instance properties
             instance_state = heros.env.train_data[0][instance_index]
             outcome_state = heros.env.train_data[1][instance_index]
             # Make {M}
-            heros.rule_population.make_eval_match_set(instance_state,heros)
+            heros.model_population.make_eval_match_set(instance_state,heros)
             # Make {C}
-            heros.rule_population.make_correct_set(outcome_state,heros)
+            heros.model_population.make_eval_correct_set(outcome_state,heros)
             # Make correct set score lists
             correct_score_list, correct_rule_count = self.get_correct_set_scores(heros)
             # Set feature tracking scores for this instance
             for feat in range(heros.env.num_feat):
                 self.ft_scores[instance_index][feat] += correct_score_list[feat]
-            heros.rule_population.clear_sets()
+            heros.model_population.clear_sets()
 
 
     def export_ft_scores(self,heros,feature_names):
@@ -66,7 +51,7 @@ class FEAT_TRACK:
         return ft_df 
     
     
-    def plot_clustered_ft_heatmap(self, ft_df, feature_names, show=True, save=False, output_path=None):
+    def plot_clustered_ft_heatmap(self, ft_df, feature_names, specified_filter, show=True, save=False, output_path=None):
         """ Generates a clustered heatmap of feature tracking scores. Scores values are scaled within rows between 0 and 1 for 
             hierarchical clustering between both rows and columns to determine clustering arrangment in plot. Scores values are 
             globally scaled (min/max out of all feature tracking scores) for displaying heatmap values on plot. 
@@ -76,16 +61,22 @@ class FEAT_TRACK:
         # Prepare dataframe
         ft_df.columns = feature_names #Add original feature names back to columns rather than indexes
         #Filter out any feature columns with all zero values
-        ft_df = ft_df.loc[:, (ft_df != 0).any(axis=0)]
+        if specified_filter != None and specified_filter != 'None':
+            cols_to_keep = (ft_df != 0.0).sum(axis=0) >= specified_filter
+            ft_df = ft_df.loc[:, cols_to_keep]
+
+        #ft_df = ft_df.loc[:, (ft_df != 0).any(axis=0)]
         # Scale feature tracking scores
         df_min = ft_df.min().min()
         df_max = ft_df.max().max()
         ft_df_all_scaled = (ft_df - df_min) / (df_max - df_min)
-        ft_df_row_scaled = ft_df.apply(lambda x: (x - x.min()) / (x.max() - x.min()) if x.max() != x.min() else np.zeros_like(x), axis=1) # Scale within rows individually
+
+        #ft_df_row_scaled = ft_df.apply(lambda x: (x - x.min()) / (x.max() - x.min()) if x.max() != x.min() else np.zeros_like(x), axis=1) # Scale within rows individually
+
         # Perform hierarchical clustering on columns
-        col_linkage = linkage(ft_df_row_scaled.T, method='average', metric='euclidean', optimal_ordering=True)
+        col_linkage = linkage(ft_df_all_scaled.T, method='average', metric='euclidean', optimal_ordering=True)
         # Perform hierarchical clustering on rows
-        row_linkage = linkage(ft_df_row_scaled, method='average', metric='euclidean', optimal_ordering=True)
+        row_linkage = linkage(ft_df_all_scaled, method='average', metric='euclidean', optimal_ordering=True)
         # Create a seaborn clustermap
         clustermap = sns.clustermap(ft_df_all_scaled, row_linkage=row_linkage, col_linkage=col_linkage, cmap='viridis', figsize=(10, 10))
         clustermap.ax_heatmap.set_xlabel('Features', fontsize=12)
@@ -98,6 +89,7 @@ class FEAT_TRACK:
         font_size = max(min_text_size, max_text_size - num_features // min_text_size)  # Adjust font size based on the number of features
         clustermap.ax_heatmap.set_xticklabels(clustermap.ax_heatmap.get_xticklabels(), rotation=90, fontsize=font_size)
         if save:
-            plt.savefig(output_path+'/clustered_ft_heatmap.png', bbox_inches="tight")
+            plt.savefig(output_path+'/clustered_rule_set_'+str(self.model_index)+'_ft_heatmap.png', bbox_inches="tight")
+
         if show:
             plt.show()

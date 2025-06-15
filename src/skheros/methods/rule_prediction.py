@@ -1,3 +1,5 @@
+import numpy as np
+
 class RULE_PREDICTION():
     def __init__(self,heros,rule_population,random):
         """ Returns a prediction when applying the entire rule population to a given training or testing instance. """
@@ -7,6 +9,8 @@ class RULE_PREDICTION():
         self.prediction_proba = {}
         # Quantitative outcome object
         self.prediction_range = []
+        self.majority_class_selection_made = False
+        self.random_selection_made = False
 
         if heros.outcome_type == 'class': #classification outcome
             # Calculate vote sums based on rules in match set
@@ -47,8 +51,10 @@ class RULE_PREDICTION():
                     i += 1
                 if len(final_candidates_actions) == 1: #One of the tied classes is the majority class in the training data
                     self.prediction = final_candidates_actions[0]
+                    self.majority_class_selection_made = True
                 else: # There is still a tie (first listed class as final tiebreaker)
                     self.prediction = random.choice(final_candidates_actions)
+                    self.random_selection_made = True
         elif heros.outcome_type == 'quant': #quantitative outcome
             if len(rule_population.match_set) > 0: #at least one rule in match set (i.e. current instance is covered by the rule population)
                 self.covered = True
@@ -104,10 +110,20 @@ class RULE_PREDICTION():
         return self.prediction
     
 
-    def get_prediction_proba(self):
+    def get_prediction_proba_dictionary(self):
         """ Return prediction prediction for each class as a dictionary."""
         return self.prediction_proba
+    
 
+    def get_prediction_proba(self):
+        """ Return prediction prediction for each class as a dictionary."""
+        predict_proba_list = np.empty(len(sorted(self.prediction_proba.items())))
+        counter = 0
+        for k, v in sorted(self.prediction_proba.items()):
+            predict_proba_list[counter] = v
+            counter += 1
+        return predict_proba_list
+    
 
     def get_if_covered(self):
         """ Return prediction prediction for each class as a dictionary."""

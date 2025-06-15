@@ -2,6 +2,11 @@ import copy
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.cluster.hierarchy import linkage
+import networkx as nx
+from collections import defaultdict
+from itertools import combinations
 from .model import MODEL
 
 
@@ -11,12 +16,49 @@ class MODEL_POP:
         self.pop_set = []
         self.offspring_pop = []
         self.match_set = []
+        self.correct_set = []
         self.target_rule_set = []
+        # Model training tracking -----------
+        self.tracking_list = []
+        self.tracking_entry = []
+        self.tracking_header = ["Iteration",
+                            "Training Accuracy",
+                            "Coverage",
+                            "Rules in Model",
+                            "Total Time"]
+        # Archiving ----------------------------
         self.pop_set_archive = {}
         self.pop_set_hold = None
         self.explored_models = set() #Efficient storage of all explored models for referencing during algorithm run
-        self.archive_discovered_rules = True
+        self.archive_discovered_models = False #True value is experimental
+    
+    def update_performance_tracking(self,iteration,heros):
+        """ Adds algorithm performance tracking information for the current training iteration."""
+        # Identify current top model (by default method)
+        top_model = self.get_max()
+        # Update current global time
+        heros.timer.update_global_time() 
+        # Create tracking entry
+        self.tracking_entry = [iteration+1,
+                          top_model.accuracy,
+                          top_model.coverage,
+                          len(top_model.rule_set),
+                          heros.timer.time_phase2]
+        # Add new tracking entry to the tracking list
+        self.tracking_list.append(self.tracking_entry)
 
+    def print_tracking_entry(self):
+        """ Prints the tracking information for the current training iteration. """
+        self.tracking_entry = [round(num,3) for num in self.tracking_entry]
+        report_df = pd.DataFrame([self.tracking_entry], columns=self.tracking_header,index=None)
+        print(report_df)
+
+    def get_performance_tracking_df(self):
+        """ Returns performance tracking over all training iterations as a dataframe. """
+        tracking_df = pd.DataFrame(self.tracking_list,columns=self.tracking_header)
+        return tracking_df
+    
+    
     def skip_phase2(self,heros):
         """ Creates a model out of entire rule population. Used to effectively skip phase 2 optimization when rule population was very small (< 2) after cleaning/compaction """
         new_model = MODEL()
@@ -48,10 +90,28 @@ class MODEL_POP:
             if rule.match(instance_state,heros):
                 self.match_set.append(i)
 
+    def sort_match_set(self):
+        """ Not currently used: Sorts the rule indexes in the match set based on a more intuitive ranking for model explanation."""
+        self.match_set =  sorted(self.match_set, key=lambda i: (self.target_rule_set[i].numerosity, self.target_rule_set[i].correct_cover), reverse=True)
+
+    def make_eval_correct_set(self,outcome_state,heros):
+        """ Makes a correct set {C} given an instance outcome and {M}. Used by model feature tracking."""
+        for i in range(len(self.match_set)):
+            rule_index = self.match_set[i]
+            if heros.outcome_type == 'class':
+                if self.target_rule_set[rule_index].action == outcome_state:
+                    self.correct_set.append(rule_index)
+            elif heros.outcome_type == 'quant':
+                if self.target_rule_set[rule_index].action[0] <= outcome_state <= self.target_rule_set[rule_index].action[1]:
+                    self.correct_set.append(rule_index)
+            else:
+                pass
+
 
     def clear_sets(self):
         """ """
         self.match_set = []
+        self.correct_set = []
 
 
     def dominates(self,p,q):
@@ -179,7 +239,7 @@ class MODEL_POP:
                 rules_in_model = random.randint(min_rules,max_rules)
                 new_model.initialize_randomly(rules_in_model,heros)
                 #Check if model already in population, and add to population
-                if self.archive_discovered_rules:
+                if self.archive_discovered_models:
                     if not self.list_exists(new_model.rule_IDs, self.explored_models):
                         # Evalute model and update model parameters
                         new_model.evaluate_model_class(heros)
@@ -194,7 +254,7 @@ class MODEL_POP:
                         new_model.evaluate_model_class(heros)
                         #Add model to population
                         self.pop_set.append(new_model) #add to model population
-                        self.add_new_explored_model(new_model.rule_IDs, self.explored_models)
+                        #self.add_new_explored_model(new_model.rule_IDs, self.explored_models)
                     else:
                         fail_count += 1
 
@@ -216,7 +276,7 @@ class MODEL_POP:
                 else:
                     target_list_counter += 1
                 #Check if model already in population, and add to population
-                if self.archive_discovered_rules:
+                if self.archive_discovered_models:
                     if not self.list_exists(new_model.rule_IDs, self.explored_models):
                         # Evalute model and update model parameters
                         new_model.evaluate_model_class(heros)
@@ -231,7 +291,7 @@ class MODEL_POP:
                         new_model.evaluate_model_class(heros)
                         #Add model to population
                         self.pop_set.append(new_model) #add to model population
-                        self.add_new_explored_model(new_model.rule_IDs, self.explored_models)
+                        #self.add_new_explored_model(new_model.rule_IDs, self.explored_models)
                     else:
                         fail_count += 1
         else:
@@ -266,7 +326,7 @@ class MODEL_POP:
             offspring_3.merge(parent_list[1])
             # If model already exists, generate a random one with a larger rule-set size range
             try_counter = 0
-            if self.archive_discovered_rules:
+            if self.archive_discovered_models:
                 while self.list_exists(offspring_3.rule_IDs, self.explored_models) and try_counter < random_gen_tries: 
                     rules_in_model = random.randint(random_gen_rule_min,int(len(heros.rule_population.pop_set)))
                     if heros.model_pop_init == "random":
@@ -295,7 +355,7 @@ class MODEL_POP:
                         print("Specified model initialization method not available.")
                     try_counter += 1
             # Evalute model and update model parameters
-            if self.archive_discovered_rules:
+            if self.archive_discovered_models:
                 if not self.list_exists(offspring_3.rule_IDs, self.explored_models):
                     offspring_3.evaluate_model_class(heros)
                     #Add model to offspring population
@@ -307,7 +367,7 @@ class MODEL_POP:
                     offspring_3.evaluate_model_class(heros)
                     #Add model to offspring population
                     self.offspring_pop.append(offspring_3) #add to model population
-                    self.add_new_explored_model(offspring_3.rule_IDs, self.explored_models)
+                    #self.add_new_explored_model(offspring_3.rule_IDs, self.explored_models)
                     new_model_count += 1
         # Crossover
         if random.random() < heros.cross_prob:
@@ -326,7 +386,7 @@ class MODEL_POP:
             offspring_1_empty = True
         # If model is empty or already exists, generate a random one with a larger rule-set size range
         try_counter = 0
-        if self.archive_discovered_rules:
+        if self.archive_discovered_models:
             while offspring_1_empty or (self.list_exists(offspring_1.rule_IDs, self.explored_models) and try_counter < random_gen_tries): 
                 rules_in_model = random.randint(random_gen_rule_min,int(len(heros.rule_population.pop_set)))
                 if heros.model_pop_init == "random":
@@ -357,7 +417,7 @@ class MODEL_POP:
                 try_counter += 1
                 offspring_1_empty = False
         # Evalute model and update model parameters
-        if self.archive_discovered_rules:
+        if self.archive_discovered_models:
             if not self.list_exists(offspring_1.rule_IDs, self.explored_models):
                 offspring_1.evaluate_model_class(heros)
                 #Add model to offspring population
@@ -369,7 +429,7 @@ class MODEL_POP:
                 offspring_1.evaluate_model_class(heros)
                 #Add model to offspring population
                 self.offspring_pop.append(offspring_1) #add to model population
-                self.add_new_explored_model(offspring_1.rule_IDs, self.explored_models)
+                #self.add_new_explored_model(offspring_1.rule_IDs, self.explored_models)
                 new_model_count += 1
 
         # Offspring 2 Checks -----------------
@@ -378,7 +438,7 @@ class MODEL_POP:
             offspring_2_empty = True
         # If model is empty or already exists, generate a random one with a larger rule-set size range
         try_counter = 0
-        if self.archive_discovered_rules:
+        if self.archive_discovered_models:
             while offspring_2_empty or (self.list_exists(offspring_2.rule_IDs, self.explored_models) and try_counter < random_gen_tries): 
                 rules_in_model = random.randint(random_gen_rule_min,int(len(heros.rule_population.pop_set)))
                 if heros.model_pop_init == "random":
@@ -409,7 +469,7 @@ class MODEL_POP:
                 try_counter += 1
                 offspring_2_empty = False
         # Evalute model and update model parameters
-        if self.archive_discovered_rules:
+        if self.archive_discovered_models:
             #if not self.model_exists(offspring_2):
             if not self.list_exists(offspring_2.rule_IDs, self.explored_models):
                 offspring_2.evaluate_model_class(heros)
@@ -423,9 +483,10 @@ class MODEL_POP:
                 offspring_2.evaluate_model_class(heros)
                 #Add model to offspring population
                 self.offspring_pop.append(offspring_2) #add to model population
-                self.add_new_explored_model(offspring_2.rule_IDs, self.explored_models)
+                #self.add_new_explored_model(offspring_2.rule_IDs, self.explored_models)
                 new_model_count += 1
             return new_model_count > 0
+
 
     def add_offspring_into_pop(self):
         self.pop_set = self.pop_set + self.offspring_pop
@@ -454,20 +515,16 @@ class MODEL_POP:
         pop_list = []
         column_names = ['Rule IDs', 
                         'Number of Rules',
-                        'Fitness', 
                         'Accuracy',
                         'Coverage', 
                         'Birth Iteration', 
-                        'Deletion Probability', 
                         'Model on Front']
         for model in self.pop_set: 
             model_list = [str(model.rule_IDs), 
                           len(model.rule_set), 
-                          model.fitness, 
                           model.accuracy,
                         model.coverage, 
                         model.birth_iteration, 
-                        model.deletion_prob,
                         model.model_on_front]
             pop_list.append(model_list)
         pop_df = pd.DataFrame(pop_list, columns = column_names)
@@ -506,7 +563,7 @@ class MODEL_POP:
 
     def get_all_model_fronts(self):
         return self.fast_non_dominated_sort(self.pop_set)
-    
+
 
     def export_top_training_model(self):
         """ Prepares and exports a dataframe capturing the top model, i.e. rule set."""
@@ -637,4 +694,180 @@ class MODEL_POP:
         if show:
             plt.show()
 
+    def plot_model_tracking(self,show, save, output_path):
+        """ """   
+        tracking_df = self.get_performance_tracking_df()
+        # Create the plot
+        fig, ax1 = plt.subplots()
+        # Plot the first line on the left y-axis 
+        ax1.plot(tracking_df['Iteration'], tracking_df['Training Accuracy'], 'b-', label='Model Balanced Accuracy')  # 'b-' specifies a blue solid line
+        ax1.plot(tracking_df['Iteration'], tracking_df["Coverage"], 'g-', label='Model Coverage')  # 'b-' specifies a blue solid line
 
+        ax1.set_xlabel('Iteration')
+        ax1.set_ylabel('Training Accuracy (Blue) and Coverage (Green)')
+        ax1.tick_params(axis='y')
+        # Create a second y-axis sharing the same x-axis
+        ax2 = ax1.twinx()
+        ax2.plot(tracking_df['Iteration'], tracking_df['Rules in Model'], 'r--', label='Rules in Model')  # 'r--' specifies a red dashed line
+        ax2.set_ylabel('Rules in Model', color='r')
+        ax2.tick_params(axis='y', labelcolor='r')
+        if save:
+            plt.savefig(output_path+'/model_tracking_line_graph.png', bbox_inches="tight")
+        if show:
+            plt.show()
+
+
+    def plot_rule_set_heatmap(self, feature_names, index, heros, weighting='useful_accuracy', specified_filter=None, display_micro=False, show=True, save=False, output_path=None):
+        """ Plots a clustered heatmap of the rule population based on what features are specified vs. generalized in each rule.
+            Hierarchical clustering is applied to rows (i.e. across rules), with feature order preserved. 
+
+            Parameters:
+            :param feature_names: a list of feature names for the entire training dataset (given in original dataset order)
+            :param weighting: indicates what (if any) weighting is applied to individual rules for the plot ('useful_accuracy', 'fitness', None)
+            :param specified_filter: the number of times a given feature must be specified in rules of the population to be included in the plot (must be a positive integer or None)
+            :param display_micro: controls whether or not additional copies of rules (based on rule numerosity) should be included in the heatmap (True or False) 
+            :param show: indicates whether or not to show the plot (True or False)
+            :param save: indicates whether or not to save the plot to a specified path/filename (True or False)
+            :param output_path: a valid folder path within which to save the plot (str of folder path)
+            :param data_name: a unique name precursor to give to the plot (str)
+        """
+        # Get the rule set for the target model to visualize
+        self.get_target_model(index)
+        if display_micro:
+            model_numerosity_sum = 0
+            for rule in self.target_rule_set:
+                model_numerosity_sum += rule.numerosity
+            rule_spec_df = pd.DataFrame([[0.0] * heros.env.num_feat for _ in range(model_numerosity_sum)])
+            rule_weight_df = pd.DataFrame([[0.0] * heros.env.num_feat for _ in range(model_numerosity_sum)])
+        else:
+            rule_spec_df = pd.DataFrame([[0.0] * heros.env.num_feat for _ in range(len(self.target_rule_set))])
+            rule_weight_df = pd.DataFrame([[0.0] * heros.env.num_feat for _ in range(len(self.target_rule_set))])
+        # Add feature names as the dataframe columns
+        rule_weight_df.columns = feature_names
+        rule_spec_df.columns = feature_names
+        # Add feature specificities (and weights if selected) to this dataframe
+        row = 0
+        for rule in self.target_rule_set:
+            if display_micro: #include copies of rules based on rule numerosity
+                for copy in range(rule.numerosity):
+                    feat_index = 0 #feature index
+                    for feat in feature_names:
+                        if feat_index in rule.condition_indexes: #feature is specified in given rule
+                            rule_spec_df.at[row,feat] = 1.0
+                            if weighting is None or weighting == 'None':
+                                rule_weight_df.at[row,feat] = 1.0
+                            elif weighting == 'useful_accuracy':
+                                rule_weight_df.at[row,feat] = float(rule.useful_accuracy)
+                            else:
+                                print("Warning: Rule pop heatmap weighting must be 'useful_accuracy', 'fitness' or None. " )
+                        feat_index += 1
+                    row += 1
+            else: #include each rule only once (i.e. ignore rule numerosity)
+                feat_index = 0 #feature index
+                for feat in feature_names:
+                    if feat_index in rule.condition_indexes: #feature is specified in given rule
+                        rule_spec_df.at[row,feat] = 1.0
+                        if weighting is None or weighting == 'None':
+                            rule_weight_df.at[row,feat] = 1.0
+                        elif weighting == 'useful_accuracy':
+                            rule_weight_df.at[row,feat] = float(rule.useful_accuracy)
+                        else:
+                            print("Warning: Rule pop heatmap weighting must be 'useful_accuracy', 'fitness' or None. " )
+                    feat_index += 1
+                row += 1      
+        # Apply optional filtering to the dataframe to remove features that are specified with a lower frequency
+        if specified_filter != None and specified_filter != 'None':
+            cols_to_keep = (rule_spec_df != 0.0).sum(axis=0) >= specified_filter
+            rule_weight_df = rule_weight_df.loc[:, cols_to_keep]
+            rule_spec_df = rule_spec_df.loc[:, cols_to_keep]
+        # Perform hierarchical clustering on columns
+        col_linkage = linkage(rule_spec_df.T, method='average', metric='euclidean', optimal_ordering=False)
+        # Perform hierarchical clustering on rows
+        row_linkage = linkage(rule_spec_df.values, method='average', metric='euclidean', optimal_ordering=True)
+        # Create a seaborn clustermap
+        #clustermap = sns.clustermap(rule_weight_df, row_linkage=row_linkage, col_cluster=False, cmap='viridis', figsize=(10, 10))
+        clustermap = sns.clustermap(rule_weight_df, row_linkage=row_linkage, col_linkage=col_linkage, cmap='viridis', figsize=(10, 10))
+        clustermap.ax_heatmap.set_xlabel('Features', fontsize=12)
+        clustermap.ax_heatmap.set_ylabel('Rules', fontsize=12)
+        clustermap.ax_heatmap.set_yticks([])
+        # Dynamicaly update x-tick label text size based on number of features in the dataset (up to a minimum )
+        num_features = rule_weight_df.shape[1]
+        min_text_size = 4
+        max_text_size = 12
+        font_size = max(min_text_size, max_text_size - num_features // min_text_size)  # Adjust font size based on the number of features
+        clustermap.ax_heatmap.set_xticklabels(clustermap.ax_heatmap.get_xticklabels(), rotation=90, fontsize=font_size)
+        if save:
+            plt.savefig(output_path+'/clustered_rule_set_'+str(index)+'_heatmap.png', bbox_inches="tight")
+        if show:
+            plt.show()
+
+
+    def plot_rule_set_network(self, feature_names, index, weighting='useful_accuracy', display_micro=False, node_size=1000, edge_size=10, show=True, save=False, output_path=None):
+        """ Plots a network visualization of the rule population with feature specificity across rules as node size and feature co-specificity 
+            across rules in the population as edge size.
+        """
+        # Get the rule set for the target model to visualize
+        self.get_target_model(index)
+        # Initialize dictionaries to count the number of times each feature is specified in rules of the population and how often feature combinations are cospecified
+        feat_spec_count = defaultdict(int)
+        feat_cooccurrence_count = defaultdict(int)
+        #Create dictionaries of specificity counts
+        for rule in self.target_rule_set:
+            # Count appearances of each integer
+            base_score = 1.0
+            if display_micro:
+                base_score = base_score * rule.numerosity
+            for feature_index in rule.condition_indexes:
+                if weighting is None or weighting == 'None':
+                    feat_spec_count[feature_index] += base_score
+                elif weighting == 'useful_accuracy':
+                    feat_spec_count[feature_index] += base_score * rule.useful_accuracy
+                else:
+                    print("Warning: Rule pop network weighting must be 'useful_accuracy', 'fitness' or None. " )
+            # Count appearances of each unique pair
+            for pair in combinations(rule.condition_indexes, 2):
+                # Ensure pairs are in sorted order to avoid duplicate pairs (e.g., (1, 2) and (2, 1))
+                pair = tuple(sorted(pair))
+                if weighting is None or weighting == 'None':
+                    feat_cooccurrence_count[pair] += base_score
+                elif weighting == 'useful_accuracy':
+                    feat_cooccurrence_count[pair] += base_score * rule.useful_accuracy
+                else:
+                    print("Warning: Rule pop network weighting must be 'useful_accuracy', 'fitness' or None. " )
+        # Convert defaultdicts to regular dictionaries
+        feat_spec_count = dict(feat_spec_count)
+        feat_cooccurrence_count = dict(feat_cooccurrence_count)
+        # Scale all node weights to a max of 1
+        max_value = max(feat_spec_count.values())
+        feat_spec_count = {key: value / max_value for key, value in feat_spec_count.items()}
+        # Scale all edge weights to a max of 1
+        max_value = max(feat_cooccurrence_count.values())
+        feat_cooccurrence_count = {key: value / max_value for key, value in feat_cooccurrence_count.items()}
+        # Create a graph
+        G = nx.Graph()
+        # Add nodes with their weights
+        for feature, weight in feat_spec_count.items():
+            G.add_node(feature_names[feature], size=weight)
+        # Add edges with their weights
+        for (feature1, feature2), weight in feat_cooccurrence_count.items():
+            G.add_edge(feature_names[feature1], feature_names[feature2], weight=weight)
+        # Get positions for the nodes
+        pos = nx.circular_layout(G)
+        # Draw nodes with sizes proportional to their weights
+        node_sizes = [G.nodes[node]['size'] * node_size for node in G.nodes]  # Scale factor for visibility
+        # Set node colors proportional to normalized weights
+        node_colors = [G.nodes[node]['size'] for node in G.nodes] 
+        #nx.draw_networkx_nodes(G, pos, node_size=node_sizes, node_color='skyblue', alpha=0.9)
+        nx.draw_networkx_nodes(G, pos, node_size=node_sizes, node_color=node_colors, cmap='viridis', alpha=0.9)
+        # Draw edges with widths proportional to their weights
+        edge_widths = [G.edges[edge]['weight'] * edge_size for edge in G.edges]
+        edge_colors = [G.edges[edge]['weight'] for edge in G.edges]
+        nx.draw_networkx_edges(G, pos, width=edge_widths, edge_color=edge_colors)
+        # Draw node labels
+        nx.draw_networkx_labels(G, pos, font_size=12, font_color='orange')
+        # Show the plot
+        plt.axis('off')
+        if save:
+            plt.savefig(output_path+'/rule_set_'+str(index)+'_network.png', bbox_inches="tight")
+        if show:
+            plt.show()

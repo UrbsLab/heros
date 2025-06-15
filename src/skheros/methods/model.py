@@ -25,8 +25,6 @@ class MODEL:
         self.birth_iteration = None #iteration number when this ruleset was first introduced (or re-introduced) to the population
         self.objectives = None
         # FLEXIBLE MODEL PARAMETERS ***************************************************
-        self.fitness = None #model 'goodness' metric that drives many aspects of algorithm learning, discovery, and prediction
-        self.deletion_prob = None #probability of model being selected for deletion
         self.model_on_front = None #identifies if the model was on the pareto front at the end of phase 2 training
 
 
@@ -403,13 +401,10 @@ class MODEL:
         """ Report basic information regarding this model. """
         print("Set-------------------------------------------")
         print("Rule IDs: " + str(self.rule_IDs))
-        print("Fitness: " + str(self.fitness))
         print("Accuracy: " + str(self.accuracy))
-        #print("Useful Accuracy: " +str(self.useful_accuracy))
         print("Coverage: " + str(self.coverage))
         print("Birth Iteration: " + str(self.birth_iteration))
-        print("Rule Count: " + str(len(self.rule_IDs))) 
-        print("Deletion Prob: " + str(self.deletion_prob))
+        print("Rule Count: " + str(len(self.rule_IDs)))
 
 
     def plot_rule_pop_network(self, feature_names, heros, weighting='useful_accuracy', display_micro=False, node_size=1000, edge_size=10, show=True, save=False, output_path=None, data_name=None):

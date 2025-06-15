@@ -9,19 +9,21 @@
  - [Algorithm History](#item-six)
  - [Citing HEROS](#item-seven)
  - [Futher Documentation](#item-eight)
- - [Contact](#item-nine)
- - [Acknowledgements](#item-ten)
+ - [License](#item-nine)
+ - [Contact](#item-ten)
+ - [Acknowledgements](#item-eleven)
+
 
 <!-- headings -->
 <a id="item-one"></a>
 ## Introduction
-**HEROS (Heuristic Evolutionary Rule Optimization System)** is an evolutionary rule-based machine learning (ERBML) algorithm framework for supervised learning. It is designed with the goal of modeling complex and/or noisy problems in a manner than yields maximally human interpretable models (nearly on par with decision trees) without relying on fuzzification, transfer learning, or making assumptions about the signal or patterns of association in the data. HEROS directly descends from a lineage of "Michigan-Syle" Learning Classifier System (LCS) algorithms including XCS, UCS, and ExSTraCS.  HEROS embrases a new paradigm in ERBML given its two-phase approach that uniquely separates the tasks of rule optimization, and rule-set (i.e. model) optimization, each with a uniquely tailored multi-objective pareto-front-based fitness function. Specifically, rules are optimized based on the objectives of maximizing both rule-accuracy and instance coverage, while models are optimized based on the objectives of maximizing model-accuracy and minimizing rule-set size. Currently these phases are run sequentially, such that phase II (model optimization) can only utilize rules discovered within the training iterations of phase I (rule optimization). This package is scikit-learn compatible. 
+**HEROS (Heuristic Evolutionary Rule Optimization System)** is an evolutionary rule-based machine learning (ERBML) algorithm framework for supervised learning. It is designed to agnostically modeling simple/complex and/or clean/noisy problems (without hyperparameter optimization) and yield maximally human interpretable models. HEROS adopts a two-phase approach separating rule optimization, and rule-set (i.e. model) optimization, each with distinct multi-objective Pareto-front-based optimization. Rules are optimized based on maximizing rule-accuracy and instance coverage using a Pareto-inspired rule fitness function. Differently, models are optimized based on maximizing balanced accuracy and minimizing rule-set size using an NSGA-II-inspired evolutionary algorithm. This package is scikit-learn compatible. 
 
-To date we have only validated HEROS functionality on binary classification problems. This project is under active development with a number of improvements/expansions planned or in progress. For example, we are expanding HEROS to also include multiclass, regression, and survival outcomes (i.e. survival times with censoring) problems. 
+To date, HEROS functionality has been validated on binary classification problems. This project is under active development with a number of improvements/expansions planned or in progress. For example, we are expanding HEROS to support multiclass, regression, and survival outcomes in future releases.
 
 A schematic detailing how the HEROS algorithm works is given below:
 
-![alttext](https://github.com/UrbsLab/heros/blob/main/images/HEROS_1.0_Square_Schematic_white_back.png?raw=true)
+![alttext](https://github.com/UrbsLab/heros/blob/main/images/HEROS_1.0_Paper_Schematic_white_back.png?raw=true)
 
 
 ***
@@ -59,10 +61,10 @@ Lastly, the fit() method can optionally be passed 'pop_df', a dataframe object, 
 ## Using HEROS
 
 ### Demonstration Notebook
-A Jupyter Notebooks has been included to demonstrate how HEROS (and it's functions) can be applied to train, evaluate, and apply models.
+A Jupyter Notebooks has been included to demonstrate how HEROS (and it's functions) can be applied to train, evaluate, and apply models with a wide variety of saved outputs, visualizations and model prediction explanations. We strongly recommend exploring this demonstration notebook to get familiar with HEROS and its capabilities. 
 * [DEMO Notebook](https://github.com/UrbsLab/heros/blob/main/HEROS_Demo_Notebook.ipynb)
 
-This notebook is currently set up to run by downloading this repository and running the included notebook. 
+This notebook is currently set up to run by cloning this repository and running the included notebook. 
 
 
 ### Basic Run Command Walk-Through
@@ -82,9 +84,9 @@ heros = HEROS(iterations=10000, pop_size=500, nu=1, model_iterations=100, model_
 heros = heros_trained.fit(X, y, cat_feat_indexes=cat_feat_indexes)
 ```
 
-Once trained, HEROS can be applied to make predictions on testing data. Users have the option to choose the learned rule-model to use; either (1) the entire Phase I rule population (2) the top Phase II model (automatically selected based on training performance), or (3) the top Phase II model from the model-pareto front (evaluated by either training or testing data).
+Once trained, HEROS can be applied to make predictions on testing data. Users have the option to choose the model to use; either (1) the top Phase II model from the model-pareto front (selected based on maximizing testing performance, maximizing instance coverage, and, if possible, minimizing rule-count) - RECOMMENDED, (2) the default top Phase II model (automatically selected based on training performance), or (3) the entire Phase I rule population.
 
-Below is an example of the first option:
+Below is an example of the first option (RECOMMENDED):
 
 ```
 # Data Preparation
@@ -93,75 +95,126 @@ X_test = test_data.drop(outcome_label, axis=1)
 X_test = X_test.values
 y_test = test_data[outcome_label].values 
 
-# HEROS Prediction (Via Phase I Rule Population) and Performance Report
+# HEROS Prediction (Model selection via Phase II Model Testing Evaluation) and Performance Report
+best_model_index = heros.auto_select_top_model(X_test,y_test)
+predictions = heros.predict(X_test, target_model=best_model_index)
+print(classification_report(predictions, y_test, digits=8))
+```
+
+To get predicitions with the second option, after preparing the data we would run the following:
+```
+# HEROS Prediction (Model selection via Phase II Default Model Selection) and Performance Report
+predictions = heros.predict(X_test)
+print(classification_report(predictions, y_test, digits=8))
+```
+
+To get predictions with the third option, after preparing the data we would run the following:
+```
+# HEROS Prediction (Whole Phase I Rule Population Applied as Model) and Performance Report
 predictions = heros.predict(X_test,whole_rule_pop=True)
 print(classification_report(predictions, y_test, digits=8))
 ```
 
-To get predicitions with the second option we would make this one change:
+Differently, HEROS will return prediction probabilities using the following: 
 ```
-predictions = heros.predict(X_test)
-```
-
-An example of the third option is given in the [DEMO Notebook](https://github.com/UrbsLab/heros/blob/main/HEROS_Demo_Notebook.ipynb).
-
-HEROS can alternatively return prediction probabilities using the following: 
-```
-predictions = heros.predict_proba(X_test)
+predictions = heros.predict_proba(X_test, target_model=best_model_index)
 ```
 
 HEROS can also return whether each instance is covered (i.e. at least one rule matches it in the given 'model') using the following:
 ```
-predictions = heros.predict_covered(X_test)
+predictions = heros.predict_covered(X_test, target_model=best_model_index)
 ```
 
+Lastly, HEROS can give direct explanations of individual model predictions using the following:
+```
+testing_instance = X_test[0] # Testing instance index 0 arbitrarily chosen here
+heros.predict_explanation(testing_instance, feature_names, target_model=best_model_index)
+```
+The parameter, `feature_names`, is the ordered list of original feature names from the training dataset.
 
-NOTE: The documentation below is currently under construction!!!!!!!!!!!!!
-        There are still remnants from code copied from the scikit-FIBERS project.
+Below is a simple example prediction explanation for a HEROS model trained on the 6-bit multiplexer problem:
+> PREDICTION REPORT ------------------------------------------------------------------
+
+> Outcome Prediction: 0
+
+> Model Prediction Probabilities: {0: 1.0, 1: 0.0}
+
+> Instance Covered by Model: Yes
+
+> Number of Matching Rules: 1
+
+> PREDICTION EXPLANATION -------------------------------------------------------------
+
+> Supporting Rules: --------------------
+
+> 6 rule copies assert that IF: (A_0 = 0) AND (A_1 = 0) AND (R_0 = 0) THEN: predict outcome '0' with 100.0% confidence based on 68 matching training instances (15.11% of training instances)
+
+> Contradictory Rules: -----------------
+
+> No contraditory rules matched.
+
+In the case that multiple rules match an instance, they will all be displayed in a similar human-readable format. 
 
 ***
 <a id="item-five"></a>
 ## Hyperparameters
-While HEROS has a number of available hyperparameters only a few can have a significant impact on algorithm performance (see first table below). It's important to set *outcome_type* to the appropriate data outcome, where 'class' is used for binary or multi-class outcomes, and 'quant' is used for quantiative outcomes (i.e. regression). In general, setting *iterations* and *pop_size* to larger integers is expected to improve training performance, but will require longer Phase I run times, and the same is true for *model_iterations* and *model_pop_size* with respect to Phase II. The optional parameter *use_ek* indicates if Phase I will utilize expert knowledge covering (as opposed to random covering), but this also requires that a list of expert knowledge weights are passed to the fit() function for training. 
+### Key Hyperparameters
+While HEROS has a number of available hyperparameters only a few are expected to have a significant impact on algorithm performance (see first table below). In general, setting *iterations* and *pop_size* to larger integers is expected to improve training performance, but will require longer Phase I run times, and the same is true for *model_iterations* and *model_pop_size* with respect to Phase II. The *nu* parameter should always be set to 1 unless the user is confident that they are modeling a problem that can achieve 100% testing accuracy (i.e. a problem with no signal noise).
 
 | Hyperparameter | Description | Type/Options | Default Value |
 | -------------- | ----------- | ------------- | ------------- |
-| *outcome_type* | Defines the type of outcome in the dataset | 'class','quant' | 'class' |
 | *iterations* | Number of (rule population) learning iterations (Phase I) | int | 100000 | 
 | *pop_size* | Maximum 'micro' rule-population size (Phase I)  | int | 1000 |
 | *model_iterations* | Number of (model population) learning iterations (Phase II) | int | 500 |
 | *model_pop_size* | Maximum model-population size (Phase II) | int | 100 |
+| *nu* | Power parameter used to determine the importance of high rule-accuracy when calculating fitness (Phases I & II) | int | 1 |
 
-
-In this second table we define other HEROS hyperparameters that are generally recommended to be left to their default values. 
+### Other Hyperparameters
+The table below gives other HEROS hyperparameters that should generally be left as-is, unless experimenting with general algorithm configuration optimization.
 
 | Hyperparameter | Description | Type/Options | Default Value |
 | -------------- | ----------- | ------------- | ------------- |
-| *cross_prob* |  The probability of applying crossover in rule discovery with the genetic algorithm (Phases I & II) | float | 0.8 |
-| *mut_prob* | The probability of mutating a position within an offspring rule (Phases I & II) | float | 0.04 | 
-| *nu* | Power parameter used to determine the importance of high rule-accuracy when calculating fitness (Phases I & II) | int | 1 |
 | *beta* | Learning parameter - used in calculating average match set size (Phase I) | float | 0.2 |
 | *theta_sel* | The fraction of the correct set to be included in tournament selection (Phases I & II) | float | 0.5 |
-| *fitness_function* | The fitness function used to globally evaluate rules (Phases I & II) | 'pareto','accuracy' | 'pareto' | 
+| *cross_prob* |  The probability of applying crossover in rule discovery with the genetic algorithm (Phases I & II) | float | 0.8 |
+| *mut_prob* | The probability of mutating a position within an offspring rule (Phases I & II) | float | 0.04 | 
+| *merge_prob* | The probablity of the merge operator being used during model offspring generation (Phase II) | float | 0.1 |
+| *new_gen* | Proportion of maximum pop size used to generate an model offspring population each generation (Phase II) | float | 1.0 |
+| *model_pop_init* | Model population initialization method (Phase II) | 'random', 'probabilistic', 'bootstrap', or 'target_acc' | 'target_acc' |
 | *subsumption* | Specify subsumption strategy(s) to apply i.e. genetic algorithm, correct set, both or None (Phase I) | 'ga', 'c', 'both', or None | 'both' |  
 | *rsl* | Rule specificity limit (automatically determined when 0) (Phase I) | int | 0 |
-| *feat_track* | Activates a specified feature tracking mechanism which tracks estimated feature importance for individual instances (Phase I) | 'add' or 'wh' or 'end' or None | 'add' |
-| *model_pop_init* | Model population initialization method (Phase II) | 'random', 'probabilistic', 'bootstrap', or 'target_acc' | 'target_acc' |
-| *new_gen* | Proportion of maximum pop size used to generate an model offspring population each generation (Phase II) | float | 1.0 |
-| *merge_prob* | The probablity of the merge operator being used during model offspring generation (Phase II) | float | 0.1 |
-| *rule_pop_init* | Specifies type of rule population initiailzation (if any) (Phase I) | 'load', 'dt', or None | None |
 | *compaction* | Specifies type of rule-compaciton to apply at end of rule population training (if any) (Phase I) | 'sub' or None | 'sub' |
+| *random_state* | The seed value needed to generate a random number (Phases I & II) for reproducibility| int or None | None |
+
+### Performance Tracking Hyperparameters
+This next table gives optional hyperparameters that control HEROS performance tracking options (over the course of learning). These are useful when interested in analyzing rule/model learning across iterations.
+
+| Hyperparameter | Description | Type/Options | Default Value |
+| -------------- | ----------- | ------------- | ------------- |
 | *track_performance* | (For detailed algorithm evaluation) Activates performance tracking when > 0. Value indicates how many iteration steps to wait to gather tracking data (Phase I) | int | 0 |
+| *model_tracking* | (For detailed algorithm evaluation) Activates tracking of top model performance across training iterations (Phase II) | True or False | False |
 | *stored_rule_iterations* | (For detailed algorithm evaluation) Specifies iterations where a copy of the rule population is stored (Phase I) | comma-separated string of ints (e.g. 500,1000,5000) | None |
 | *stored_model_iterations* | (For detailed algorithm evaluation) Specifies iterations where a copy of the model population is stored (Phase II) | comma-separated string of ints (e.g. 50,100,500) | None |
-| *random_state* | The seed value needed to generate a random number (Phases I & II) | int or None | None |
 | *verbose* | Boolean flag to run in 'verbose' mode - display run details | True or False | False |
 
+### In-Development Hyperparameters
+This last table gives hyperparameters that are 'in-development' and should be left as-is. Currently we have only tested HEROS for binary classification.  While it should work for multi-class classification it has not been fully tested and may yield bugs.
 
-TO EDIT
-fit() parameters
-| *use_ek* | Activates expert knowlege covering (Phase I) | bool | False |
+| Hyperparameter | Description | Type/Options | Default Value |
+| -------------- | ----------- | ------------- | ------------- |
+| *outcome_type* | Defines the type of outcome in the dataset | 'class','quant' | 'class' |
+| *fitness_function* | Defines the Phase I fitness function used by HEROS. The 'accuracy' option should only be used for clean-signal problems. | 'accuracy','pareto' | 'pareto' |
+| *feat_track* | Feature tracking strategy applied | None, 'add','wh','end' | None |
+| *rule_pop_init* | Specifies rule population pre-initialization method | None, 'load','dt'| None |
 
+### fit() Parameters
+In addition to the typical *X* and *y* parameters for HEROS's fit function users can utilize the following fit() parameters:
+| Parameter | Description | Type/Options | Default Value |
+| -------------- | ----------- | ------------- | ------------- |
+| *row_id* | List of unique row/instance identifiers that can be included for instance-related outputs | None, array-like {n_samples} | None |
+| *cat_feat_indexes* | List of feature indexes to be treated as categorical (vs. quantitative) | None, array-like max({n_features}) | None |
+| *pop_df* | HEROS-formatted rule population dataframe (to manually initialize rule-population) | None, HEROS {P} dataframe | None |
+| *ek* | List of expert knowledge (EK) scores which activats HEROS EK covering and mutation | None, array-like {n_features} | None |
 
 ***
 <a id="item-six"></a>
@@ -195,11 +248,9 @@ Most recently, in 2024, we released [Survival-LCS](https://github.com/UrbsLab/su
 ***
 <a id="item-seven"></a>
 ## Citing HEROS
-The manuscript for HEROS has been submitted for review.
+If you use HEROS in a scientific publication, cite the following paper:
 
-If you use HEROS in a scientific publication, please cite the following paper (once available):
-
-Gabe Lipschutz-Villa, Harsh Bandhey, Ruonan Yin, Malek Kamoun, Ryan J. Urbanowicz (Submitted). [Rule-based Machine Learning: Separating Rule and Rule-Set Pareto-Optimization for Interpretable Noise-Agnostic Modeling](Not_yet_available)
+Gabe Lipschutz-Villa, Harsh Bandhey, Ruonan Yin, Malek Kamoun, Ryan J. Urbanowicz. [Rule-based Machine Learning: Separating Rule and Rule-Set Pareto-Optimization for Interpretable Noise-Agnostic Modeling] 2025. (In Press)
 
 BibTeX entry:
 ```bibtex
@@ -213,18 +264,26 @@ Further code documentation regarding the HEROS API is under development
 
 ***
 <a id="item-nine"></a>
+## License:
+TBD
+
+***
+<a id="item-ten"></a>
 ## Contact
-Please email Ryan.Urbanowicz@cshs.org for any inquiries related to HEROS.
+Please email Ryan.Urbanowicz@cshs.org for any application or collaboration inquiries related to HEROS.
 
 Commercial entities or for commercial use of the Software: please contact CSTechTransfer@cshs.org for licensing opportunities.
 
 ***
-<a id="item-ten"></a>
+<a id="item-eleven"></a>
 ## Acknowledgements
-The study was supported by Cedars Sinai Medical Center and NIH grants R01 AI173095, U01 AG066833 and P30 AG0373105. Drs. John Holmes and Jason Moore for their mentorship and and research insights regarding rule-based machine learning for biomedicine, and Robert Zhang, who implemented scikit-ExSTraCS and prototyped an early batch-learning version of ExSTraCS. 
+The study was supported by Cedars Sinai Medical Center and NIH grants R01 AI173095, U01 AG066833 and P30 AG0373105. We thank Drs. John Holmes and Jason Moore for their mentorship and and research insights regarding rule-based machine learning for biomedicine, and Robert Zhang, who implemented scikit-ExSTraCS and prototyped an early batch-learning version of ExSTraCS.
 
-### Algorithm/Code Contributors
-* Ryan J. Urbanowicz - Primary Conceptualization, Implementation, and Algorithm Design
-* Gabriel Lipschutz-Villa - Implementation and Testing of Phase II prototype, Phase II initialization methods, and unique rule encoding. 
-* Ruonan Yin - Design of Phase I Pareto-front distance calculation for fitness calculation.
-* Harsh Bandhey - Prototyping of Phase I rule initialization
+### Code Contributors
+* Ryan Urbanowicz - Developed algorithm concepts, implemented algorithm, led debugging and evaluation
+* Gabriel Lipschutz-Villa - Prototyped implementation of Phase II, model initialization strategies, and phase alternation (in development)
+* Harsh Bandhey - Prototyped implementation of random forest rule initialization (in development)
+* Khoi Dinh - Prototyped implementation of model interpretation visualization 
+* Ruonan Yin - Developed strategy for calculating distance from the rule-pareto front for Phase I rule fitness
+* Robert Zhang - Prototyped strategy for rule batch-learning (adapted for HEROS)
+

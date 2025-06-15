@@ -2,12 +2,14 @@ import random
 import numpy as np
 import pandas as pd
 import collections.abc
+from sklearn.metrics import balanced_accuracy_score
 from sklearn.base import BaseEstimator, TransformerMixin
 from .methods.time_tracking import TIME_TRACK
 from .methods.data_mange import DATA_MANAGE
 from .methods.rule_population import RULE_POP
 from .methods.rule_pareto_fitness import RULE_PARETO
 from .methods.feature_tracking import FEAT_TRACK
+from .methods.model_feature_tracking import MODEL_FEAT_TRACK
 from .methods.rule_tracking import RULE_TRACK
 from .methods.rule_prediction import RULE_PREDICTION
 from .methods.rule_compaction import COMPACT
@@ -18,7 +20,7 @@ from .methods.model_prediction import MODEL_PREDICTION
 
 class HEROS(BaseEstimator, TransformerMixin):
     def __init__(self, outcome_type='class',iterations=100000,pop_size=1000,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,fitness_function='pareto',
-                 subsumption='both',rsl=0,feat_track='add',model_iterations=500,model_pop_size=100, model_pop_init = 'target_acc', new_gen=1.0,merge_prob=0.1,rule_pop_init=None,compaction='sub',track_performance=0,stored_rule_iterations=None,stored_model_iterations=None,random_state=None,verbose=False):
+                 subsumption='both',rsl=0,feat_track=None,model_iterations=500,model_pop_size=100, model_pop_init = 'target_acc', new_gen=1.0,merge_prob=0.1,rule_pop_init=None,compaction='sub',track_performance=0,model_tracking=False,stored_rule_iterations=None,stored_model_iterations=None,random_state=None,verbose=False):
         """
         A Scikit-Learn compatible implementation of the 'Heuristic Evolutionary Rule Optimization System' (HEROS) Algorithm.
         ..
@@ -43,6 +45,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         :param rule_pop_init: Specifies type of population initiailzation (if any) (Must be 'load' or 'dt', or None)
         :param compaction: Specifies type of rule-compaciton to apply at end of rule population training (if any) (Must be 'sub' or None)
         :param track_performance: Activates performance tracking when > 0. Value indicates how many iteration steps to wait to gather tracking data (Must be 0 or a positive integer)
+        :param model_tracking: Boolean flag to track best model each model training iteration
         :param stored_rule_iterations: specifies iterations where a copy of the rule population is stored (Must be positive integers separated by commas or None)
         :param stored_model_iterations: specifies iterations where a copy of the model population is stored (Must be positive integers separated by commas or None)
         :param random_state: the seed value needed to generate a random number
@@ -109,6 +112,9 @@ class HEROS(BaseEstimator, TransformerMixin):
         if not self.check_is_int(track_performance) or track_performance < 0:
             raise Exception("'track_performance' param must be non-negative integer")
         
+        if not model_tracking == True and not model_tracking == False and not model_tracking == 'True' and not model_tracking == 'False':
+            raise Exception("'verbose' param must be a boolean, i.e. True or False")
+
         if not self.check_is_int(random_state) and not random_state is None and not random_state == 'None':
             raise Exception("'random_state' param must be an int or None")
 
@@ -142,6 +148,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         else:
             self.compaction = str(compaction)
         self.track_performance = int(track_performance)
+        self.model_tracking = model_tracking
         if stored_rule_iterations == 'None' or stored_rule_iterations is None:
             self.stored_rule_iterations = None
         else:
@@ -161,7 +168,7 @@ class HEROS(BaseEstimator, TransformerMixin):
 
         self.use_ek = False #internal parameter - set to False by default, but switched to true of ek scores passed to fit()
         self.y_encoding = None
-        self.top_models = [] #for tracking model performance increase over iterations
+        #self.top_models = [] #for tracking model performance increase over iterations !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     @staticmethod
     def check_is_int(num):
@@ -380,8 +387,6 @@ class HEROS(BaseEstimator, TransformerMixin):
                 self.model_population.initialize_model_population(self,random,self.model_pop_init)
                 # RUN MODEL-LEARNING TRAINING ITERATIONS **************************************************************
                 while self.model_iteration < self.model_iterations:
-                    if self.verbose:
-                        print("Iteration: "+str(self.model_iteration))
                     #Apply NSGAII-like fast non dominated sorting of models into ranked fronts of models
                     fronts = self.model_population.fast_non_dominated_sort(self)
                     #Calculate crowding distances
@@ -405,7 +410,12 @@ class HEROS(BaseEstimator, TransformerMixin):
                     #Model Deletion
                     self.model_population.model_deletion(self,fronts,crowding_distances)
                     #Model Performance Tracking
-                    self.top_models.append(self.model_population.get_max())
+                    if self.model_tracking:
+                        self.timer.phase2_time_stop()
+                        self.model_population.update_performance_tracking(self.model_iteration,self)
+                        self.model_population.print_tracking_entry()
+                        self.timer.phase2_time_start()
+                    #self.top_models.append(self.model_population.get_max()) !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                     #Pause learning to conduct a complete evaluation of the current rule population
                     if self.stored_model_iterations != None and (self.model_iteration + 1) in self.stored_model_iterations:
                         #Archive current rule population
@@ -423,10 +433,10 @@ class HEROS(BaseEstimator, TransformerMixin):
                 self.timer.update_global_time()
                 if self.verbose:
                     print("HEROS (Phase 2) run complete!")
-                    print("Number of Unique Models Identified: "+str(len(self.model_population.explored_models)))
+                    #print("Number of Unique Models Identified: "+str(len(self.model_population.explored_models)))
                     print("Random Seed Check - End: "+ str(random.random()))
 
-        self.env.clear_data_from_memory()
+        #self.env.clear_data_from_memory()
         return self
 
     def run_iteration(self,instance):
@@ -479,6 +489,75 @@ class HEROS(BaseEstimator, TransformerMixin):
         self.rule_population.clear_sets()
 
 
+    def predict_explanation(self, x, feature_names, whole_rule_pop=False, target_model=0):
+        """ Applies model to predict a single instance outcome with full explanation of prediction. """
+        # Data point checks ************************
+        for value in x:
+            if np.isnan(value):
+                value = None
+            elif not self.check_is_float(value) and self.check_is_int(value):
+                raise Exception("X must be fully numeric")
+        # Apply Prediction ******************************
+        if whole_rule_pop:
+            # Whole final rule population used to make prediction based on standard LCS voting scheme
+            self.rule_population.make_eval_match_set(x,self)
+            prediction = RULE_PREDICTION(self, self.rule_population,random)
+            outcome_prediction = prediction.get_prediction()
+            outcome_proba = prediction.get_prediction_proba_dictionary()
+            outcome_coverage = prediction.get_if_covered()
+            match_set = self.rule_population.match_set
+            self.rule_population.clear_sets()
+        else:
+            self.model_population.get_target_model(target_model)
+            #Top performing model (i.e. rule-set) is used to make prediction with random-forest-like calculation of predict_probas
+            self.model_population.make_eval_match_set(x,self)
+            prediction = MODEL_PREDICTION(self, self.model_population,random)
+            outcome_prediction = prediction.get_prediction()
+            outcome_proba = prediction.get_prediction_proba_dictionary()
+            outcome_coverage = prediction.get_if_covered()
+            match_set = self.model_population.match_set
+            self.model_population.clear_sets()
+
+        # Technical Report of Matching Rules ------------------------------------------
+        print("PREDICTION REPORT ------------------------------------------------------------------")
+        print("Outcome Prediction: "+str(outcome_prediction))
+        print("Model Prediction Probabilities: "+ str(outcome_proba))
+        if outcome_coverage == 0:
+            print("Instance Covered by Model: No")
+        else:
+            print("Instance Covered by Model: Yes")
+        print("Number of Matching Rules: "+str(len(match_set)))
+        # TECHNICAL RULE REPORT
+        #for rule_index in match_set:
+        #    self.model_population.target_rule_set[rule_index].display_key_rule_info()
+        print("PREDICTION EXPLANATION -------------------------------------------------------------")
+        if prediction.majority_class_selection_made:
+            print("Majority class selected since there is probability tie among matching rules, but there is a training majority class")
+        if prediction.random_selection_made:
+            print("Random class selected since there is probability tie among matching rules, but no training majority class")
+        if len(match_set) > 0:
+            # Sort match set for intuitive ordering
+            match_set =  sorted(match_set, key=lambda i: (self.model_population.target_rule_set[i].numerosity, self.model_population.target_rule_set[i].correct_cover), reverse=True)
+            # Give explanations for matching rules
+            print("Supporting Rules: --------------------")
+            for rule_index in match_set:
+                if str(self.model_population.target_rule_set[rule_index].action) == str(prediction.prediction):
+                    self.model_population.target_rule_set[rule_index].translate_rule(feature_names,self)
+            print("Contradictory Rules: -----------------")
+            counter = 0
+            for rule_index in match_set:
+                if str(self.model_population.target_rule_set[rule_index].action) != str(prediction.prediction):
+                    self.model_population.target_rule_set[rule_index].translate_rule(feature_names,self)
+                    counter += 1
+            if counter == 0:
+                print("No contradictory rules matched.")  
+        else: # No matching rules
+            if prediction.random_selection_made:
+                print("Random class selected since there are no matching rules and no training majority class")
+            else:
+                print("Majority class selected since there are no matching rules, but there is a training majority class")
+            
+
     def predict(self, X, whole_rule_pop=False, target_model=0, rule_pop_iter=None, model_pop_iter=None):
         """Scikit-learn required: Apply trained model to predict outcomes of instances. 
         Applicable to both classification and regression (i.e. quantitative outcome prediction).
@@ -520,7 +599,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             if model_pop_iter != None:
                 self.model_population.change_model_pop(model_pop_iter)
             self.model_population.get_target_model(target_model)
-            #Top performing model (i.e. rule-set) is used to make predictions based on standard LCS voting scheme
+            #Top performing model (i.e. rule-set) is used to make prediction with random-forest-like calculation of predict_probas
             for instance in range(num_instances):
                 instance_state = X[instance]
                 self.model_population.make_eval_match_set(instance_state,self)
@@ -574,7 +653,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             if model_pop_iter != None:
                 self.model_population.change_model_pop(model_pop_iter)
             self.model_population.get_target_model(target_model)
-            #Top performing model (i.e. rule-set) is used to make predictions based on standard LCS voting scheme
+            #Top performing model (i.e. rule-set) is used to make prediction with random-forest-like calculation of predict_probas
             for instance in range(num_instances):
                 instance_state = X[instance]
                 self.model_population.make_eval_match_set(instance_state,self)
@@ -627,7 +706,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             if model_pop_iter != None:
                 self.model_population.change_model_pop(model_pop_iter)
             self.model_population.get_target_model(target_model)
-            #Top performing model (i.e. rule-set) is used to make predictions based on standard LCS voting scheme
+            #Top performing model (i.e. rule-set) is used to make prediction with random-forest-like calculation of predict_probas
             for instance in range(num_instances):
                 instance_state = X[instance]
                 self.model_population.make_eval_match_set(instance_state,self)
@@ -680,7 +759,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             if model_pop_iter != None:
                 self.model_population.change_model_pop(model_pop_iter)
             self.model_population.get_target_model(target_model)
-            #Top performing model (i.e. rule-set) is used to make predictions based on standard LCS voting scheme
+            #Top performing model (i.e. rule-set) is used to make prediction with random-forest-like calculation of predict_probas
             for instance in range(num_instances):
                 instance_state = X[instance]
                 self.model_population.make_eval_match_set(instance_state,self)
@@ -694,13 +773,18 @@ class HEROS(BaseEstimator, TransformerMixin):
 
     def get_pop(self):
         """ Return a dataframe of the rule population. """
-        self.rule_population.order_rule_conditions()
+        self.rule_population.order_all_rule_conditions()
         pop_df = self.rule_population.export_rule_population()
         return pop_df
     
     def get_ft(self,feature_names):
         """ Return a dataframe of the ft scores. """
         ft_df = self.FT.export_ft_scores(self,feature_names)
+        return ft_df 
+    
+    def get_model_ft(self,feature_names):
+        """ Return a dataframe of the ft scores. """
+        ft_df = self.model_FT.export_ft_scores(self,feature_names)
         return ft_df 
     
     def get_model_pop(self):
@@ -717,9 +801,15 @@ class HEROS(BaseEstimator, TransformerMixin):
         """ """
         self.rule_population.plot_rule_pop_heatmap(feature_names, self, weighting, specified_filter, display_micro, show, save, output_path)
 
+    def get_rule_set_heatmap(self,feature_names, index, weighting, specified_filter, display_micro, show, save, output_path):
+        self.model_population.plot_rule_set_heatmap(feature_names, index, self, weighting, specified_filter, display_micro, show, save, output_path)
+
     def get_rule_pop_network(self, feature_names, weighting, display_micro, node_size, edge_size, show, save, output_path):
         """ """
         self.rule_population.plot_rule_pop_network(feature_names, weighting, display_micro, node_size, edge_size, show, save, output_path)
+
+    def get_rule_set_network(self, feature_names, index, weighting, display_micro, node_size, edge_size, show, save, output_path):
+        self.model_population.plot_rule_set_network(feature_names, index, weighting, display_micro, node_size, edge_size, show, save, output_path)
 
     def get_rule_pareto_landscape(self,resolution, rule_population, plot_rules, color_rules, show, save, output_path):
         """ """
@@ -733,35 +823,33 @@ class HEROS(BaseEstimator, TransformerMixin):
     def get_performance_tracking(self):
         return self.tracking.get_performance_tracking_df()
     
+    def get_model_performance_tracking(self):
+        return self.model_population.get_performance_tracking_df()
+    
     def get_model_pareto_fronts(self, show, save, output_path):
-        """ """
+        """ Generate Model Pareto Front Visualization """
         fronts = self.model_population.get_all_model_fronts()
         self.model_population.plot_model_pareto_fronts(fronts, show, save, output_path)
 
+    def get_rule_tracking_plot(self, show, save, output_path):
+        """ Generate Rule Tracking Line Plot """
+        self.tracking.plot_rule_tracking(show, save, output_path)
+
+    def get_model_tracking_plot(self, show, save, output_path):
+        """ Generate Model Tracking Line Plot """
+        self.model_population.plot_model_tracking(show, save, output_path)
+
+    def run_model_feature_tracking(self,index):
+        self.model_FT = MODEL_FEAT_TRACK(self)
+        self.model_FT.batch_calculate_ft_scores(self,index)
+
+    def get_clustered_model_ft_heatmap(self,feature_names, specified_filter, show, save, output_path):
+        ft_df = self.model_FT.export_ft_scores(self,feature_names)
+        ft_df = ft_df.drop('row_id', axis=1)
+        self.model_FT.plot_clustered_ft_heatmap(ft_df, feature_names, specified_filter, show, save, output_path)
+
     def get_runtimes(self):
         return self.timer.report_times()
-    
-    def export_model_growth(self):
-        """ Prepares and exports a dataframe capturing the top models at each iteration. """
-        pop_list = []
-        column_names = ['Rule IDs', 
-                        'Number of Rules',
-                        'Fitness', 
-                        'Accuracy',
-                        'Coverage', 
-                        'Birth Iteration', 
-                        'Deletion Probability']
-        for model in self.top_models: 
-            model_list = [str(model.rule_IDs), 
-                          len(model.rule_set), 
-                          model.fitness, 
-                          model.accuracy,
-                        model.coverage, 
-                        model.birth_iteration, 
-                        model.deletion_prob]
-            pop_list.append(model_list)
-        pop_df = pd.DataFrame(pop_list, columns = column_names)
-        return pop_df
 
     def save_run_params(self,filename):
         with open(filename, 'w') as file:
@@ -792,4 +880,62 @@ class HEROS(BaseEstimator, TransformerMixin):
             file.write(f"verbose: {self.verbose}\n")
             if self.use_ek:
                 file.write(f"ek_weights: {self.env.ek_weights}\n")
-  
+
+    def get_non_dominated_models(self):
+        """ Allows user to get all model (objects) on the final top ranking non-dominated model front. """
+        non_dominated_model_indexes = []
+        self.model_population.pop_set
+        i = 0
+        for model in self.model_population.pop_set:
+            if model.model_on_front:
+                non_dominated_model_indexes.append(i)
+            i += 1
+        return non_dominated_model_indexes
+
+
+    def auto_select_top_model(self,X_test,y_test,verbose=False,model_pop_iter=None):
+        """ Given testing data, evaluates all non-dominated models on trained model Pareto-front and returns the best performing model
+        based on balanced testing accuracy, instance-coverage, and rule-set size. Maximizing testing accuracy and instance-coverage is 
+        always the priority, with minimizing rule-set size as a secondary selection criteria. """
+        # Get all non-dominated models from final top-ranking non-dominated model front
+        non_dominated_model_indexes = self.get_non_dominated_models()
+        if verbose:
+            print(str(len(non_dominated_model_indexes))+' non-dominated models on Pareto-front.')
+        # Evaluate all models on non-dominated Pareto-front
+        model_test_accuracies = []
+        model_test_coverages = []
+        model_rule_counts = []
+        for model_index in non_dominated_model_indexes:
+            #Handle class prediction and accuracy
+            predictions = self.predict(X_test,whole_rule_pop=False, target_model=model_index,model_pop_iter=model_pop_iter)
+            balanced_acc = balanced_accuracy_score(y_test, predictions)
+            model_test_accuracies.append(balanced_acc)
+            #Handle model coverage
+            coverages = self.predict_covered(X_test,whole_rule_pop=False, target_model=model_index,model_pop_iter=model_pop_iter)
+            coverage = sum(coverages)/len(coverages) #proportion of instances covered
+            model_test_coverages.append(coverage)
+            model_rule_counts.append(len(self.model_population.pop_set[model_index].rule_IDs))
+        if verbose:
+            print('----------------------------------------')
+            print('Model testing accuracies: '+str(model_test_accuracies))
+            print('Model testing coverages: '+str(model_test_coverages))
+            print('Model rule counts: '+str(model_rule_counts))
+        #Identify the model index with the highest prediction accuracy
+        best_accuracy = 0
+        best_coverage = 0
+        best_rule_count = np.inf
+        best_model_index = 0
+        for i in range(0,len(non_dominated_model_indexes)):
+            if (model_test_accuracies[i] > best_accuracy and model_test_coverages[i] >= best_coverage) or (model_test_accuracies[i] >= best_accuracy and model_test_coverages[i] >= best_coverage and model_rule_counts[i] < best_rule_count):
+                best_accuracy = model_test_accuracies[i]
+                best_coverage = model_test_coverages[i]
+                best_rule_count = model_rule_counts[i]
+                best_model_index = non_dominated_model_indexes[i]
+        if verbose:
+            print('----------------------------------------')
+            print('Best model testing accuracy: '+str(best_accuracy))
+            print('Best model testing coverage: '+str(best_coverage))    
+            print('Best rule count: '+str(best_rule_count))
+            print('Best model index: '+str(best_model_index))
+            print('----------------------------------------')
+        return best_model_index
