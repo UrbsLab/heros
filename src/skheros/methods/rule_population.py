@@ -12,14 +12,19 @@ from itertools import combinations
 class RULE_POP:
     def __init__(self):
         """ Initializes rule population objects. """
+        # Key rule population parameters --------------------------------------------------------------------------
         self.pop_set = []  # List rule objects making up the rule population
         self.match_set = []  # List of references to rules in population that make up a temporary match set (i.e. rules with 'IF' conditions matching current instance state)
         self.correct_set = []  # List of references to rules in population that make up correct set (i.e. rules with 'THEN' action matching current instance outcome)
         self.micro_pop_count = 0 # Number of rules in the population defined by the sum of individual rule numerosities (aka 'micro' population count)
         self.ID_counter = 0 # A unique id given to each new rule discovered (that isn't in the current rule population).
+        # Population performance tracking -----------------------------------------------------------------------------
         self.pop_set_archive = {}
         self.pop_set_hold = None
-        #Experimental
+        # Niche Update Lists (experimental) --------------------------------------------------------------------------
+        self.new_rule_set = [] # Idexes of rules that were newly introduced in the current iteration
+        self.rules_for_niche_update = [] # All unique rules across all niche updates that participated in a {C}
+        # Rule Archiving (experimental) -------------------------------------------------------------------------------
         self.explored_rules = []
         self.archive_discovered_rules = False #True value is experimental
 
@@ -72,6 +77,269 @@ class RULE_POP:
         self.pop_set_hold = None
 
 
+    def dominates(self,p,q):
+        """Check if p dominates q. A rule dominates another if it has a more optimal value for at least one objective."""
+        objective_directions = ['max', 'max'] #maximize useful accuracy and useful coverage
+        better_in_all_objectives = True
+        better_in_at_least_one_objective = False
+        for val1, val2, obj in zip(self.pop_set[p].objectives, self.pop_set[q].objectives, objective_directions):
+            if obj == 'max':
+                if val1 < val2:
+                    better_in_all_objectives = False
+                if val1 > val2:
+                    better_in_at_least_one_objective = True
+            elif obj == 'min':
+                if val1 > val2:
+                    better_in_all_objectives = False
+                if val1 < val2:
+                    better_in_at_least_one_objective = True
+            else:
+                raise ValueError("Objectives must be 'max' or 'min'")
+        return better_in_all_objectives and better_in_at_least_one_objective
+    
+
+    def fast_non_dominated_sort_M(self):
+        """NSGA-II-like fast non dominated sorting of rules into a series of non-dominated fronts."""
+        fronts = [[]]
+        domination_counts = {sol: 0 for sol in self.match_set}
+        dominated_solutions = {sol: [] for sol in self.match_set}
+        #Cout dominated solutions and counts for each solution
+        for p in self.match_set:
+            for q in self.match_set:
+                if self.dominates(p, q):
+                    dominated_solutions[p].append(q)
+                elif self.dominates(q, p):
+                    domination_counts[p] += 1
+            if domination_counts[p] == 0:
+                fronts[0].append(p)
+        # Determine set on non-dominated fronts based on dominated solutions and counts
+        i = 0
+        while fronts[i]:
+            next_front = []
+            for p in fronts[i]:
+                for q in dominated_solutions[p]:
+                    domination_counts[q] -= 1
+                    if domination_counts[q] == 0:
+                        next_front.append(q)
+            i += 1
+            fronts.append(next_front)
+        return fronts[:-1]
+
+
+    def fast_non_dominated_sort_C(self, correct_set):
+        """NSGA-II-like fast non dominated sorting of rules into a series of non-dominated fronts."""
+        fronts = [[]]
+        domination_counts = {sol: 0 for sol in correct_set}
+        dominated_solutions = {sol: [] for sol in correct_set}
+        #Cout dominated solutions and counts for each solution
+        for p in correct_set:
+            for q in correct_set:
+                if self.dominates(p, q):
+                    dominated_solutions[p].append(q)
+                elif self.dominates(q, p):
+                    domination_counts[p] += 1
+            if domination_counts[p] == 0:
+                fronts[0].append(p)
+        # Determine set on non-dominated fronts based on dominated solutions and counts
+        i = 0
+        while fronts[i]:
+            next_front = []
+            for p in fronts[i]:
+                for q in dominated_solutions[p]:
+                    domination_counts[q] -= 1
+                    if domination_counts[q] == 0:
+                        next_front.append(q)
+            i += 1
+            fronts.append(next_front)
+        return fronts[:-1]
+    
+
+    def calculate_crowding_distance(self,front):
+        """Assigns crowding distance to solutions within a Pareto front."""
+        num_solutions = len(front)
+        if num_solutions == 0:
+            return
+        distances = {sol: 0 for sol in front}
+        num_objectives = len(self.pop_set[front[0]].objectives)
+        for m in range(num_objectives):
+            front.sort(key=lambda sol: self.pop_set[sol].objectives[m])
+            distances[front[0]] = distances[front[-1]] = float('inf')
+            min_obj = self.pop_set[front[0]].objectives[m]
+            max_obj = self.pop_set[front[-1]].objectives[m]
+            if max_obj == min_obj:
+                continue  # Avoid division by zero
+            for i in range(1, num_solutions - 1):
+                distances[front[i]] += (self.pop_set[front[i + 1]].objectives[m] - self.pop_set[front[i - 1]].objectives[m]) / (max_obj - min_obj)
+        
+        return distances
+    
+
+    def binary_tournament_selection(self,crowding_distances,random):
+        """Selects a solution using binary tournament selection."""
+        #Edge case catch (for very small rule populations, which leads to very small model populations)
+        if len(self.match_set) == 1:
+            return self.match_set[0]
+        a, b = random.sample(self.match_set, 2)
+        if self.dominates(a, b):
+            return a
+        elif self.dominates(b, a):
+            return b
+        elif a in crowding_distances and b in crowding_distances:
+            if crowding_distances[a] > crowding_distances[b]:
+                return a
+            elif crowding_distances[a] < crowding_distances[b]:
+                return b
+            else:
+                return random.choice([a,b])
+        else:
+            return random.choice([a,b])
+        
+
+    def update_niche_metrics_C(self, instance_index, fronts, crowding_distances):
+        """ """
+        #print('updated niche metrics --------')
+        #print('fronts: '+str(fronts))
+        #print('crowd: '+str(crowding_distances))
+        rank = 1
+        for front in fronts: # For each front
+            #print('front '+str(front))
+            for rule_index in front: # For each rule within the front
+                #print('rule_index '+str(rule_index))
+                self.pop_set[rule_index].update_niche_metrics(instance_index, rank,crowding_distances[rule_index])
+            rank += 1
+
+
+    def initialize_niche_rules(self):
+        """ """
+        # Add all rules in current {C}
+        #print('initialize niche rules')
+        #print(self.correct_set)
+        self.rules_for_niche_update = copy.deepcopy(self.correct_set)
+
+
+    def update_impacted_niches(self,heros):
+        """ For each newly introduced rule this method re-evaluates dominance and crowding for each rule in every other niche (i.e. instance) {M}/{C} where this new rule would be included.  These other niches are defined by the instances that this rule would be both {M}/{C}. """
+        for rule_index in self.new_rule_set: #Each NEW rule introduced this generation
+            #print('current new rule index - NICHE - being updated: '+str(rule_index))
+            correctly_predicted_instances = list(self.pop_set[rule_index].correct_instance_indexes.keys())
+            for instance_index in correctly_predicted_instances: # Each training instance that this rule matched and made the correct prediction
+                #print('current instance index -NICHE - being updated: '+str(instance_index))
+                temp_match_set = []
+                temp_correct_set = []
+                instance_state = heros.env.train_data[0][instance_index]
+                outcome_state = heros.env.train_data[1][instance_index]
+                # Form match set
+                for i in range(len(self.pop_set)):
+                    rule = self.pop_set[i]
+                    if rule.match(instance_state,heros):
+                        temp_match_set.append(i) #adds index to rule in pop_set
+                        # Form correct set
+                        if rule.rule_is_correct(outcome_state,heros):
+                            temp_correct_set.append(i)
+                            # Add any rules that were in a correct set to the unique rule list for a final update later
+                            self.rules_for_niche_update.append(i)
+                    else:
+                        pass
+                #Apply NSGAII-like fast non dominated sorting of models into ranked fronts of models
+                fronts = self.fast_non_dominated_sort_C(temp_correct_set)
+                #Calculate crowding distances
+                crowding_distances = {sol: d for front in fronts for sol, d in self.calculate_crowding_distance(front).items()}
+                # Update {C} rule rank and crowding distances
+                self.update_niche_metrics_C(instance_index, fronts, crowding_distances)
+
+
+    def global_niche_update(self):
+        """ """
+        #print('rules for niche update')
+        #print(self.rules_for_niche_update)
+        for rule_index in self.rules_for_niche_update:
+            self.pop_set[rule_index].global_niche_metric_update()
+
+
+    def deletion(self,heros,np):
+        """ """
+        #print(self.new_rule_set)
+        heros.timer.deletion_time_start() 
+        if self.micro_pop_count > heros.pop_size:
+            # Calculate number of rules to delete
+            delete_count = self.micro_pop_count - heros.pop_size
+            #print(delete_count)
+            #print(self.micro_pop_count)
+
+            deletion_list = []
+            headers = ['index','rank','numerosity','crowding','deletion weight']
+            rule_index = 0
+            rule_list = []
+            for rule in self.pop_set:
+                rule_list = [rule_index, rule.top_niche_rank, rule.numerosity, rule.max_niche_crowding_distance, 0]
+                rule_index += 1
+                deletion_list.append(rule_list)
+            df = pd.DataFrame(deletion_list,columns = headers)
+            #Determine deletion ranking
+            if df['rank'].max() == 1: #Only non-dominated rules exist
+                # Delete rules with larger numerosity first, then use crowding as a tie breaker
+                sorted_df = df.sort_values(by=['numerosity','crowding'], ascending=[True, False])
+            elif df[df['rank'] > 1]['numerosity'].max() > 1: #if there is a dominated rule with numerosity > 1
+                # Delete from rule with worst rank then highest numerosity then lowest crowding
+                df = df[(df['rank'] > 1) & (df['numerosity'] > 1)] #Focus on 
+                sorted_df = df.sort_values(by=['rank','numerosity','crowding'], ascending=[True, True, False])
+            # Only now do we potentially delete from rank 1 rules numerosity
+            else:
+                rule_index = 0
+                for rule in self.pop_set:
+                    deletion_weight = 0
+                    if rule.top_niche_rank == 1 and rule.numerosity == 1: 
+                        deletion_weight = 0 #always protected in situations where {P} includes any dominated rules
+                    else:
+                        deletion_weight = (rule.numerosity*heros.diversity) + rule.top_niche_rank
+                        rule.deletion_prob = deletion_weight
+                    df.at[rule_index, 'deletion weight'] = deletion_weight
+                    rule_index += 1
+                sorted_df = df.sort_values(by=['deletion weight','crowding'], ascending=[True, False])
+            # Pick lowest deletion score -ranked rules for deletion
+            selected_rule_indexes = sorted_df['index'].tail(delete_count).tolist()
+            sorted_list = sorted(selected_rule_indexes, reverse=True)
+            # Delete selected rules (either numerosity reduction or rule removal)
+            for rule_index in sorted_list:
+                self.pop_set[rule_index].update_numerosity(-1)
+                self.micro_pop_count -= 1
+                if self.pop_set[rule_index].numerosity < 1: # When all micro-classifiers for a given classifier have been depleted.
+                    self.pop_set.pop(rule_index)
+        heros.timer.deletion_time_stop()
+
+
+    def deletion_first_experimental(self,heros,np):
+        """ """
+        heros.timer.deletion_time_start()
+        if self.micro_pop_count > heros.pop_size:
+            # Calculate number of rules to delete
+            delete_count = self.micro_pop_count - heros.pop_size
+            rule_indexes = []
+            deletion_votes = []
+            deletion_probs = []
+            rule_index = 0
+            for rule in self.pop_set:
+                rule_indexes.append(rule_index)
+                deletion_votes.append(rule.get_deletion_vote(np))
+                rule_index += 1
+            vote_sum = sum(deletion_votes)
+            i = 0
+            for rule in self.pop_set:
+                rule.deletion_prob = deletion_votes[i] / vote_sum
+                deletion_probs.append(rule.deletion_prob)
+                i +=1
+            # Select rules to be deleted
+            selected_rule_indexes = list(np.random.choice(rule_indexes, size=delete_count, replace=False, p=deletion_probs))
+            sorted_list = sorted(selected_rule_indexes, reverse=True)
+            # Delete selected rules (either numerosity reduction or rule removal)
+            for rule_index in sorted_list:
+                self.pop_set[rule_index].update_numerosity(-1)
+                self.micro_pop_count -= 1
+                if self.pop_set[rule_index].numerosity < 1: # When all micro-classifiers for a given classifier have been depleted.
+                    self.pop_set.pop(rule_index)
+        heros.timer.deletion_time_stop()
+
+
     def make_match_set(self, instance,heros,random,np):
         """ Makes a match set {M} and activates covering as needed to initialize the population. """
         # MATCHING ****************************************************
@@ -96,7 +364,7 @@ class RULE_POP:
         # While HEROS covering is not guaranteed to create a rule with the current instance class, it is activated whenever the correct set would be empty
         heros.timer.covering_time_start() #covering time tracking
         if do_covering:
-            new_rule = RULE(heros)
+            new_rule = RULE(heros,np)
             new_rule.initialize_by_covering(set_numerosity_sum+1,instance_state,outcome_state,heros,random,np)
             #self.debug_confirm_offspring_match(new_rule, instance,heros,'covering',None)
             if len(new_rule.condition_indexes) > 0: #prevents completely general rules from being added to the population
@@ -110,8 +378,9 @@ class RULE_POP:
                 else:
                     self.evaluate_covered_rule(new_rule,outcome_state,heros,random)
                 if self.no_identical_rule_exists(new_rule,heros,'match_set'):
+                    #new_rule.show_rule_short('covered rule')
                     self.add_rule_to_pop(new_rule)
-                    self.match_set.append(len(self.pop_set)-1)
+                    #self.match_set.append(len(self.pop_set)-1)
         heros.timer.covering_time_stop() #covering time tracking
 
 
@@ -125,6 +394,10 @@ class RULE_POP:
 
     def global_fitness_update(self,heros):
         """ Relevant for pareto-front rule fitness. Updates the fitness of all rules in the population if the pareto front gets updated. """
+        # Update rule front
+        for rule in self.pop_set:
+            rule.update_rule_pareto_front(heros)
+        # Update rule fitness
         for rule in self.pop_set:
             rule.update_rule_fitness(heros)
 
@@ -213,24 +486,30 @@ class RULE_POP:
             print(parent_list[1].action)
             print(1/0)
 
-
-    def genetic_algorithm(self, instance, heros, random,np):
+    def genetic_algorithm(self, instance, crowding_distances, heros, random,np):
         instance_state = instance[0] #instance feature values
         outcome_state = instance[1] #instance outcome value
         # PARENT SELECTION *****************************************
         heros.timer.selection_time_start() #parent selection time tracking
-        parent_list = self.tournament_selection(heros,random)
+        parent1 = self.binary_tournament_selection(crowding_distances,random)
+        parent2 = self.binary_tournament_selection(crowding_distances,random)
+
+        #self.pop_set[parent1].show_rule_short('parent rule')
+        #self.pop_set[parent2].show_rule_short('parent rule')
+        parent_list = [self.pop_set[parent1],self.pop_set[parent2]]
+        #parent_list = self.tournament_selection(heros,random)
         heros.timer.selection_time_stop() #parent selection time tracking
         # INITIALIZE OFFSPRING *************************************
         heros.timer.mating_time_start() #mating time tracking
         offspring_list = []
         for parent_rule in parent_list:
-            new_rule = RULE(heros)
+            new_rule = RULE(heros,np)
             new_rule.initialize_by_parent(parent_rule,heros)
             offspring_list.append(new_rule)
         # CROSSOVER OPERATOR **************************************
         if len(offspring_list) > 1: #crossover only applied between two parent rules
             if random.random() < heros.cross_prob:
+                #print('crossover run')
                 offspring_list[0].uniform_crossover(offspring_list[1],heros,random,np)
         #for offspring in offspring_list: #debug
         #    self.debug_confirm_offspring_match(offspring, instance,heros,'crossover',parent_list)
@@ -243,11 +522,16 @@ class RULE_POP:
         #Check for offspring duplication
         if len(offspring_list) > 1:
             if offspring_list[0].equals(offspring_list[1]): 
+                #print('duplicate offspring found - and removed')
                 offspring_list.pop()
                 if len(offspring_list) > 1:
                     print("ERROR: More than 2 expected offspring in GA")
+        #print('OFFSPRING')
+        #for offspring in offspring_list: #debugging
+        #    offspring.show_rule_short('offspring rule')
         # CHECK FOR DUPLICATE RULES IN {P} and EVALUATE Non-Duplicate Ruels
         front_updated = False
+        final_offspring_list = []
         for offspring in offspring_list:
             if self.archive_discovered_rules:
                 rule_summary = self.rule_exists(offspring)
@@ -265,9 +549,12 @@ class RULE_POP:
                 if front_changed:
                     front_updated = True
                 heros.timer.rule_eval_time_stop() #rule evaluation time tracking
-        final_offspring_list = []
-        if self.no_identical_rule_exists(offspring,heros,'pop_set'):
-            final_offspring_list.append(offspring)
+            if self.no_identical_rule_exists(offspring,heros,'pop_set'):
+                final_offspring_list.append(offspring)
+            else: # DEBUG
+                pass
+                #print('identical rule found in population')
+        """
         # Update all rule fitness values if one or both offspring rules updated the pareto front
         heros.timer.rule_eval_time_start() #rule evaluation time tracking
         if heros.fitness_function == 'pareto' and front_updated: #new 3/29/25
@@ -276,46 +563,26 @@ class RULE_POP:
             for offspring in final_offspring_list:
                 offspring.update_rule_fitness(heros)
         heros.timer.rule_eval_time_stop() #rule evaluation time tracking
+        """
         # INSERT RULE(S) IN POPULATON (OPTIONAL GA SUBSUMPTION) ***************************
-        self.process_offspring(parent_list,final_offspring_list,heros)
+        self.process_offspring(parent_list,final_offspring_list,outcome_state,heros)
 
 
-    def tournament_selection(self,heros,random):
-        """ Applies tournament selection to choose and return two parent rules. """
-        parent_options = copy.deepcopy(self.match_set)
-        parent_list = []
-        if len(parent_options) == 1: #only one rule in {M}
-            parent_list = [self.pop_set[self.match_set[0]]] #only one parent returned
-        elif len(parent_options) == 2: #only two rules in {M}
-            parent_list = [self.pop_set[self.match_set[0]],self.pop_set[self.match_set[1]]]
-        else:
-            while len(parent_list) < 2:
-                tournament_size = max(2,int(len(parent_options)*heros.theta_sel))
-                tournament_set = random.sample(parent_options,tournament_size)
-                best_fitness = 0
-                best_rule_index = self.match_set[0]
-                for i in tournament_set:
-                    if self.pop_set[i].fitness >= best_fitness:
-                        best_fitness = self.pop_set[i].fitness
-                        best_rule_index = i
-                parent_list.append(self.pop_set[best_rule_index])
-                parent_options.remove(best_rule_index)
-        return parent_list
-
-
-    def process_offspring(self,parent_list,offspring_list,heros):
+    def process_offspring(self,parent_list,offspring_list,outcome_state,heros):
         """ Activates GA subsumption (if used), and then inserts offpring rules into population as needed. """
         if heros.subsumption == 'ga' or heros.subsumption == 'both': #apply subsumption and insert rule(s) as needed
             heros.timer.subsumption_time_start()
             for offspring in offspring_list:
-                self.ga_subsumption(offspring,parent_list,heros)
+                self.ga_subsumption(offspring,parent_list,outcome_state,heros)
             heros.timer.subsumption_time_stop()
         else: #insert rule(s) as needed following rule equality check
             for offspring in offspring_list:
                 self.add_rule_to_pop(offspring)
+                if offspring.rule_is_correct(outcome_state,heros):
+                    self.correct_set.append(len(self.pop_set)-1)
 
 
-    def ga_subsumption(self,offspring,parent_list,heros):
+    def ga_subsumption(self,offspring,parent_list,outcome_state,heros):
         """ Applies GA subsumption. """
         offspring_subsumed = False
         for parent in parent_list:
@@ -326,6 +593,8 @@ class RULE_POP:
                     parent.update_numerosity(1)
         if not offspring_subsumed:
             self.add_rule_to_pop(offspring)
+            if offspring.rule_is_correct(outcome_state,heros):
+                self.correct_set.append(len(self.pop_set)-1)
 
     """
     def add_covered_rule_to_pop(self,new_rule,outcome_state,heros,random): #old now
@@ -353,8 +622,10 @@ class RULE_POP:
             front_updated = new_rule.complete_rule_evaluation_quant(heros) #only called if brand new rule being added to population
         else:
             pass
+        """
         if heros.fitness_function == 'pareto' and front_updated: 
             self.global_fitness_update(heros)
+        """
         heros.timer.rule_eval_time_stop() #rule evaluation time tracking
         heros.timer.covering_time_start() #covering time tracking
 
@@ -408,8 +679,11 @@ class RULE_POP:
 
     def add_rule_to_pop(self,new_rule):
         """ Add new and novel rule to population, updating key relevant parameters. """
+        
         new_rule.assign_ID(self.ID_counter)
         self.pop_set.append(new_rule)
+        self.match_set.append(len(self.pop_set)-1)
+        self.new_rule_set.append(len(self.pop_set)-1)
         self.ID_counter += 1 #every time a new rule gets added to the pop (that isn't in the current pop) it is assigned a new unique ID
         self.micro_pop_count += 1
         if self.archive_discovered_rules:
@@ -420,14 +694,8 @@ class RULE_POP:
         """ Makes a correct set {C}"""
         for i in range(len(self.match_set)):
             rule_index = self.match_set[i]
-            if heros.outcome_type == 'class':
-                if self.pop_set[rule_index].action == outcome_state:
-                    self.correct_set.append(rule_index)
-            elif heros.outcome_type == 'quant':
-                if self.pop_set[rule_index].action[0] <= outcome_state <= self.pop_set[rule_index].action[1]:
-                    self.correct_set.append(rule_index)
-            else:
-                pass
+            if self.pop_set[rule_index].rule_is_correct(outcome_state,heros):
+                self.correct_set.append(rule_index)
 
 
     def update_rule_parameters(self,heros):
@@ -439,7 +707,7 @@ class RULE_POP:
             self.pop_set[rule_index].update_ave_match_set_size(match_set_numerosity_sum,heros)
 
 
-    def deletion(self,heros,random):
+    def deletion_original(self,heros,random):
         """ Applies probabalistic deletion to the rule population to maintain maximum population size."""
         heros.timer.deletion_time_start()
         while self.micro_pop_count > heros.pop_size:
@@ -471,14 +739,6 @@ class RULE_POP:
                 if rule.numerosity < 1:  # When all micro-classifiers for a given classifier have been depleted.
                     self.remove_macro_rule(i)
                 return
-
-
-    def get_pop_fitness_sum(self):
-        """ Returns the sum of the fitnesses of all rules in the population. """
-        fitness_sum = 0.0
-        for rule in self.pop_set:
-            fitness_sum += rule.fitness *rule.numerosity
-        return fitness_sum 
     
 
     def remove_macro_rule(self,rule_index):
@@ -490,6 +750,7 @@ class RULE_POP:
         """ Clears out references in the match and correct sets for the next learning iteration. """
         self.match_set = []
         self.correct_set = []
+        self.new_rule_set = []
 
 
     def order_all_rule_conditions(self):
@@ -498,13 +759,13 @@ class RULE_POP:
             rule.order_rule_conditions()
 
 
-    def load_rule_population(self, pop_df, heros, random):
+    def load_rule_population(self, pop_df, heros, random,np):
         """ Load a HEROS rule population data frame, then instantiates and evaluates all rules.
             Each specified rule must have a condition and action at minimum. """
         rule_count = pop_df.shape[0] #rows in dataframe
         for rule_row in range(rule_count): #for each rule in the dataframe
             # Initialize the rule
-            loaded_rule = RULE(heros)
+            loaded_rule = RULE(heros,np)
             # Set the rule condition
             loaded_rule.condition_indexes = ast.literal_eval(pop_df.loc[rule_row,'Condition Indexes'])
             loaded_rule.condition_values = ast.literal_eval(pop_df.loc[rule_row,'Condition Values'])
@@ -533,8 +794,10 @@ class RULE_POP:
             elif heros.outcome_type == 'quant':
                 front_updated = loaded_rule.complete_rule_evaluation_quant(heros) #only called if brand new rule being added to population
         # Update all rule fitness values (if pareto front rule fitness used)
+        """
         if heros.fitness_function == 'pareto': #new 3/29/25
             self.global_fitness_update(heros)
+        """
         # Add rule to the population
         self.pop_set.append(loaded_rule)
         self.ID_counter += 1 #every time a new rule gets added to the pop (that isn't in the current pop) it is assigned a new unique ID
@@ -550,6 +813,8 @@ class RULE_POP:
                         'Action',
                         'Numerosity',
                         'Fitness',
+                        'Top Niche Rank',
+                        'Top Niche Crowding',
                         'Useful Accuracy',
                         'Useful Coverage',
                         'Accuracy',
@@ -562,6 +827,7 @@ class RULE_POP:
                         'Specified Count',
                         'Average Match Set Size',
                         'Deletion Probabiilty']
+
         for rule in self.pop_set:
             rule_list = [rule.ID,
                          rule.condition_indexes,
@@ -569,6 +835,8 @@ class RULE_POP:
                          rule.action,
                          rule.numerosity,
                          rule.fitness,
+                         rule.top_niche_rank,
+                         rule.max_niche_crowding_distance,
                          rule.useful_accuracy,
                          rule.useful_coverage,
                          rule.accuracy,

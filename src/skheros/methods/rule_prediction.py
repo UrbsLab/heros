@@ -103,6 +103,7 @@ class RULE_PREDICTION():
                 self.prediction_range = (self.prediction - heros.env.outcome_sd, self.prediction + heros.env.outcome_sd)
                 self.prediction_proba = None
                 self.covered = False
+                #consider a default prediction of mean outcome for no matching instances (simplify above) 
 
 
     def get_prediction(self):

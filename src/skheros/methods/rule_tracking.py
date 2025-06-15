@@ -18,6 +18,8 @@ class RULE_TRACK:
         elif heros.outcome_type == 'quant':
             self.tracking_header = ["Iteration",
                             "Pred.Error.Est.",
+                            "Unique Rule Count",
+                            "Rule Pop Size",
                             "Total Time"]
         else:
             pass

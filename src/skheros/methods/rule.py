@@ -1,7 +1,7 @@
 import copy
 
 class RULE:
-    def __init__(self,heros):
+    def __init__(self,heros,np):
         """ Initializes objects that define an individual rule. """
         # REFERENCE OBJECTS ******************************************************
         self.ID = None #unique identifier for this rule (used in model evolution and does not guarantee global uniqueness)
@@ -27,6 +27,7 @@ class RULE:
         # Non-standary metric parameters
         self.useful_accuracy = None
         self.useful_coverage = None
+        self.objectives = None
         self.outcome_range_prob = None
         self.mean_absolute_error = None
         self.prediction = None #average of training instance outcome values that match this rule (rule's specific prediction - similar to decision tree)
@@ -35,6 +36,13 @@ class RULE:
         self.numerosity = 1 #number of virtual copies of this rule maintained in the population - can protect rule from random deletion - increases influence of rule
         self.ave_match_set_size = 1 #average size of the match sets in which this rule was included across all training instances - used in deletion to promote niching
         self.deletion_prob = None #probability of rule being selected for deletion
+        # NICHE NSGA-II ranking
+        self.matching_instance_indexes = []
+        self.correct_instance_index_init = [0, np.inf]
+        self.correct_instance_indexes = {} #stores the instance index (not instance ID) as key and [NSGA-II rank, crowding distance] as value
+        self.top_niche_rank = 1 # Initialized to 1 by default so any new rules generated that are not in {C} for birth iteration are protected from deletion
+        self.max_niche_crowding_distance = np.inf
+
 
     def __eq__(self, other):
         return isinstance(other, RULE) and self.ID == other.ID
@@ -83,6 +91,47 @@ class RULE:
         self.numerosity = 1 
         self.ave_match_set_size = copy.deepcopy(parent_rule.ave_match_set_size) 
         self.deletion_prob = None 
+
+
+    def update_niche_metrics(self, instance_index, rank, crowding_distance):
+        """ """
+        #self.correct_instance_indexes[instance_index] = [rank,crowding_distance]
+        #print('updating niche metrics - pre')
+        #print(instance_index)
+        #print(self.correct_instance_indexes)
+        if instance_index in self.correct_instance_indexes: #debugging
+
+            self.correct_instance_indexes[instance_index] = [rank,crowding_distance]
+        else: #debugging
+            print('error') #debugging
+            print (5/0)
+
+    def rule_is_correct(self,outcome_state,heros):
+        """ Returns whether this rule is correct based on given outcome."""
+        if heros.outcome_type == 'class':
+            if self.action == outcome_state:
+                return True
+        elif heros.outcome_type == 'quant':
+            if self.action[0] <= outcome_state <= self.action[1]:
+                return True
+        else:
+            print("Error: Specified outcome type not supported. ")
+        return False
+        
+    def global_niche_metric_update(self):
+        """ """
+        #if self.ID == 157:
+        #    print('global niche update')
+        #    self.show_rule_short(157)
+        #    print(self.useful_accuracy)
+        #    print(self.useful_coverage)
+        #    print(self.correct_instance_indexes)
+
+        best_instance_index = max(self.correct_instance_indexes, key=lambda k: (-self.correct_instance_indexes[k][0], self.correct_instance_indexes[k][1]))
+        #if self.ID == 157:
+        #    print(best_instance_index)
+        self.top_niche_rank = self.correct_instance_indexes[best_instance_index][0]
+        self.max_niche_crowding_distance = self.correct_instance_indexes[best_instance_index][1]
 
 
     def match(self, instance_state, heros):
@@ -235,15 +284,19 @@ class RULE:
                 mutations_remaining += 1
             else:
                 keep_going = False
+        #print('Target number of mutations: '+str(mutations_remaining)) #debugging
         if len(self.condition_indexes) + mutations_remaining > heros.env.num_feat: # In case of small number of features in dataset, put a hard limit on mutations
             mutations_remaining = heros.env.num_feat - len(self.condition_indexes)
         # MAINTAIN SPECIFICITY - added for similarity to scikit-ExSTraCS 3/30/25
         if mutations_remaining == 0 and random.random() < (1 - heros.mut_prob):
+            #print('default mutation swap conducted')
             # Generalize one feature
-            generalized_features = self.generalize_condition(1,instance_state,[],random,heros,np,False)
+            changed_feature = self.generalize_condition(1,instance_state,[],random,heros,np,False)
+            #print("Generalized features: "+str(changed_feature))
             if len(self.condition_indexes) < len(instance_state): #This check is necessary since generalize condition can mutate a range rather than remove a specified features
                 #Specify one feature
-                specified_features = self.specify_condition_mutation(1,instance_state,[],heros,random,np)
+                specified_features = self.specify_condition_mutation(1,instance_state,changed_feature,heros,random,np)
+                #print("specified features: "+str(specified_features))
         else:
             # Determine mutation option possibilities ******************************************************
             mutate_options = ['G','S','R'] #generalize feature, specify feature, and mutate quanatitative feature range
@@ -440,16 +493,17 @@ class RULE:
                     prob_list.append(heros.env.ek_weights[feat]) #inverted weights since higher weight means less generalize probability
                 if sum(prob_list) == 0.0:
                     target_features = np.random.choice(temp_feature_pool,size=1,replace=False).tolist()
+                    #num_to_specify -= 1
                 else:
                     prob_sum = sum(prob_list)
                     prob_list = [x / float(prob_sum) for x in prob_list]
                     target_features = np.random.choice(temp_feature_pool,size=1,replace=False,p=prob_list).tolist()
-                    #feat = random.sample(temp_feature_pool,1)[0]
+                #Specify selected features
+                for feat in target_features:
                     temp_feature_pool.remove(feat)
                     if instance_state[feat] != None:
                         self.condition_indexes.append(feat)
                         self.condition_values.append(self.set_condition_value(feat,instance_state,heros,random,np))
-                        target_features.append(feat)
                         num_to_specify -= 1
         return target_features
 
@@ -537,6 +591,7 @@ class RULE:
         if self.useful_coverage < 0.0:
             self.useful_coverage = 0.0
         # Calculate fitness *********************************
+        """
         if heros.fitness_function == 'accuracy':
             self.fitness = pow(self.accuracy, heros.nu)
         elif heros.fitness_function == 'pareto':
@@ -545,6 +600,7 @@ class RULE:
             if self.fitness is None: #Pareto front only has (0,0) for useful_accuracy and useful_coverage
                 self.fitness = pow(self.accuracy, heros.nu)
             #print(self.show_rule())
+        """
 
     def complete_rule_evaluation_class(self,heros,random,target_instance_outcome):
         """ Evaluates rule performance across the entire training dataset and update rule parameters accordingly. """
@@ -560,6 +616,8 @@ class RULE:
             if self.match(instance_state,heros):
                 self.match_cover += 1
                 self.instance_outcome_count[outcome_state] += 1 #update rule's outcome counts for training set
+                #For niche optimization
+                self.matching_instance_indexes.append(instance_index) #store for later reference
         # Assign class that yields highest rule accuracy - regardless of current target instance class
         self.instance_outcome_prop = copy.deepcopy(self.instance_outcome_count)
         #Convert class counts first into class accuracies then into 'useful' accuracies to take class imbalance into account
@@ -590,7 +648,14 @@ class RULE:
         self.useful_coverage = self.correct_cover - (self.match_cover * class_probability)
         if self.useful_coverage < 0.0:
             self.useful_coverage = 0.0
+        # Identify training instances that are correctly covered by this rule
+        for instance_index in self.matching_instance_indexes:
+            outcome_state = train_data[1][instance_index]
+            if outcome_state == self.action: #correctly matches this instance
+                 self.correct_instance_indexes[instance_index] = self.correct_instance_index_init # to store [NSGA-II rank, crowding distance] for given instance. 
+        self.objectives = (self.useful_accuracy,self.useful_coverage)
         # Calculate fitness *********************************
+        """
         if heros.fitness_function == 'accuracy':
             self.fitness = pow(self.accuracy, heros.nu)
         elif heros.fitness_function == 'pareto':
@@ -604,6 +669,7 @@ class RULE:
                 return True
         else:
             print("Fitness metric not available.")
+        """
         return False
     
 
@@ -653,6 +719,7 @@ class RULE:
             if self.useful_coverage < 0.0:
                 self.useful_coverage = 0.0
         # Calculate fitness *********************************
+        """
         if heros.fitness_function == 'accuracy' or heros.nu > 1:
             self.fitness = pow(self.useful_accuracy, heros.nu)
         elif heros.fitness_function == 'pareto':
@@ -666,6 +733,7 @@ class RULE:
                 return True
         else:
             print("Fitness metric not available.")
+            """
         return False
     
 
@@ -687,6 +755,10 @@ class RULE:
             self.fitness = pow(self.accuracy, heros.nu)
 
 
+    def update_rule_pareto_front(self,heros):
+        """ Updates the rule front with this rule. """
+        front_updated = heros.rule_pareto.update_front(self.useful_accuracy,self.useful_coverage,['max','max']) 
+
     def subsumes(self,other_rule,heros):
         """ Determines if 'self' rule meets conditions for subsuming the 'other_rule'. A rule is a subsumer if:
         (1) It has the same action as the other rule.
@@ -697,7 +769,7 @@ class RULE:
             if not self.action == other_rule.action:
                 return False
         elif heros.outcome_type == 'quant':
-            if self.action[0] > other_rule.action[0] or self.action[1] < other_rule.action[1]:
+            if self.action[0] >= other_rule.action[0] or self.action[1] <= other_rule.action[1]:
                 return False
         else:
             print("Error: Outcome type undefined.")
@@ -743,7 +815,7 @@ class RULE:
         return False #initial or secondary checks yield inequality
     
 
-    def get_deletion_vote(self):
+    def get_deletion_vote_original(self):
         """  Returns the vote for deletion of the rule. """
         if self.fitness == 0.0:
             deletion_vote = self.ave_match_set_size * self.numerosity / (0.001 / self.numerosity)
@@ -751,6 +823,31 @@ class RULE:
             deletion_vote = self.ave_match_set_size * self.numerosity / (self.fitness / self.numerosity) 
         return deletion_vote
 
+ 
+    def get_deletion_vote(self, np):
+        """  Returns the vote for deletion of the rule. """
+        max_crowding_distance = 2.0 # 1 for each objective (to replace inf distances)
+        if self.max_niche_crowding_distance == np.inf:
+            deletion_vote = self.top_niche_rank * self.top_niche_rank * self.ave_match_set_size * self.numerosity * self.numerosity / max_crowding_distance
+        elif self.max_niche_crowding_distance == 0:
+            deletion_vote = self.top_niche_rank * self.top_niche_rank * self.ave_match_set_size * self.numerosity * self.numerosity / 0.001
+        else:
+            deletion_vote = self.top_niche_rank * self.top_niche_rank * self.ave_match_set_size * self.numerosity * self.numerosity / self.max_niche_crowding_distance
+        return deletion_vote
+
+    """
+        max_crowding_distance = 2.0 # 1 for each objective (to replace inf distances)
+        if self.top_niche_rank == 1:
+            deletion_vote = self.numerosity * self.numerosity
+        else:
+            if self.max_niche_crowding_distance == np.inf:
+                deletion_vote = self.top_niche_rank * self.top_niche_rank * self.ave_match_set_size * self.numerosity * self.numerosity / max_crowding_distance
+            elif self.max_niche_crowding_distance == 0:
+                deletion_vote = self.top_niche_rank * self.top_niche_rank * self.ave_match_set_size * self.numerosity * self.numerosity / 0.001
+            else:
+                deletion_vote = self.top_niche_rank * self.top_niche_rank * self.ave_match_set_size * self.numerosity * self.numerosity / self.max_niche_crowding_distance
+        return deletion_vote
+    """
 
     def update_ave_match_set_size(self, match_set_numerosity_sum,heros):
         """ Applies Widrow-Hoff algorithm to update average match set size in which this rule also matches. """
@@ -784,6 +881,7 @@ class RULE:
         print(str(name)+" Rule-------------------------------------------")
         print("Condition Indexes: "+str(self.condition_indexes))
         print("Condition Values: "+str(self.condition_values))
+        print("Action: "+str(self.action))
 
     def display_key_rule_info(self):
         self.order_rule_conditions()

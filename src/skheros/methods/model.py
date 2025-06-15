@@ -184,7 +184,6 @@ class MODEL:
                 uncovered_count += 1
         self.accuracy = self.balanced_accuracy(y_true, y_pred)
         self.coverage = (heros.env.num_instances - uncovered_count) / float(heros.env.num_instances)
-        #self.objectives = (self.useful_accuracy,len(self.rule_set))
         self.objectives = (self.accuracy,len(self.rule_set))
 
 

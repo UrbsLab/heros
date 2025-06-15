@@ -19,8 +19,8 @@ from .methods.model_prediction import MODEL_PREDICTION
 #import inspect #temporary testing
 
 class HEROS(BaseEstimator, TransformerMixin):
-    def __init__(self, outcome_type='class',iterations=100000,pop_size=1000,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,fitness_function='pareto',
-                 subsumption='both',rsl=0,feat_track=None,model_iterations=500,model_pop_size=100, model_pop_init = 'target_acc', new_gen=1.0,merge_prob=0.1,rule_pop_init=None,compaction='sub',track_performance=0,model_tracking=False,stored_rule_iterations=None,stored_model_iterations=None,random_state=None,verbose=False):
+    def __init__(self, outcome_type='class',iterations=100000,pop_size=1000,diversity=0,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,fitness_function='pareto',subsumption='both',rsl=0,feat_track=None,model_iterations=500,model_pop_size=100, model_pop_init = 'target_acc', new_gen=1.0,merge_prob=0.1,rule_pop_init=None,compaction='sub',track_performance=0,model_tracking=False,stored_rule_iterations=None,stored_model_iterations=None,random_state=None,verbose=False):
+
         """
         A Scikit-Learn compatible implementation of the 'Heuristic Evolutionary Rule Optimization System' (HEROS) Algorithm.
         ..
@@ -28,6 +28,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         :param outcome_type: Defines the outcome type (Must be 'class' for classification, or 'quant' for quantiative outcome)
         :param iterations: The number of rule training cycles to run. (Must be nonnegative integer)
         :param pop_size: Maximum 'micro' rule population size, i.e. sum of rule numerosities. (Must be nonnegative integer)
+        :param diversity: Rule population pressure encouraging preservation of rule diversity. (Must be a float from 0 - 1)
         :param cross_prob: The probability of applying crossover in rule discovery with the genetic algorithm. (Must be float from 0 - 1)
         :param mut_prob: The probability of mutating a position within an offspring rule. (Must be float from 0 - 1)
         :param nu: Power parameter used to determine the importance of high rule-accuracy when calculating fitness. (must be non-negative)
@@ -61,6 +62,9 @@ class HEROS(BaseEstimator, TransformerMixin):
         
         if not self.check_is_int(pop_size) or pop_size < 50:
             raise Exception("'pop_size' param must be non-negative integer >= 50")
+        
+        if not self.check_is_float(diversity) or diversity < 0 or diversity > 1:
+            raise Exception("'diversity' param must be float from 0 - 1")
         
         if not self.check_is_float(cross_prob) or cross_prob < 0 or cross_prob > 1:
             raise Exception("'cross_prob' param must be float from 0 - 1")
@@ -112,19 +116,28 @@ class HEROS(BaseEstimator, TransformerMixin):
         if not self.check_is_int(track_performance) or track_performance < 0:
             raise Exception("'track_performance' param must be non-negative integer")
         
-        if not model_tracking == True and not model_tracking == False and not model_tracking == 'True' and not model_tracking == 'False':
-            raise Exception("'verbose' param must be a boolean, i.e. True or False")
+        if model_tracking == 'True' or model_tracking == True:
+            model_tracking = True
+        if model_tracking == 'False' or model_tracking == False:
+            model_tracking = False
+        if not self.check_is_bool(model_tracking):
+            raise Exception("'model_tracking' param must be a boolean, i.e. True or False")
 
         if not self.check_is_int(random_state) and not random_state is None and not random_state == 'None':
             raise Exception("'random_state' param must be an int or None")
 
-        if not verbose == True and not verbose == False and not verbose == 'True' and not verbose == 'False':
+        if verbose == 'True' or verbose == True:
+            verbose = True
+        if verbose == 'False' or verbose == False:
+            verbose = False
+        if not self.check_is_bool(verbose):
             raise Exception("'verbose' param must be a boolean, i.e. True or False")
         
         #Initialize global variables
         self.outcome_type = str(outcome_type)
         self.iterations = int(iterations)
         self.pop_size = int(pop_size)
+        self.diversity = float(diversity)
         self.cross_prob = float(cross_prob)
         self.mut_prob = float(mut_prob)
         self.nu = float(nu)
@@ -161,14 +174,13 @@ class HEROS(BaseEstimator, TransformerMixin):
             self.random_state = None
         else:
             self.random_state = int(random_state)
-        if verbose == 'True' or verbose == True:
-            self.verbose = True
-        if verbose == 'False' or verbose == False:
-            self.verbose = False
-
+        self.verbose = verbose
         self.use_ek = False #internal parameter - set to False by default, but switched to true of ek scores passed to fit()
         self.y_encoding = None
         #self.top_models = [] #for tracking model performance increase over iterations !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+        self.run_mode = 'first' # For development only 
+        #first = niche rule ranking (constantly maintained each itereation, very slow, too much diversity without caputuring global ideals.
 
     @staticmethod
     def check_is_int(num):
@@ -185,11 +197,18 @@ class HEROS(BaseEstimator, TransformerMixin):
         return isinstance(num, float)
 
     @staticmethod
-    def check_is_list(num):
+    def check_is_bool(obj):
         """
         :meta private:
         """
-        return isinstance(num, list)
+        return isinstance(obj, bool)
+    
+    @staticmethod
+    def check_is_list(obj):
+        """
+        :meta private:
+        """
+        return isinstance(obj, list)
     
     def check_inputs(self, X, y, row_id, cat_feat_indexes, pop_df, ek): 
         """
@@ -318,7 +337,7 @@ class HEROS(BaseEstimator, TransformerMixin):
 
         # Initialize Rule Population (if specified)
         if self.rule_pop_init == 'load': # Initialize rule population based on loaded rule population
-            self.rule_population.load_rule_population(pop_df,self,random)
+            self.rule_population.load_rule_population(pop_df,self,random,np)
         elif self.rule_pop_init == 'dt': # Train and utilize decision tree models to initialize rule population (based on individual tree 'branches')
             print("Not yet implemented.")
             pass
@@ -329,15 +348,19 @@ class HEROS(BaseEstimator, TransformerMixin):
         while self.iteration < self.iterations:
             # Get current training instance
             instance = self.env.get_instance()
-            #print('Iteration: '+str(self.iteration)+' RulePopSize: '+str(len(self.rule_population.pop_set)))
+            print('Iteration: '+str(self.iteration)+' RulePopSize: '+str(len(self.rule_population.pop_set)))
             # Run a single training iteration focused on the current training instance
             #print(instance)
+            #if self.iteration == 100:
+            #    print(5/0)
+
             self.run_iteration(instance)
             # Evaluation tracking ***************************************************
-            if (self.iteration + 1) % self.track_performance == 0:
-                self.tracking.update_performance_tracking(self.iteration,self)
-                if self.verbose:
-                    self.tracking.print_tracking_entry()
+            if self.track_performance > 0:
+                if (self.iteration + 1) % self.track_performance == 0:
+                    self.tracking.update_performance_tracking(self.iteration,self)
+                    if self.verbose:
+                        self.tracking.print_tracking_entry()
             #Pause learning to conduct a complete evaluation of the current rule population
             if self.stored_rule_iterations != None and (self.iteration + 1) in self.stored_rule_iterations:
                 #Archive current rule population
@@ -440,6 +463,79 @@ class HEROS(BaseEstimator, TransformerMixin):
         return self
 
     def run_iteration(self,instance):
+        # Make 'Match Set', {M}
+        self.rule_population.make_match_set(instance,self,random,np)
+
+        # Track Training Accuracy
+        outcome_prediction = None
+        if self.track_performance > 0:
+            self.timer.prediction_time_start()
+            prediction = RULE_PREDICTION(self, self.rule_population,random)
+            outcome_prediction = prediction.get_prediction()
+            self.tracking.update_prediction_list(outcome_prediction,instance[1],self)
+            self.timer.prediction_time_stop()
+
+        # Make 'Correct Set', {C}
+        self.rule_population.make_correct_set(instance[1],self) #passed the instance outcome only
+        #print("Main - initial correct set")
+        #print(self.rule_population.correct_set)
+
+        #Apply NSGAII-like fast non dominated sorting of rules into ranked fronts of rules
+        fronts = self.rule_population.fast_non_dominated_sort_M()
+        #Calculate crowding distances
+        crowding_distances = {sol: d for front in fronts for sol, d in self.rule_population.calculate_crowding_distance(front).items()}
+
+        # Update Rule Parameters
+        self.timer.rule_eval_time_start()
+        self.rule_population.update_rule_parameters(self)
+        self.timer.rule_eval_time_stop()
+
+        # Correct Set Subsumption (New implementation)
+        if self.subsumption == 'c' or self.subsumption == 'both':
+            self.timer.subsumption_time_start()
+            if len(self.rule_population.correct_set) > 0:
+                self.rule_population.correct_set_subsumption(self)
+            self.timer.subsumption_time_stop()
+
+        # Update Feature Tracking
+        if self.feat_track == 'add':
+            self.timer.feature_track_time_start()
+            if len(self.rule_population.correct_set) > 0:
+                self.FT.update_ft_scores(outcome_prediction,instance[1],self)
+            self.timer.feature_track_time_stop()
+        elif self.feat_track == 'wh':
+            self.timer.feature_track_time_start()
+            if len(self.rule_population.correct_set) > 0:
+                self.FT.update_ft_scores_wh(outcome_prediction,instance[1],self)
+            self.timer.feature_track_time_stop()
+
+        # GENETIC ALGORITHM -----------------------------------------------------------------------------------------------------------
+        self.rule_population.genetic_algorithm(instance,crowding_distances,self,random,np)
+        #print('post-ga correct set: '+str(self.rule_population.correct_set))
+        # CURRENT NICHE SET EVALUTION (Focus on {C} rules for the current instance) ---------------------------------------------------
+        #Apply NSGAII-like fast non dominated sorting of models into ranked fronts of models
+        fronts = self.rule_population.fast_non_dominated_sort_C(self.rule_population.correct_set)
+        #Calculate crowding distances
+        crowding_distances = {sol: d for front in fronts for sol, d in self.rule_population.calculate_crowding_distance(front).items()}
+        #print('updating current {C} niche')
+        # Update {C} rule rank and crowding distances
+        self.rule_population.update_niche_metrics_C(self.env.instance_index, fronts, crowding_distances)
+
+        # IMPACTED NICHE SET EVALUATIONS - Update all rules in all niches impacted by addition of new rules ---------------------------
+        #print('updating other impacted niches (where new rules matched and were correct. )')
+        self.rule_population.initialize_niche_rules() 
+        self.rule_population.update_impacted_niches(self)
+        self.rule_population.global_niche_update()
+
+        # DELETION FROM {P} -----------------------------------------------------------------------------------------------------------
+        self.rule_population.deletion(self,np)
+
+        #Clear Match and Correct Sets
+        self.rule_population.clear_sets()
+        # Note: is there any reason at some point to re-evaluate all rule ranks (despite not being in {C} - i.e. in all {M}'s, or after compaction?)
+
+
+    def run_iteration_original(self,instance):
         # Make 'Match Set', {M}
         self.rule_population.make_match_set(instance,self,random,np)
 
@@ -847,6 +943,9 @@ class HEROS(BaseEstimator, TransformerMixin):
         ft_df = self.model_FT.export_ft_scores(self,feature_names)
         ft_df = ft_df.drop('row_id', axis=1)
         self.model_FT.plot_clustered_ft_heatmap(ft_df, feature_names, specified_filter, show, save, output_path)
+
+    def calculate_global_rule_fitness(self):
+        self.rule_population.global_fitness_update(self)
 
     def get_runtimes(self):
         return self.timer.report_times()

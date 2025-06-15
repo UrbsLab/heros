@@ -19,7 +19,8 @@ class COMPACT:
         sufficient_rule_pop_remain = True
         for i in range(len(heros.rule_population.pop_set)):
             rule = heros.rule_population.pop_set[index]
-            if rule.useful_accuracy <= 0:
+            if rule.useful_accuracy <= 0 or rule.top_niche_rank > 1:
+            #if rule.useful_accuracy <= 0:
                 #Remove bad rule from population
                 heros.rule_population.pop_set.pop(index)
             else:
