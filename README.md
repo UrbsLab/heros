@@ -1,4 +1,4 @@
-# HEROS
+![alttext](https://github.com/UrbsLab/heros/blob/main/images/heros_logo.png?raw=true)
 
 **Table of contents:**
  - [Introduction](#item-one)
