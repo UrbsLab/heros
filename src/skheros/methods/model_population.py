@@ -26,6 +26,7 @@ class MODEL_POP:
                             "Coverage",
                             "Rules in Model",
                             "Total Time"]
+        self.model_alterations = []
         # Archiving ----------------------------
         self.pop_set_archive = {}
         self.pop_set_hold = None
@@ -85,6 +86,7 @@ class MODEL_POP:
 
     def make_eval_match_set(self,instance_state,heros):
         """ Makes a match set {M} given an instance state. Used by predict function."""
+        self.match_set = []
         for i in range(len(self.target_rule_set)):
             rule = self.target_rule_set[i]
             if rule.match(instance_state,heros):
@@ -96,6 +98,7 @@ class MODEL_POP:
 
     def make_eval_correct_set(self,outcome_state,heros):
         """ Makes a correct set {C} given an instance outcome and {M}. Used by model feature tracking."""
+        self.correct_set = []
         for i in range(len(self.match_set)):
             rule_index = self.match_set[i]
             if heros.outcome_type == 'class':
@@ -711,6 +714,22 @@ class MODEL_POP:
         ax2.plot(tracking_df['Iteration'], tracking_df['Rules in Model'], 'r--', label='Rules in Model')  # 'r--' specifies a red dashed line
         ax2.set_ylabel('Rules in Model', color='r')
         ax2.tick_params(axis='y', labelcolor='r')
+
+        y_min, y_max = ax1.get_ylim()
+        label_y = y_max - 0.02 * (y_max - y_min)
+
+        for x in self.model_alterations:
+            ax1.axvline(x=x, color='black', linestyle=':', linewidth=1)
+            ax1.text(
+                x + 0.5,
+                label_y,
+                f"alt {self.model_alterations.index(x)}",
+                rotation=0,
+                va='top',
+                ha='right',
+                fontsize=8,
+                color='black'
+            )
         if save:
             plt.savefig(output_path+'/model_tracking_line_graph.png', bbox_inches="tight")
         if show:
