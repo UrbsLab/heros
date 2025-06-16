@@ -19,7 +19,7 @@
 ## Introduction
 **HEROS (Heuristic Evolutionary Rule Optimization System)** is an evolutionary rule-based machine learning (ERBML) algorithm framework for supervised learning. It is designed to agnostically modeling simple/complex and/or clean/noisy problems (without hyperparameter optimization) and yield maximally human interpretable models. HEROS adopts a two-phase approach separating rule optimization, and rule-set (i.e. model) optimization, each with distinct multi-objective Pareto-front-based optimization. Rules are optimized based on maximizing rule-accuracy and instance coverage using a Pareto-inspired rule fitness function. Differently, models are optimized based on maximizing balanced accuracy and minimizing rule-set size using an NSGA-II-inspired evolutionary algorithm. This package is scikit-learn compatible. 
 
-To date, HEROS functionality has been validated on binary classification problems. This project is under active development with a number of improvements/expansions planned or in progress. For example, we are expanding HEROS to support multiclass, regression, and survival outcomes in future releases.
+To date, HEROS functionality has been validated on binary classification problems, and has also passed bug checks on multiclass outcomes and data with a mix of categorical and quantitative features. This project is under active development with a number of improvements/expansions planned or in progress. For example, we will be expanding HEROS to support regression, and survival outcomes in future releases.
 
 A schematic detailing how the HEROS algorithm works is given below:
 
