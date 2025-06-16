@@ -1,20 +1,20 @@
 import setuptools
-import subprocess
-import os
+#import subprocess
+#import os
 
-heros_version = subprocess.run(['git','describe','--tags'], stdout=subprocess.PIPE).stdout.decode("utf-8").strip()
-assert "." in heros_version
+#heros_version = subprocess.run(['git','describe','--tags'], stdout=subprocess.PIPE).stdout.decode("utf-8").strip()
+#assert "." in heros_version
 
-assert os.path.isfile("heros/version.py")
-with open("heros/VERSION", "w", encoding="utf-8") as fh:
-    fh.write(f"{heros_version}\n")
+#assert os.path.isfile("heros/version.py")
+#with open("heros/VERSION", "w", encoding="utf-8") as fh:
+#    fh.write(f"{heros_version}\n")
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
     name="heros",
-    version=heros_version,
+    version="0.2.3",
     author="Ryan Urbanowicz",
     author_email="ryan.urbanowicz@cshs.org",
     description="The Heuristic Evolutionary Rule Optimization System (HEROS) is a supervised rule-based machine learning algorithm designed to agnostically model diverse 'structured' data problems and yield compact human interpretable solutions. This implementation is scikit-learn compatible.",
