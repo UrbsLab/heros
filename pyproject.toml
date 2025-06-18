@@ -7,7 +7,7 @@ name = "skheros"
 version = "0.2.3"
 description = "The Heuristic Evolutionary Rule Optimization System (HEROS) is a supervised rule-based machine learning algorithm designed to agnostically model diverse 'structured' data problems and yield compact human interpretable solutions. This implementation is scikit-learn compatible."
 readme = "README.md"
-requires-python = ">=3.12.11"
+requires-python = ">=3.8"
 license = {file = "LICENSE" }
 keywords = ["machine learning","rule-based","scikit-learn", "interpretable", "classification", "supervised learning", "evolutionary computation"]
 authors = [{name = "Ryan Urbanowicz", email = "ryanurbanowicz@gmail.com"}]
