@@ -29,10 +29,20 @@ A schematic detailing how the HEROS algorithm works is given below:
 ***
 <a id="item-two"></a>
 ## Installation
-HEROS can currently only be installed by cloning this repository. Make sure that you have also installed all prerequisite packages included in requirements.txt prior to running (Note: this list may need updating - so if you get errors, check first that you have necessary packages installed). 
+HEROS can be installed with pip or by cloning this repository. 
 
+### Pip
+HEROS can most easily be installed using the following pip command:
+```
+pip install skheros
+```
+In order to run the [HEROS_Demo_Notebook](https://github.com/UrbsLab/heros/blob/main/HEROS_Demo_Notebook.ipynb), download it and make sure to set the following notebook parameter to False in order to import HEROS from the above pip installation.
+```
+load_from_cloned_repo = False
+```
 
 ### Clone Respository
+To install/run HEROS from this cloned repository, run the following commands from the desired folder:
 ```
 git clone --single-branch https://github.com/UrbsLab/heros
 cd heros
@@ -62,7 +72,7 @@ Lastly, the fit() method can optionally be passed 'pop_df', a dataframe object, 
 
 ### Demonstration Notebook
 A Jupyter Notebooks has been included to demonstrate how HEROS (and it's functions) can be applied to train, evaluate, and apply models with a wide variety of saved outputs, visualizations and model prediction explanations. We strongly recommend exploring this demonstration notebook to get familiar with HEROS and its capabilities. 
-* [DEMO Notebook](https://github.com/UrbsLab/heros/blob/main/HEROS_Demo_Notebook.ipynb)
+* [HEROS_Demo_Notebook](https://github.com/UrbsLab/heros/blob/main/HEROS_Demo_Notebook.ipynb)
 
 This notebook is currently set up to run by cloning this repository and running the included notebook. 
 
