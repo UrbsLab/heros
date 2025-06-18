@@ -4,14 +4,5 @@ scikit-learn
 matplotlib
 seaborn
 scipy
-collections
-random
 skrebate==0.7
-os
-time
-copy
-math
-ast
 networkx
-itertools
-pickle
