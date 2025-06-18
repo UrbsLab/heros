@@ -34,7 +34,13 @@ dependencies = [
 "networkx>=3.5"]
 
 [project.optional-dependencies]
-test = ["pytest"]
+test = [
+  "pytest>=7.0",
+  "pytest-cov",
+  "pytest-mock",
+  "flake8",
+  "mypy",
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
