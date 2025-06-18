@@ -71,6 +71,7 @@ Lastly, the fit() method can optionally be passed 'pop_df', a dataframe object, 
 ***
 <a id="item-four"></a>
 ## Using HEROS
+HEROS can be used similar to other scikit-learn supervised machine learning modeling algorithms with some added funcationalities to enhance run options, and post analyses (e.g. visualization generation).
 
 ### Demonstration Notebook
 A Jupyter Notebooks has been included to demonstrate how HEROS (and it's functions) can be applied to train, evaluate, and apply models with a wide variety of saved outputs, visualizations and model prediction explanations. We strongly recommend exploring this demonstration notebook to get familiar with HEROS and its capabilities. 
