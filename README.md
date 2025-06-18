@@ -92,6 +92,7 @@ X = X.values
 y = train_df[outcome_label].values 
 
 # HEROS Initialization and Training
+from skheros.heros import HEROS # import from pip installation
 heros = HEROS(iterations=10000, pop_size=500, nu=1, model_iterations=100, model_pop_size=100)
 heros = heros_trained.fit(X, y, cat_feat_indexes=cat_feat_indexes)
 ```
