@@ -49,10 +49,11 @@ test = [
 [project.urls]
 "Source Code" = "https://github.com/UrbsLab/heros"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
+#[tool.setuptools]
+#package-dir = {"" = "src"}
+#packages = ["skheros"]      # Explicitly includes your package
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["heros*"]
-exclude = ["tests*"]
+#include = ["heros*"]
+#exclude = ["tests*"]
