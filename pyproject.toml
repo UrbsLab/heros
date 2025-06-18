@@ -22,15 +22,17 @@ classifiers = [
   "Operating System :: OS Independent", 
 ]
 
+# dependencies = ["numpy>=2.3.0","pandas>=2.3.0","scikit-learn>=1.7.0","matplotlib>=3.10.3","seaborn>=0.13.2","scipy>=1.15.3","skrebate==0.7","networkx>=3.5"]
+
 dependencies = [
-"numpy>=2.3.0",
-"pandas>=2.3.0",
-"scikit-learn>=1.7.0",
-"matplotlib>=3.10.3",
-"seaborn>=0.13.2",
-"scipy>=1.15.3",
+"numpy",
+"pandas",
+"scikit-learn",
+"matplotlib",
+"seaborn",
+"scipy",
 "skrebate==0.7",
-"networkx>=3.5"]
+"networkx"]
 
 [project.optional-dependencies]
 test = [
