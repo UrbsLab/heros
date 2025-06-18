@@ -4,17 +4,17 @@ import pandas as pd
 import collections.abc
 from sklearn.metrics import balanced_accuracy_score
 from sklearn.base import BaseEstimator, TransformerMixin
-from skheros.methods.time_tracking import TIME_TRACK
-from skheros.methods.data_mange import DATA_MANAGE
-from skheros.methods.rule_population import RULE_POP
-from skheros.methods.rule_pareto_fitness import RULE_PARETO
-from skheros.methods.feature_tracking import FEAT_TRACK
-from skheros.methods.model_feature_tracking import MODEL_FEAT_TRACK
-from skheros.methods.rule_tracking import RULE_TRACK
-from skheros.methods.rule_prediction import RULE_PREDICTION
-from skheros.methods.rule_compaction import COMPACT
-from skheros.methods.model_population import MODEL_POP
-from skheros.methods.model_prediction import MODEL_PREDICTION
+from .methods.time_tracking import TIME_TRACK
+from .methods.data_mange import DATA_MANAGE
+from .methods.rule_population import RULE_POP
+from .methods.rule_pareto_fitness import RULE_PARETO
+from .methods.feature_tracking import FEAT_TRACK
+from .methods.model_feature_tracking import MODEL_FEAT_TRACK
+from .methods.rule_tracking import RULE_TRACK
+from .methods.rule_prediction import RULE_PREDICTION
+from .methods.rule_compaction import COMPACT
+from .methods.model_population import MODEL_POP
+from .methods.model_prediction import MODEL_PREDICTION
 #import pickle #temporary testing
 #import inspect #temporary testing
 
