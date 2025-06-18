@@ -3,11 +3,23 @@ name = "skheros"
 version = "0.2.3"
 description = "The Heuristic Evolutionary Rule Optimization System (HEROS) is a supervised rule-based machine learning algorithm designed to agnostically model diverse 'structured' data problems and yield compact human interpretable solutions. This implementation is scikit-learn compatible."
 readme = "README.md"
-authors = [
-  { name="Ryan Urbanowicz", email="ryanurbanowicz@gmail.com" }
+requires-python = ">=3.12.11"
+authors = [{name="Ryan Urbanowicz", email="ryanurbanowicz@gmail.com"}]
+license = {file = "LICENSE" }
+dependencies = [
+"numpy>=2.3.0",
+"pandas>=2.3.0",
+"scikit-learn>=1.7.0",
+"matplotlib>=3.10.3",
+"seaborn>=0.13.2",
+"scipy>=1.15.3",
+"skrebate==0.7",
+"networkx>=3.5"]
+
+[project.optional-dependencies]
+test = [
+  "pytest"
 ]
-license = { text = "Academic Software License" }
-dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/UrbsLab/heros"

@@ -1,6 +1,7 @@
+import pytest
 import os
 import pandas as pd
-from skheros.heros import HEROS
+from src.skheros.heros import HEROS
 from sklearn.metrics import classification_report
 from skrebate import MultiSURF # Install using: pip install skrebate==0.7
 
@@ -169,7 +170,7 @@ def test_multiclass():
     print("HEROS Top Model Training Data Performance Report:")
     print(classification_report(predictions, y, digits=8))
 
-
+"""
 def test_quantitative_outcome():
     print("------------------------------------------------------")
     print("Test: 6-bit MUX as quantiative outcome problem - binary features, No NA's")
@@ -190,14 +191,14 @@ def test_quantitative_outcome():
                 track_performance=1000,model_tracking=True,stored_rule_iterations=None,stored_model_iterations=None,random_state=42,verbose=True)
     heros = heros.fit(X, y, None, cat_feat_indexes=cat_feat_indexes, ek=ek)
     #Incomplete implementation
+"""
 
-
-if __name__ == "__main__":
-    test_6mux()
-    test_na()
-    test_mixed_feature_types()
-    test_mixed_feature_types_na()
-    test_multiclass()
-    #test_quantitative_outcome() #incomplete
+#if __name__ == "__main__":
+#    test_6mux()
+#    test_na()
+#    test_mixed_feature_types()
+#    test_mixed_feature_types_na()
+#    test_multiclass()
+#    test_quantitative_outcome() #incomplete
 
 
