@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "skheros"
-version = "0.2.3"
+version = "0.2.4"
 description = "The Heuristic Evolutionary Rule Optimization System (HEROS) is a supervised rule-based machine learning algorithm designed to agnostically model diverse 'structured' data problems and yield compact human interpretable solutions. This implementation is scikit-learn compatible."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -22,8 +22,7 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
   "License :: Other/Academic Software License",
-  "Framework :: Scikit-Learn",
-  "Operating System :: OS Independent", 
+  "Operating System :: OS Independent" 
 ]
 
 # dependencies = ["numpy>=2.3.0","pandas>=2.3.0","scikit-learn>=1.7.0","matplotlib>=3.10.3","seaborn>=0.13.2","scipy>=1.15.3","skrebate==0.7","networkx>=3.5"]
