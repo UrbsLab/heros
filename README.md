@@ -291,7 +291,7 @@ Commercial entities or for commercial use of the Software: please contact CSTech
 ***
 <a id="item-eleven"></a>
 ## Acknowledgements
-The study was supported by Cedars Sinai Medical Center and NIH grants R01 AI173095, U01 AG066833 and P30 AG0373105. We thank Drs. John Holmes and Jason Moore for their mentorship and and research insights regarding rule-based machine learning for biomedicine, and Robert Zhang, who implemented scikit-ExSTraCS and prototyped an early batch-learning version of ExSTraCS.
+The study was supported by Cedars Sinai Medical Center and NIH grants R01 AI173095, U01 AG066833 and P30 AG0373105. We thank Drs. John Holmes and Jason Moore for their mentorship and and research insights regarding rule-based machine learning for biomedicine, and Robert Zhang, who implemented scikit-ExSTraCS and prototyped an early batch-learning version of ExSTraCS. Additional thanks to Jay Moran for his technical expertise and assistance. 
 
 ### Code Contributors
 * Ryan Urbanowicz - Developed algorithm concepts, implemented algorithm, led debugging and evaluation
