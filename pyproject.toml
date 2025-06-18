@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "skheros"
+version = "0.2.3"
+description = "The Heuristic Evolutionary Rule Optimization System (HEROS) is a supervised rule-based machine learning algorithm designed to agnostically model diverse 'structured' data problems and yield compact human interpretable solutions. This implementation is scikit-learn compatible."
+readme = "README.md"
+requires-python = ">=3.8"
+license = {file = "LICENSE" }
+keywords = ["machine learning","rule-based","scikit-learn", "interpretable", "classification", "supervised learning", "evolutionary computation"]
+authors = [{name = "Ryan Urbanowicz", email = "ryanurbanowicz@gmail.com"}]
+
+classifiers = [
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "License :: Other/Academic Software License",
+  "Framework :: Scikit-Learn",
+  "Operating System :: OS Independent", 
+]
+
+# dependencies = ["numpy>=2.3.0","pandas>=2.3.0","scikit-learn>=1.7.0","matplotlib>=3.10.3","seaborn>=0.13.2","scipy>=1.15.3","skrebate==0.7","networkx>=3.5"]
+
+dependencies = [
+"numpy",
+"pandas",
+"scikit-learn",
+"matplotlib",
+"seaborn",
+"scipy",
+"skrebate==0.7",
+"networkx"]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=7.0",
+  "pytest-cov",
+  "pytest-mock",
+  "flake8",
+  "mypy",
+]
+
+[project.urls]
+"Source Code" = "https://github.com/UrbsLab/heros"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["heros*"]
+exclude = ["tests*"]
