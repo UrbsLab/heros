@@ -264,7 +264,7 @@ Most recently, in 2024, we released [Survival-LCS](https://github.com/UrbsLab/su
 ## Citing HEROS
 If you use HEROS in a scientific publication, cite the following paper:
 
-Gabe Lipschutz-Villa, Harsh Bandhey, Ruonan Yin, Malek Kamoun, Ryan J. Urbanowicz. [Rule-based Machine Learning: Separating Rule and Rule-Set Pareto-Optimization for Interpretable Noise-Agnostic Modeling] 2025. (In Press)
+Gabe Lipschutz-Villa, Harsh Bandhey, Ruonan Yin, Malek Kamoun, Ryan Urbanowicz. 2025. [Rule-based Machine Learning: Separating Rule and Rule-Set Pareto-Optimization for Interpretable Noise-Agnostic Modeling](https://dl.acm.org/doi/10.1145/3712256.3726461) GECCO '25: Proceedings of the Genetic and Evolutionary Computation Conference. 407-415. 
 
 BibTeX entry:
 ```bibtex
