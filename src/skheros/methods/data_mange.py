@@ -9,6 +9,7 @@ class DATA_MANAGE:
         if cat_feat_indexes is None or cat_feat_indexes == 'None' or len(cat_feat_indexes) == 0: #all features are quantitative
             self.num_q_feat = X.shape[1]
             self.num_c_feat = 0
+            cat_feat_indexes = []
         else:
             self.num_q_feat = X.shape[1] - len(cat_feat_indexes)
             self.num_c_feat = len(cat_feat_indexes)
