@@ -4,7 +4,7 @@ import ast
 from .rule import RULE
 import seaborn as sns
 import matplotlib.pyplot as plt
-from scipy.cluster.hierarchy import linkage#, dendrogram, leaves_list
+from scipy.cluster.hierarchy import linkage #, dendrogram, leaves_list
 import networkx as nx
 from collections import defaultdict
 from itertools import combinations
@@ -499,47 +499,56 @@ class RULE_POP:
             rule.order_rule_conditions()
 
 
-    def load_rule_population(self, pop_df, heros, random):
+    def load_rule_population(self, pop_df, heros, random, np):
         """ Load a HEROS rule population data frame, then instantiates and evaluates all rules.
             Each specified rule must have a condition and action at minimum. """
-        rule_count = pop_df.shape[0] #rows in dataframe
-        for rule_row in range(rule_count): #for each rule in the dataframe
+        self.ID_counter  = pop_df['ID'].astype(int).max()
+        if heros.verbose:
+            print("Initializing Rule Population via Loaded File!")
+            print('Max Rule ID in Loaded Population: '+str(self.ID_counter))
+        self.ID_counter += 1
+        for index, row in pop_df.iterrows():
             # Initialize the rule
             loaded_rule = RULE(heros)
             # Set the rule condition
-            loaded_rule.condition_indexes = ast.literal_eval(pop_df.loc[rule_row,'Condition Indexes'])
-            loaded_rule.condition_values = ast.literal_eval(pop_df.loc[rule_row,'Condition Values'])
+            loaded_rule.condition_indexes = ast.literal_eval(row['Condition Indexes'])
+            safe_globals = {"__builtins__": {}, "inf": np.inf, "-inf": -np.inf}
+            loaded_rule.condition_values = eval(row['Condition Values'], safe_globals)
             # Set the rule action
             if heros.outcome_type =='class':
-                loaded_rule.action = int(pop_df.loc[rule_row,'Action'])
+                loaded_rule.action = int(row['Action'])
             elif heros.outcome_type =='quant':
-                loaded_rule.action = ast.literal_eval(pop_df.loc[rule_row,'Action'])
+                loaded_rule.action = ast.literal_eval(row['Action'])
             else:
                 pass
+            # Set the rule ID
+            loaded_rule.ID = int(row['ID'])
             # Set the rule numerosity
             if loaded_rule.numerosity is None:
                 loaded_rule.numerosity = 1
             else:
-                loaded_rule.numerosity = int(pop_df.loc[rule_row,'Numerosity'])
+                loaded_rule.numerosity = int(row['Numerosity'])
             # Set the rule average match set size
             if loaded_rule.ave_match_set_size is None:
                 loaded_rule.ave_match_set_size = 1
             else:
-                loaded_rule.ave_match_set_size = float(pop_df.loc[rule_row,'Average Match Set Size'])
-            # Set the rule birth iteration
+                loaded_rule.ave_match_set_size = float(row['Average Match Set Size'])
+            # Set the rule birth iteration (Currently we simplify by resetting the birth iteration to zero)
             loaded_rule.birth_iteration = 0
             # Evaluate loaded rule
             if heros.outcome_type == 'class':
                 front_updated = loaded_rule.complete_rule_evaluation_class(heros,random,None) #only called if brand new rule being added to population
             elif heros.outcome_type == 'quant':
                 front_updated = loaded_rule.complete_rule_evaluation_quant(heros) #only called if brand new rule being added to population
+            # Add rule to the population
+            self.pop_set.append(loaded_rule)
+            self.ID_counter += 1 #every time a new rule gets added to the pop (that isn't in the current pop) it is assigned a new unique ID
+            self.micro_pop_count += loaded_rule.numerosity
         # Update all rule fitness values (if pareto front rule fitness used)
         if heros.fitness_function == 'pareto': #new 3/29/25
             self.global_fitness_update(heros)
-        # Add rule to the population
-        self.pop_set.append(loaded_rule)
-        self.ID_counter += 1 #every time a new rule gets added to the pop (that isn't in the current pop) it is assigned a new unique ID
-        self.micro_pop_count += 1
+        if heros.verbose:
+            print('Loading Rule Population Complete: '+str(len(self.pop_set))+' unique rules and '+str(self.micro_pop_count)+' total rules loaded.')
 
 
     def export_rule_population(self):

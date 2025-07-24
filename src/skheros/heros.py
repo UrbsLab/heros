@@ -329,7 +329,7 @@ class HEROS(BaseEstimator, TransformerMixin):
 
         # Initialize Rule Population (if specified)
         if self.rule_pop_init == 'load': # Initialize rule population based on loaded rule population
-            self.rule_population.load_rule_population(pop_df,self,random)
+            self.rule_population.load_rule_population(pop_df,self,random,np)
         elif self.rule_pop_init == 'dt': # Train and utilize decision tree models to initialize rule population (based on individual tree 'branches')
             print("Not yet implemented.")
             pass
