@@ -20,7 +20,9 @@ from .methods.model_prediction import MODEL_PREDICTION
 
 class HEROS(BaseEstimator, TransformerMixin):
     def __init__(self, outcome_type='class',iterations=100000,pop_size=1000,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,fitness_function='pareto',
-                 subsumption='both',rsl=0,feat_track=None,model_iterations=500,model_pop_size=100, model_pop_init = 'target_acc', new_gen=1.0,merge_prob=0.1,rule_pop_init=None,compaction='sub',track_performance=0,model_tracking=False,stored_rule_iterations=None,stored_model_iterations=None,random_state=None,verbose=False):
+                 subsumption='both',rsl=0,feat_track=None,model_iterations=500,model_pop_size=100, model_pop_init = 'target_acc', new_gen=1.0,merge_prob=0.1,
+                 rule_pop_init=None,compaction='sub',track_performance=0,model_tracking=False,stored_rule_iterations=None,stored_model_iterations=None,random_state=None,
+                 verbose=False, mode = 'default'):
         """
         A Scikit-Learn compatible implementation of the 'Heuristic Evolutionary Rule Optimization System' (HEROS) Algorithm.
         ..
@@ -175,8 +177,12 @@ class HEROS(BaseEstimator, TransformerMixin):
         #self.top_models = [] #for tracking model performance increase over iterations !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         self.curr_alt = 0
         self.phase_one_limit = 5000
+        self.phase_one_ratio = 0
         self.training_weights = []
-        self.phase_two_limit = 5
+        self.phase_two_convergence = 5
+        self.phase_two_limit = 100
+        self.mode = str(mode)
+        self.alternations = 5
 
     @staticmethod
     def check_is_int(num):
@@ -345,35 +351,53 @@ class HEROS(BaseEstimator, TransformerMixin):
             # Initialize model population and 
             self.model_population = MODEL_POP() # Initialize rule sets
             self.model_iteration = 0
-
-        while (self.iterations - self.iteration > 0) and (self.model_iterations - self.model_iteration > 0):
+        else: 
+            while self.iterations - self.iteration > 0: 
+                self.phase_one()
+            return self
+        
+        while (self.iterations - self.iteration > 0) and (self.model_iterations - self.model_iteration > 1):
             self.phase_one()
 
             self.tracking.alternations.append(self.iteration)
 
-            if self.model_iteration == 0: 
-                self.model_population.initialize_model_population(self,random,self.model_pop_init)
+            if self.model_iteration == 0:
+                self.model_population.initialize_model_population(
+                    self, random, self.model_pop_init
+                )
+            
             self.phase_two()
             self.model_population.model_alterations.append(self.model_iteration)
             self.curr_alt += 1
+
+        while self.iterations - self.iteration > 0:
+            self.phase_one()
+
+        # 3) Drain *all but one* of the remaining Phase II calls
+        while (self.model_iterations - self.model_iteration > 0):
+            self.phase_two()
+
+        
 
         #self.env.clear_data_from_memory()
 
         #IMPLEMENT THAT IT JUMPS BACK ONCE ITERATIONS ARE RAN
             
-        while (self.iterations - self.iteration > 0):
-            self.phase_one()
         
-        while (self.model_iterations - self.model_iteration > 0):
-            self.phase_two()
         return self
     
+
+    
+
+
     def phase_one(self):
 
         # CONVERGENCE ON NON-NEW DISCOVERY?? CHECKING WITH ARCHIVE
-
+        phase_one_stop = True
+        i = 0
+        improvement = 0
         """ (HEROS PHASE 1) RUN RULE-LEARNING TRAINING ITERATIONS"""
-        for i in range(self.phase_one_limit):
+        while phase_one_stop:
             # Get current training instance
             if i % 2 == 0 or self.model_iteration == 0:
                 instance = self.env.get_instance()
@@ -382,7 +406,12 @@ class HEROS(BaseEstimator, TransformerMixin):
             #print('Iteration: '+str(self.iteration)+' RulePopSize: '+str(len(self.rule_population.pop_set)))
             # Run a single training iteration focused on the current training instance
             #print(instance)
-            self.run_iteration(instance)
+            if self.run_iteration(instance) == 1: 
+                improvement += 1
+            else: 
+                improvement = 0
+            
+
             # Evaluation tracking ***************************************************
             if self.track_performance > 0:
                 if (self.iteration + 1) % self.track_performance == 0:
@@ -399,6 +428,27 @@ class HEROS(BaseEstimator, TransformerMixin):
             # Increment iteration and training instance
             self.iteration += 1
             self.env.next_instance()
+            i += 1
+
+
+
+            ### STOP CRITERIA CHECK
+            if self.mode == "limit":
+                if i >= self.phase_one_limit or self.iteration >= self.iterations:
+                    phase_one_stop = False
+            elif self.mode == "converge":
+                # IMPLEMENT
+
+                # IDEAS: 
+                # CHECK AT EACH ITERATION IF OFFSPRING RULE IMPROVES MATCH SET PARETO FRONT
+                if improvement >= 250 or self.iteration >= self.iterations: 
+                    phase_one_stop = False
+            elif self.mode == "equal": 
+                if i >= self.iterations / self.alternations:
+                    phase_one_stop = False
+            else: 
+                if i >= self.iterations:
+                    phase_one_stop = False
 
         # RULE COMPACTION *********************************************
         self.timer.compaction_time_start()
@@ -417,11 +467,15 @@ class HEROS(BaseEstimator, TransformerMixin):
         if self.verbose:
             print("HEROS (Phase 1) run complete!")
             print("Number of Unique Rules Identified: "+str(len(self.rule_population.explored_rules)))
+            print("Number of Iterations Used:" + str(i))
             #print(self.rule_population.explored_rules)
+        self.phase_one_ratio = float(i/self.iterations)
+
 
     def phase_two(self):
         """(HEROS PHASE 2) RUN RULE-SET-LEARNING TRAINING ITERATIONS  """
         self.timer.phase2_time_start()
+        phase_two_stop = True
 
         if self.model_iterations > 1: #Apply Phase II
             if not self.sufficient_rule_pop_remain: #abort Phase II and use Phase I rule population as final phase II model. 
@@ -438,8 +492,9 @@ class HEROS(BaseEstimator, TransformerMixin):
                 models_prev = []
                 models = []
                 iter = 0 
+                count = 0
                 # RUN MODEL-LEARNING TRAINING ITERATIONS **************************************************************
-                while iter < self.phase_two_limit and self.model_iteration < self.model_iterations:
+                while phase_two_stop:
                     #Apply NSGAII-like fast non dominated sorting of models into ranked fronts of models
                     fronts = self.model_population.fast_non_dominated_sort(self)
                     #Calculate crowding distances
@@ -486,7 +541,28 @@ class HEROS(BaseEstimator, TransformerMixin):
                     else:
                         iter = 0
                     print(iter)
+                    count += 1
                     models_prev = models
+
+
+                    # STOP CRITERIA CHECK 
+                    if self.mode == "limit":
+                        if not (iter < self.phase_two_convergence and count < self.phase_two_limit and self.model_iteration < self.model_iterations - 1):
+                            phase_two_stop = False
+                    elif self.mode == "converge":
+                        ## IMPLEMENT BASED ON PHASE I CONVERGENCE
+                        if count >= int(self.model_iterations * self.phase_one_ratio) or self.model_iteration >= self.model_iterations - 1:
+                            phase_two_stop = False
+                    elif self.mode == "equal":
+                        if count >= self.model_iterations / self.alternations:
+                            phase_two_stop = False
+                    else:  #NAME DEFAULT MODE
+                        if self.model_iteration >= self.model_iterations or self.model_iteration >= self.model_iterations - 1:
+                            phase_two_stop = False
+
+                    
+
+
                 self.model_population.sort_model_pop()
                 self.model_population.get_target_model(0) #the 'model' object with the best accuracy, then coverage, then lowest rule count (assumes prior sorting)
                 self.timer.phase2_time_stop()
@@ -555,13 +631,34 @@ class HEROS(BaseEstimator, TransformerMixin):
             self.timer.feature_track_time_stop()
 
         # Apply Genetic Algorithm To Generate Offspring Rules
-        self.rule_population.genetic_algorithm(instance,self,random,np)
+        new_rules = self.rule_population.genetic_algorithm(instance,self,random,np)
+
+        result = None 
+
+        if self.mode == "converge":
+            if self.offspring_improves(new_rules):
+                result = 0
+            else: 
+                result = 1
+            
 
         # Apply Rule Deletion
         self.rule_population.deletion(self,random)
 
         #Clear Match and Correct Sets
         self.rule_population.clear_sets()
+
+        return result
+
+    def offspring_improves(self, offspring_list):
+        best_idx = max(self.rule_population.match_set, key=lambda r: self.rule_population.pop_set[r].fitness)
+        best_fitness = self.rule_population.pop_set[best_idx].fitness
+        for offspring in offspring_list:
+            if offspring.fitness > best_fitness:
+                return True
+        return False
+                
+
 
 
     def predict_explanation(self, x, feature_names, whole_rule_pop=False, target_model=0):
