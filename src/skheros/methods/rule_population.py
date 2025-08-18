@@ -289,7 +289,7 @@ class RULE_POP:
                 offspring.update_rule_fitness(heros)
         heros.timer.rule_eval_time_stop() #rule evaluation time tracking
         # INSERT RULE(S) IN POPULATON (OPTIONAL GA SUBSUMPTION) ***************************
-        self.process_offspring(parent_list,final_offspring_list,heros)
+        return self.process_offspring(parent_list,final_offspring_list,heros)
 
 
     def tournament_selection(self,heros,random):
@@ -316,20 +316,24 @@ class RULE_POP:
 
 
     def process_offspring(self,parent_list,offspring_list,heros):
+        new_rules = []
         """ Activates GA subsumption (if used), and then inserts offpring rules into population as needed. """
         if heros.subsumption == 'ga' or heros.subsumption == 'both': #apply subsumption and insert rule(s) as needed
             heros.timer.subsumption_time_start()
             for offspring in offspring_list:
-                self.ga_subsumption(offspring,parent_list,heros)
+                new_rules.extend(self.ga_subsumption(offspring,parent_list,heros))
             heros.timer.subsumption_time_stop()
         else: #insert rule(s) as needed following rule equality check
             for offspring in offspring_list:
                 self.add_rule_to_pop(offspring,heros)
                 print("process")
+            new_rules = offspring_list
+        return new_rules
 
 
     def ga_subsumption(self,offspring,parent_list,heros):
         """ Applies GA subsumption. """
+        new_rules = []
         offspring_subsumed = False
         for parent in parent_list:
             if not offspring_subsumed:
@@ -339,6 +343,8 @@ class RULE_POP:
                     parent.update_numerosity(1)
         if not offspring_subsumed:
             self.add_rule_to_pop(offspring,heros)
+            new_rules.append(offspring)
+        return new_rules
 
     """
     def add_covered_rule_to_pop(self,new_rule,outcome_state,heros,random): #old now
