@@ -105,7 +105,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         if not self.check_is_float(merge_prob) or merge_prob < 0 or merge_prob > 1:
             raise Exception("'merge_prob' param must be float from 0 - 1")
 
-        if not rule_pop_init == 'load' and not rule_pop_init == 'dt' and not rule_pop_init is None and not rule_pop_init == 'None':
+        if not rule_pop_init == 'load' and not rule_pop_init == 'dt' and not rule_pop_init == 'dt - verbose' and not rule_pop_init is None and not rule_pop_init == 'None':
             raise Exception("'rule_pop_init' param must be 'load', 'dt', or None")
 
         if not compaction == 'sub' and not compaction is None and not compaction == 'None':
@@ -318,9 +318,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         # Data Preparation
         X, y, row_id, cat_feat_indexes, pop_df, ek = self.check_inputs(X, y, row_id, cat_feat_indexes, pop_df, ek) #check loaded data
         self.env = DATA_MANAGE(X, y, row_id, cat_feat_indexes, ek, self) #initialize the data environment; data formatting, summary statistics, and expert knowledge preparation
-        # Memory Cleanup
-        X = None
-        y = None
+       
         # Initialize Objects
         self.iteration = 0
         self.rule_population = RULE_POP() # Initialize rule sets
@@ -340,11 +338,16 @@ class HEROS(BaseEstimator, TransformerMixin):
         # Initialize Rule Population (if specified)
         if self.rule_pop_init == 'load': # Initialize rule population based on loaded rule population
             self.rule_population.load_rule_population(pop_df,self,random)
-        elif self.rule_pop_init == 'dt': # Train and utilize decision tree models to initialize rule population (based on individual tree 'branches')
-            print("Not yet implemented.")
-            pass
+        elif self.rule_pop_init == 'dt - verbose': # Train and utilize decision tree models to initialize rule population (based on individual tree 'branches')
+            self.rule_population.tree_init_population(X,y,self,random,np,True)
+        elif self.rule_pop_init == 'dt':
+            self.rule_population.tree_init_population(X,y,self,random,np)
         else: # No rule population initialization other than standard LCS-algorithm-style 'covering' mechanism.
             pass
+
+        # Memory Cleanup
+        X = None
+        y = None
         self.timer.init_time_stop() #initialization time tracking
         
         if self.model_iterations > 1: #Apply Phase II
@@ -412,25 +415,13 @@ class HEROS(BaseEstimator, TransformerMixin):
                 improvement = 0
             
 
-            # Evaluation tracking ***************************************************
-            if self.track_performance > 0:
-                if (self.iteration + 1) % self.track_performance == 0:
-                    self.tracking.update_performance_tracking(self.iteration,self)
-                    if self.verbose:
-                        self.tracking.print_tracking_entry()
-            #Pause learning to conduct a complete evaluation of the current rule population
-            if self.stored_rule_iterations != None and (self.iteration + 1) in self.stored_rule_iterations:
-                #Archive current rule population
-                if self.verbose:
-                    print('Archiving: '+str(self.iteration+1))
-                self.rule_population.archive_rule_pop(self.iteration+1)
-                self.timer.archive_rule_pop(self.iteration+1)
+            
             # Increment iteration and training instance
             self.iteration += 1
             self.env.next_instance()
             i += 1
 
-
+            ## SWITCH EVALUATION AND STOP CRITERIA AND ADD COMPACTION IN BETWEEN
 
             ### STOP CRITERIA CHECK
             if self.mode == "limit":
@@ -450,17 +441,35 @@ class HEROS(BaseEstimator, TransformerMixin):
                 if i >= self.iterations:
                     phase_one_stop = False
 
-        # RULE COMPACTION *********************************************
-        self.timer.compaction_time_start()
-        compact = COMPACT(self)
-        self.sufficient_rule_pop_remain = True
-        self.sufficient_rule_pop_remain = compact.basic_rule_cleaning(self)
-        if self.compaction == 'sub' and self.sufficient_rule_pop_remain:
-            self.sufficient_rule_pop_remain = compact.subsumption_compation(self)
-        compact.clear_pop_copy()
-        self.timer.compaction_time_stop()
+            if phase_one_stop == False: 
+                # RULE COMPACTION ********************************************* # CONSIDER USAGE
+                self.timer.compaction_time_start()
+                compact = COMPACT(self)
+                self.sufficient_rule_pop_remain = True
+                self.sufficient_rule_pop_remain = compact.basic_rule_cleaning(self)
+                if self.compaction == 'sub' and self.sufficient_rule_pop_remain:
+                    self.sufficient_rule_pop_remain = compact.subsumption_compation(self)
+                compact.clear_pop_copy()
+                self.timer.compaction_time_stop()
+                
 
-        # BATCH FEATURE TRACKING **************************************
+            # Evaluation tracking ***************************************************
+            if self.track_performance > 0:
+                if (self.iteration) % self.track_performance == 0:
+                    self.tracking.update_performance_tracking(self.iteration - 1,self)
+                    if self.verbose:
+                        self.tracking.print_tracking_entry()
+            #Pause learning to conduct a complete evaluation of the current rule population
+            if self.stored_rule_iterations != None and (self.iteration) in self.stored_rule_iterations:
+                #Archive current rule population
+                if self.verbose:
+                    print('Archiving: '+str(self.iteration))
+                self.rule_population.archive_rule_pop(self.iteration)
+                self.timer.archive_rule_pop(self.iteration)
+
+        
+
+        ### THIS SHOULD HAPPEN AT THE VERY END OF LAST PHASE I RUN # BATCH FEATURE TRACKING **************************************
         if self.feat_track == 'end':
             self.FT.batch_calculate_ft_scores(self)
         self.timer.phase1_time_stop()
