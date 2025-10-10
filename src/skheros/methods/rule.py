@@ -71,7 +71,7 @@ class RULE:
             self.quantitative_range_check_fix(self.action,outcome_state,random,np)  
         else:
             print("Error: Outcome type undefined.")
-        self.encoding = self.encode_rule_binary(heros.env.num_feat)
+        #self.encoding = self.encode_rule_binary(heros.env.num_feat)
 
 
     def initialize_by_parent(self,parent_rule,heros):
@@ -89,7 +89,7 @@ class RULE:
         self.numerosity = 1 
         self.ave_match_set_size = copy.deepcopy(parent_rule.ave_match_set_size) 
         self.deletion_prob = None 
-        self.encoding = self.encode_rule_binary(heros.env.num_feat)
+        #self.encoding = self.encode_rule_binary(heros.env.num_feat)
 
 
     def match(self, instance_state, heros):
@@ -518,14 +518,15 @@ class RULE:
 
     def reestablish_rule(self,rule_summary,heros):
         #[rule.condition_indexes, rule.condition_values, rule.action, rule.instance_outcome_count,rule.ID, rule.birth_iteration]
-        #self.birth_iteration = rule_summary[5]
+        self.ID = rule_summary[4]
+        self.birth_iteration = rule_summary[5]
         self.condition_indexes = rule_summary[0] #list of feature indexes from the dataset that are 'specified' in this rule
         self.condition_values = rule_summary[1] #list of feature values or value-ranges corresponding to the feature indexes in self.feature_index_list
         self.instance_outcome_count = rule_summary[3]
         self.match_cover = sum(self.instance_outcome_count.values())
         # Assign class that yields highest rule accuracy - regardless of current target instance class
         self.instance_outcome_prop = copy.deepcopy(self.instance_outcome_count)
-        self.ID = self.encode_rule_binary(heros.env.num_feat)
+        #self.ID = self.encode_rule_binary(heros.env.num_feat)
         #Convert class counts first into class accuracies then into 'useful' accuracies to take class imbalance into account
         for each in self.instance_outcome_prop:
             self.instance_outcome_prop[each] /= self.match_cover
@@ -610,12 +611,12 @@ class RULE:
             if self.fitness is None: #Pareto front only has (0,0) for useful_accuracy and useful_coverage
                 self.fitness = pow(self.accuracy, heros.nu)
             if front_updated: #all rule-fitnesses will be re-calculated externally
-                self.encoding = self.encode_rule_binary(heros.env.num_feat)
+                #self.encoding = self.encode_rule_binary(heros.env.num_feat)
                 return True
         else:
             print("Fitness metric not available.")
         
-        self.encoding = self.encode_rule_binary(heros.env.num_feat)
+        #self.encoding = self.encode_rule_binary(heros.env.num_feat)
         return False
     
 
