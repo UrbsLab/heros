@@ -1,7 +1,7 @@
 import copy
 import pandas as pd
 import ast
-from .rule import RULE
+from skheros.methods.rule import RULE
 import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy.cluster.hierarchy import linkage#, dendrogram, leaves_list
@@ -12,6 +12,7 @@ import struct
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import _tree, DecisionTreeClassifier
+from sklearn.preprocessing import OneHotEncoder
 from collections import Counter
 from sklearn import tree as sktree
 from matplotlib.table import Table
@@ -47,22 +48,10 @@ class RULE_POP:
 
     def rule_exists(self, target_rule, heros):
         """Checks the explored rules list to see if a given 'new' rule has been previously discovered and evaluated, returning that rule's reference in explored rules."""
-        #print('test')
-        #print(target_rule.condition_indexes)
-        #print(target_rule.condition_values)
-
-        for rule_summary in self.explored_rules:
-            if self.equals(target_rule,rule_summary):
-                #print(rule_summary[0])
-                #print(rule_summary[1])
-                return rule_summary
-        return None
-
-        """encoded = target_rule.encode_rule_binary(heros.env.num_feat)
+        encoded = target_rule.encode_rule_binary(heros.env.num_feat)
         if encoded in self.explored_rules:
             return self.decode_rule_binary(encoded, heros.env.num_feat)
-
-        return None"""
+        return None
 
     
 
@@ -632,6 +621,108 @@ class RULE_POP:
             {"n_estimators": 15, "max_depth": 6, "random_state": heros.random_state},
             {"n_estimators": 15, "max_depth": None, "random_state": heros.random_state},
         ]
+
+        # STEP 2.5: One Hot Encode the categorical features for decision tree training
+        # Decision trees need quantitative features, so we one-hot encode categorical features temporarily
+        original_X = X.copy() if hasattr(X, 'copy') else X
+        onehot_mapping = {}  # Maps one-hot encoded feature index -> (original_feat_idx, categorical_value)
+        reverse_onehot_mapping = {}  # Maps (original_feat_idx, categorical_value) -> one-hot encoded feature index
+        quant_feat_mapping = {}  # Maps encoded quantitative feature index -> original feature index
+        
+        if heros.cat_feature_indexes is not None and len(heros.cat_feature_indexes) > 0:
+            print(f"\nOne-hot encoding {len(heros.cat_feature_indexes)} categorical features...")
+            
+            # Convert X to numpy array if it's a DataFrame
+            if hasattr(X, 'values'):
+                X_array = X.values
+                X_is_dataframe = True
+                X_columns = list(X.columns)
+            else:
+                X_array = np.array(X)
+                X_is_dataframe = False
+                X_columns = None
+            
+            # Separate categorical and quantitative features
+            cat_feat_indexes = sorted(heros.cat_feature_indexes)
+            quant_feat_indexes = sorted([i for i in range(X_array.shape[1]) if i not in cat_feat_indexes])
+            
+            # Extract categorical and quantitative columns
+            cat_data = X_array[:, cat_feat_indexes]
+            quant_data = X_array[:, quant_feat_indexes] if quant_feat_indexes else None
+            
+            # One-hot encode categorical features
+            onehot_encoder = OneHotEncoder(sparse_output=False, drop=None, handle_unknown='ignore')
+            cat_onehot = onehot_encoder.fit_transform(cat_data)
+            
+            # Build mapping: one-hot encoded feature index -> (original_feat_idx, categorical_value)
+            # Also build mapping for quantitative features: encoded_idx -> original_idx
+            if quant_feat_indexes:
+                for encoded_idx, orig_idx in enumerate(quant_feat_indexes):
+                    quant_feat_mapping[encoded_idx] = orig_idx
+            
+            # Build one-hot mapping
+            current_onehot_idx = 0
+            num_quant = len(quant_feat_indexes) if quant_feat_indexes else 0
+            
+            for cat_col_idx, orig_cat_idx in enumerate(cat_feat_indexes):
+                # Get the categories from the encoder (in order)
+                if hasattr(onehot_encoder, 'categories_'):
+                    encoder_categories = onehot_encoder.categories_[cat_col_idx]
+                else:
+                    # Fallback: use unique values from data
+                    encoder_categories = np.unique(cat_data[:, cat_col_idx])
+                
+                # Find the start index for this categorical feature's one-hot columns
+                # Count how many one-hot columns come before this feature
+                onehot_start_idx = 0
+                for prev_cat_idx in cat_feat_indexes:
+                    if prev_cat_idx == orig_cat_idx:
+                        break
+                    prev_cat_col_idx = cat_feat_indexes.index(prev_cat_idx)
+                    if hasattr(onehot_encoder, 'categories_'):
+                        onehot_start_idx += len(onehot_encoder.categories_[prev_cat_col_idx])
+                    else:
+                        onehot_start_idx += len(np.unique(cat_data[:, prev_cat_col_idx]))
+                
+                # Map each one-hot column for this categorical feature
+                for cat_val_idx, cat_val in enumerate(encoder_categories):
+                    onehot_feat_idx = num_quant + onehot_start_idx + cat_val_idx
+                    onehot_mapping[onehot_feat_idx] = (orig_cat_idx, cat_val)
+                    reverse_onehot_mapping[(orig_cat_idx, cat_val)] = onehot_feat_idx
+            
+            # Combine quantitative and one-hot encoded features
+            if quant_data is not None:
+                X_encoded = np.hstack([quant_data, cat_onehot])
+            else:
+                X_encoded = cat_onehot
+            
+            # Convert back to DataFrame if original was DataFrame
+            if X_is_dataframe:
+                # Create new column names
+                new_columns = []
+                if quant_feat_indexes:
+                    new_columns.extend([X_columns[i] for i in quant_feat_indexes])
+                for orig_cat_idx in cat_feat_indexes:
+                    cat_values = heros.env.feat_c_values[orig_cat_idx]
+                    if hasattr(onehot_encoder, 'categories_'):
+                        encoder_categories = onehot_encoder.categories_[cat_feat_indexes.index(orig_cat_idx)]
+                    else:
+                        encoder_categories = np.unique(cat_data[:, cat_feat_indexes.index(orig_cat_idx)])
+                    for cat_val in encoder_categories:
+                        new_columns.append(f"{X_columns[orig_cat_idx]}_{cat_val}")
+                X = pd.DataFrame(X_encoded, columns=new_columns, index=X.index if hasattr(X, 'index') else None)
+            else:
+                X = X_encoded
+            
+            print(f"  Original features: {X_array.shape[1]}, After one-hot encoding: {X.shape[1]}")
+            print(f"  One-hot mapping created for {len(onehot_mapping)} encoded features")
+            print(f"  Quantitative feature mapping: {len(quant_feat_mapping)} features")
+        else:
+            print("\nNo categorical features to encode.")
+            onehot_mapping = {}
+            reverse_onehot_mapping = {}
+            quant_feat_mapping = {}
+    
         rf_models = []
         tree_depths_by_rf = []
         for idx, params in enumerate(rf_settings):
@@ -677,7 +768,7 @@ class RULE_POP:
         all_rules = []
         branch_paths = []
 
-        def recurse_tree(tree, node_id, path, rules, branch_paths=None):
+        def recurse_tree(tree, node_id, path, rules, branch_paths=None, onehot_mapping=None):
             if tree.children_left[node_id] == _tree.TREE_LEAF:
                 condition_indexes = []
                 condition_values = []
@@ -693,13 +784,13 @@ class RULE_POP:
             left_id = tree.children_left[node_id]
             feat_idx = tree.feature[node_id]
             threshold = tree.threshold[node_id]
-            recurse_tree(tree, left_id, path + [(feat_idx, threshold, 'leq')], rules, branch_paths)
+            recurse_tree(tree, left_id, path + [(feat_idx, threshold, 'leq')], rules, branch_paths, onehot_mapping)
             right_id = tree.children_right[node_id]
-            recurse_tree(tree, right_id, path + [(feat_idx, threshold, 'gt')], rules, branch_paths)
+            recurse_tree(tree, right_id, path + [(feat_idx, threshold, 'gt')], rules, branch_paths, onehot_mapping)
 
         for rf in rf_models:
             for estimator in rf.estimators_:
-                recurse_tree(estimator.tree_, 0, [], all_rules, branch_paths)
+                recurse_tree(estimator.tree_, 0, [], all_rules, branch_paths, onehot_mapping)
 
         print(f"Total raw rules extracted: {len(all_rules)}")
 
@@ -768,28 +859,78 @@ class RULE_POP:
         # STEP 5: Convert rules to HEROS format, check for redundancy, and add to population
         print("\nConverting extracted rules to HEROS format and checking for redundancy...")
 
-        def convert_path_to_minmax(condition_indexes, condition_values):
-            """Convert a list of (direction, threshold) for each feature into a min/max interval for HEROS."""
-            minmax_dict = {}
+        def convert_path_to_minmax(condition_indexes, condition_values, onehot_mapping, quant_feat_mapping, heros):
+            """Convert a list of (direction, threshold) for each feature into HEROS format.
+            Handles both quantitative features (min/max ranges) and categorical features (equality checks).
+            Maps one-hot encoded features back to original categorical features."""
+            minmax_dict = {}  # For quantitative features: {orig_feat_idx: [min, max]}
+            categorical_dict = {}  # For categorical features: {orig_feat_idx: set of values}
+            
             for idx, (direction, threshold) in zip(condition_indexes, condition_values):
-                if idx not in minmax_dict:
-                    minmax_dict[idx] = [float('-inf'), float('inf')]
-                if direction == 'leq':
-                    minmax_dict[idx][1] = min(minmax_dict[idx][1], threshold)
-                elif direction == 'gt':
-                    minmax_dict[idx][0] = max(minmax_dict[idx][0], np.nextafter(threshold, threshold+1))
+                # Check if this is a one-hot encoded feature
+                if idx in onehot_mapping:
+                    # This is a one-hot encoded categorical feature
+                    orig_feat_idx, cat_value = onehot_mapping[idx]
+                    
+                    # For one-hot encoding: features are binary (0 or 1)
+                    # Threshold is typically 0.5
+                    # If direction is 'gt' and threshold <= 0.5, it means the one-hot feature is 1 (category IS present)
+                    # If direction is 'leq' and threshold < 0.5, it means the one-hot feature is 0 (category NOT present)
+                    if direction == 'gt' and threshold <= 0.5:
+                        # This branch means the one-hot feature is 1, so the category IS present
+                        if orig_feat_idx not in categorical_dict:
+                            categorical_dict[orig_feat_idx] = set()
+                        categorical_dict[orig_feat_idx].add(cat_value)
+                    # If direction is 'leq' and threshold < 0.5, the category is NOT present (we ignore it)
+                    # Note: We only add categories that are explicitly present (value = 1)
+                else:
+                    # This is a quantitative feature
+                    # Map encoded index back to original index
+                    if quant_feat_mapping and idx in quant_feat_mapping:
+                        orig_idx = quant_feat_mapping[idx]
+                    else:
+                        # No one-hot encoding was done, so index is already original
+                        orig_idx = idx
+                    
+                    if orig_idx not in minmax_dict:
+                        minmax_dict[orig_idx] = [float('-inf'), float('inf')]
+                    if direction == 'leq':
+                        minmax_dict[orig_idx][1] = min(minmax_dict[orig_idx][1], threshold)
+                    elif direction == 'gt':
+                        minmax_dict[orig_idx][0] = max(minmax_dict[orig_idx][0], np.nextafter(threshold, threshold+1))
+            
+            # Build final condition lists
             clean_indexes = []
             clean_values = []
+            
+            # Add quantitative features
             for idx in sorted(minmax_dict.keys()):
                 min_val, max_val = minmax_dict[idx]
                 if min_val <= max_val:
                     clean_indexes.append(idx)
                     clean_values.append([min_val, max_val])
+            
+            # Add categorical features
+            # For categorical features, we need to check if all one-hot conditions for a feature point to the same value
+            for orig_feat_idx in sorted(categorical_dict.keys()):
+                cat_values = categorical_dict[orig_feat_idx]
+                # If only one value is in the set, that's the categorical condition
+                if len(cat_values) == 1:
+                    clean_indexes.append(orig_feat_idx)
+                    clean_values.append(list(cat_values)[0])  # Single categorical value, not a range
+                # If multiple values, we might need to handle this differently
+                # For now, we'll take the first one (though this might not be correct)
+                elif len(cat_values) > 1:
+                    # Multiple categories for same feature - this shouldn't happen in a valid tree path
+                    # But if it does, we'll use the first one
+                    clean_indexes.append(orig_feat_idx)
+                    clean_values.append(list(cat_values)[0])
+            
             return clean_indexes, clean_values
 
         for rule_data in unique_rules:
             raw_condition_indexes, raw_condition_values, action = rule_data
-            condition_indexes, condition_values = convert_path_to_minmax(raw_condition_indexes, raw_condition_values)
+            condition_indexes, condition_values = convert_path_to_minmax(raw_condition_indexes, raw_condition_values, onehot_mapping, quant_feat_mapping, heros)
             if len(condition_indexes) == 0:
                 continue
             #print(f"Condition Indexes: {condition_indexes}")
