@@ -39,7 +39,7 @@ class RULE:
         self.ave_match_set_size = 1 #average size of the match sets in which this rule was included across all training instances - used in deletion to promote niching
         self.deletion_prob = None #probability of rule being selected for deletion
         self.prediction = None
-        #self.encoding = None
+        self.encoding = None
 
     def __eq__(self, other):
         return isinstance(other, RULE) and self.ID == other.ID
@@ -820,6 +820,62 @@ class RULE:
                 translation += ' AND '
         translation += " THEN: predict outcome '"+str(self.action)+"' with "+str(100 * self.instance_outcome_prop[self.action])+"% confidence based on "+str(self.match_cover)+' matching training instances ('+str(round(100*self.match_cover /float(heros.env.num_instances),2))+"% of training instances)."
         print(translation)
+
+    def to_explanation_dict(self, feature_names, heros):
+        """Return a structured, LLM-friendly explanation of this rule.
+
+        The structure includes both machine- and human-readable fields for conditions and
+        key rule statistics useful for downstream reasoning layers.
+        """
+        # Ensure deterministic ordering of conditions
+        self.order_rule_conditions()
+        conditions = []
+        for i in range(len(self.condition_indexes)):
+            feature_index = self.condition_indexes[i]
+            value = self.condition_values[i]
+            is_categorical = (heros.env.feat_types[feature_index] == 1)
+            if is_categorical:
+                human = {
+                    "text": str(feature_names[feature_index])+" = "+str(value)
+                }
+                cond = {
+                    "feature_index": feature_index,
+                    "feature_name": feature_names[feature_index],
+                    "type": "categorical",
+                    "operator": "=",
+                    "value": value,
+                    "human_readable": human["text"]
+                }
+            else:
+                # quantitative range (min, max)
+                range_min, range_max = value[0], value[1]
+                human_text = str(feature_names[feature_index])+" in ["+str(range_min)+", "+str(range_max)+"]"
+                cond = {
+                    "feature_index": feature_index,
+                    "feature_name": feature_names[feature_index],
+                    "type": "quantitative",
+                    "operator": "in_range",
+                    "min": range_min,
+                    "max": range_max,
+                    "human_readable": human_text
+                }
+            conditions.append(cond)
+
+        explanation = {
+            "rule_id": getattr(self, "ID", None),
+            "action": self.action,
+            "instance_outcome_proportions": dict(self.instance_outcome_prop) if hasattr(self, "instance_outcome_prop") else {},
+            "numerosity": self.numerosity,
+            "fitness": self.fitness,
+            "accuracy": self.accuracy,
+            "match_cover": self.match_cover,
+            "correct_cover": self.correct_cover,
+            "average_match_set_size": self.ave_match_set_size,
+            "deletion_probability": self.deletion_prob,
+            "birth_iteration": self.birth_iteration,
+            "conditions": conditions
+        }
+        return explanation
 
 
     def order_rule_conditions(self):
