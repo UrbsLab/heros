@@ -22,7 +22,7 @@ class HEROS(BaseEstimator, TransformerMixin):
     def __init__(self, outcome_type='class',iterations=100000,pop_size=1000,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,fitness_function='pareto',
                  subsumption='both',rsl=0,feat_track=None,model_iterations=500,model_pop_size=100, model_pop_init = 'target_acc', new_gen=1.0,merge_prob=0.1,
                  rule_pop_init=None,compaction='sub',track_performance=0,model_tracking=False,stored_rule_iterations=None,stored_model_iterations=None,random_state=None,
-                 verbose=False, mode = 'default'):
+                 verbose=False, mode = 'default', feedback = False):
         """
         A Scikit-Learn compatible implementation of the 'Heuristic Evolutionary Rule Optimization System' (HEROS) Algorithm.
         ..
@@ -182,6 +182,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         self.phase_two_convergence = 5
         self.phase_two_limit = 100
         self.mode = str(mode)
+        self.feedback = feedback 
         self.alternations = 5
 
     @staticmethod
@@ -402,7 +403,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         """ (HEROS PHASE 1) RUN RULE-LEARNING TRAINING ITERATIONS"""
         while phase_one_stop:
             # Get current training instance
-            if i % 2 == 0 or self.model_iteration == 0:
+            if i % 2 == 0 or self.model_iteration == 0 or self.feedback == False:
                 instance = self.env.get_instance()
             else: 
                 instance = self.env.get_weighted_instance(self)
