@@ -498,7 +498,6 @@ class HEROS(BaseEstimator, TransformerMixin):
                     print("Random Seed Check - End: "+ str(random.random()))
 
             else: #Run Phase 2 normally
-                self.model_population.initialize_model_population(self,random,self.model_pop_init)
                 models_prev = []
                 models = []
                 iter = 0 
@@ -567,7 +566,7 @@ class HEROS(BaseEstimator, TransformerMixin):
                         if count >= self.model_iterations / self.alternations:
                             phase_two_stop = False
                     else:  #NAME DEFAULT MODE
-                        if self.model_iteration >= self.model_iterations or self.model_iteration >= self.model_iterations - 1:
+                        if self.model_iteration >= self.model_iterations:
                             phase_two_stop = False
 
                     
