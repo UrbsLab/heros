@@ -513,25 +513,40 @@ class MODEL_POP:
             self.pop_set = new_pop_set
 
 
-    def export_model_population(self):
-        """ Prepares and exports a dataframe capturing the rule population. """
-        pop_list = []
-        column_names = ['Rule IDs', 
-                        'Number of Rules',
-                        'Accuracy',
-                        'Coverage', 
-                        'Birth Iteration', 
-                        'Model on Front']
-        for model in self.pop_set: 
-            model_list = [str(model.rule_IDs), 
-                          len(model.rule_set), 
-                          model.accuracy,
-                        model.coverage, 
-                        model.birth_iteration, 
-                        model.model_on_front]
-            pop_list.append(model_list)
-        pop_df = pd.DataFrame(pop_list, columns = column_names)
-        return pop_df
+    def export_model_population(self, model_pop_iter=None):
+        """ Prepares and exports a dataframe capturing the rule population at a given iteration (defualt live population). """
+        switched = False
+        if model_pop_iter is not None:
+            self.change_model_pop(model_pop_iter)
+            switched = True
+        try:
+
+            self.sort_model_pop()
+            self.identify_models_on_front()
+
+            pop_list = []
+            column_names = ['Rule IDs',
+                            'Number of Rules',
+                            'Accuracy',
+                            'Coverage',
+                            'Birth Iteration',
+                            'Model on Front']
+            for model in self.pop_set:
+                model_list = [str(model.rule_IDs),
+                            len(model.rule_set),
+                            model.accuracy,
+                            model.coverage,
+                            model.birth_iteration,
+                            model.model_on_front]
+                pop_list.append(model_list)
+            pop_df = pd.DataFrame(pop_list, columns = column_names)
+            return pop_df
+
+        finally:
+            if switched:
+                self.restore_model_pop()
+
+
     
 
     def custom_sort_key(self, obj):

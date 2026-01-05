@@ -483,10 +483,11 @@ class RULE_POP:
             new_sum = new_sum + vote_list[i]
             if new_sum > choicePoint:  # Select classifier for deletion
                 # Delete classifier----------------------------------
-                rule.update_numerosity(-1)
                 self.micro_pop_count -= 1
-                if rule.numerosity < 1:  # When all micro-classifiers for a given classifier have been depleted.
+                if rule.numerosity == 1: # When all micro-classifiers for a given classifier have been depleted.
                     self.remove_macro_rule(i)
+                else:
+                    rule.update_numerosity(-1)
                 return
 
 
