@@ -4,12 +4,14 @@ import argparse
 import pickle
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
-sys.path.append('/project/kamoun_shared/code_shared/scikit-heros/')
+sys.path.append('/project/kamoun_shared/gabe/heros/src')
 #sys.path.append('/project/kamoun_shared/code_shared/new_heros/scikit-heros/')
-from src.skheros.heros import HEROS
-#from skheros.heros import HEROS #PIP INSTALL RUN
+#from src.skheros.heros import HEROS
+from skheros.heros import HEROS #PIP INSTALL RUN
 
 def main(argv):
     #ARGUMENTS:------------------------------------------------------------------------------------
@@ -24,6 +26,9 @@ def main(argv):
     parser.add_argument('--el', dest='excluded_column', help='label of another column to drop (if present)', type=str, default = 'Group') 
     #Experiment Parameters
     parser.add_argument('--m', dest='mode', help='alternation mode', type = str, default = 'default')
+    parser.add_argument('--fb', dest='feedback', action='store_true', help='use alternation weights')
+    parser.add_argument('--pt', dest='rule_pop_init', help='type of population initialization (load, dt, or None)', type=str, default=None)
+
     #Critical HEROS Parameters
     parser.add_argument('--ot', dest='outcome_type', help='outcome type', type=str, default='class')
     parser.add_argument('--it', dest='iterations', help='number of rule training cycles', type=int, default=100000)
@@ -43,7 +48,6 @@ def main(argv):
     parser.add_argument('--ft', dest='feat_track', help='feature tracking mechanism', type=str, default='None')
     parser.add_argument('--ng', dest='new_gen', help='proportion of max model population size', type=float, default=1.0)
     parser.add_argument('--mg', dest='merge_prob', help='probability of applying merge in model discovery', type=float, default=0.1)
-    parser.add_argument('--pt', dest='rule_pop_init', help='type of population initialization (load, dt, or None)', type=str, default=None)
     parser.add_argument('--c', dest='compaction', help='rule-compaction strategy', type=str, default='sub')
     parser.add_argument('--tp', dest='track_performance', help='performance tracking', type=int, default=1000)
     parser.add_argument('--sr', dest='stored_rule_iterations', help='comma-separated string indicating rule pop iterations to run full evaluation', type=str, default=None)
@@ -63,6 +67,7 @@ def main(argv):
     excluded_column = options.excluded_column
     #Experiment Parameters
     mode = options.mode
+    feedback = options.feedback
     #Critical HEROS Parameters
     outcome_type = options.outcome_type
     iterations = options.iterations
@@ -132,7 +137,6 @@ def main(argv):
         row_id = train_df[instanceID_label].values #instance id values
     except:
         row_id = None
-
     #Load expert knowledge scores
     score_path_name = ekfolder+'/'+str(data_name)+'_MultiSURF_Scores.csv' #No need to change
     loaded_data = pd.read_csv(score_path_name)
@@ -142,10 +146,8 @@ def main(argv):
     heros = HEROS(outcome_type=outcome_type,iterations=iterations, pop_size=pop_size, cross_prob=cross_prob, mut_prob=mut_prob, nu=nu, beta=beta, theta_sel=theta_sel,
                 fitness_function=fitness_function,subsumption=subsumption, rsl=rsl, feat_track=feat_track, model_iterations=model_iterations,
                 model_pop_size=model_pop_size, model_pop_init = model_pop_init, new_gen=new_gen, merge_prob=merge_prob, rule_pop_init=rule_pop_init, compaction=compaction,
-                track_performance=track_performance,stored_rule_iterations=stored_rule_iterations,stored_model_iterations=stored_model_iterations,random_state=random_state, verbose=verbose, mode=mode)
-
+                track_performance=track_performance,model_tracking = True, stored_rule_iterations=stored_rule_iterations,stored_model_iterations=stored_model_iterations,random_state=random_state, verbose=verbose, mode=mode, feedback=feedback)
     heros = heros.fit(train_X, train_y, row_id, cat_feat_indexes=cat_feat_indexes, ek=ek)
-
     # Save Rule Population
     pop_df = heros.get_pop()
     pop_df.to_csv(outputPath+'/rule_pop.csv', index=False)
@@ -159,7 +161,7 @@ def main(argv):
         resolution = 500
         plot_rules = True
         color_rules = True
-        heros.get_rule_pareto_landscape(resolution, heros.rule_population, plot_rules, color_rules,show=True,save=True,output_path=outputPath)
+        heros.get_rule_pareto_landscape(resolution, heros.rule_population, plot_rules, color_rules,show=False,save=True,output_path=outputPath)
 
     #Save Feature Tracking Scores
     if feat_track != None:
@@ -216,11 +218,11 @@ def main(argv):
     if stored_model_iterations is not None:
         for iter in stored_model_iterations:
             row_indexes.append('default_model_'+str(iter))
-    row_indexes.append('default_model_'+str(model_iterations))
+    #row_indexes.append('default_model_'+str(model_iterations))
     if stored_model_iterations is not None:
         for iter in stored_model_iterations:
             row_indexes.append('test_selected_model_'+str(iter))
-    row_indexes.append('test_selected_model_'+str(model_iterations))
+    #row_indexes.append('test_selected_model_'+str(model_iterations))
 
     #Gather Results ----------------------------------------------------------------------
     results_list = []
@@ -255,6 +257,49 @@ def main(argv):
             full_list = full_list + [rule_count,run_time]
             results_list.append(full_list)
 
+    # Post-Compact Rule Pop Evaluation
+    pred_y = heros.predict(train_X,whole_rule_pop=True,rule_pop_iter=None)
+    tn, fp, fn, tp, balanced_accuracy = evaluate_stats(train_y, pred_y)
+    cov_y = heros.predict_covered(train_X,whole_rule_pop=True,rule_pop_iter=None)
+    coverage = sum(cov_y)/len(cov_y)
+    train_list = [balanced_accuracy,tp,fp,tn,fn,coverage]
+    #Testing Evaluations-----
+    pred_y = heros.predict(test_X,whole_rule_pop=True,rule_pop_iter=None)
+    tn, fp, fn, tp, balanced_accuracy = evaluate_stats(test_y, pred_y)
+    cov_y = heros.predict_covered(test_X,whole_rule_pop=True,rule_pop_iter=None)
+    coverage = sum(cov_y)/len(cov_y)
+    test_list = [balanced_accuracy,tp,fp,tn,fn,coverage]
+    full_list = train_list + test_list
+    #Other Data
+    rule_count = len(heros.rule_population.pop_set)
+    run_time = heros.timer.time_phase1
+    #Combine into results list
+    full_list = full_list + [rule_count,run_time]
+    results_list.append(full_list)
+
+    #Archived Model Population Evaluations (Default Selection)--------------------------
+    if stored_model_iterations is not None:
+        for iter in stored_model_iterations:
+            #Training Evaluations-----
+            pred_y = heros.predict(train_X,whole_rule_pop=False, target_model=0,model_pop_iter=iter)
+            tn, fp, fn, tp, balanced_accuracy = evaluate_stats(train_y, pred_y)
+            cov_y = heros.predict_covered(train_X,whole_rule_pop=False, target_model=0,model_pop_iter=iter)
+            coverage = sum(cov_y)/len(cov_y)
+            train_list = [balanced_accuracy,tp,fp,tn,fn,coverage]
+            #Testing Evaluations-----
+            pred_y = heros.predict(test_X,whole_rule_pop=False, target_model=0,model_pop_iter=iter)
+            tn, fp, fn, tp, balanced_accuracy = evaluate_stats(test_y, pred_y)
+            cov_y = heros.predict_covered(test_X,whole_rule_pop=False, target_model=0,model_pop_iter=iter)
+            coverage = sum(cov_y)/len(cov_y)
+            test_list = [balanced_accuracy,tp,fp,tn,fn,coverage]
+            full_list = train_list + test_list
+            #Other Data
+            rule_count = len(heros.model_population.pop_set_archive[iter][0].rule_IDs)
+            run_time = heros.timer.model_time_archive[iter]
+            #Combine into results list
+            full_list = full_list + [rule_count,run_time]
+            results_list.append(full_list)
+
 
     
     #Archived Model Population Evaluations (Testing Data Selection)--------------------------
@@ -282,6 +327,7 @@ def main(argv):
             #Combine into results list
             full_list = full_list + [rule_count,run_time]
             results_list.append(full_list)
+
 
 
     ## PRETTY CONFIDENT I CAN JUST REMOVE, LOOP BACK TO THIS 
@@ -321,7 +367,7 @@ def main(argv):
             best_accuracy = model_accuracies[i]
             best_coverage = model_coverages[i]
             best_rule_count = model_on_front_rule_count[i]
-            best_model_index = model_on_front_indexes[i]"""
+            best_model_index = model_on_front_indexes[i]
             
     # Run evaluation for target model
     pred_y = heros.predict(train_X,whole_rule_pop=False, target_model=best_model_index,model_pop_iter=None)
@@ -341,10 +387,12 @@ def main(argv):
     run_time = heros.timer.time_phase1 + heros.timer.time_phase2 #total time from start to end of phase 2
     #Combine into results list
     full_list = full_list + [rule_count,run_time]
-    results_list.append(full_list)
+    results_list.append(full_list)"""
 
     #REPORT EVALUATION RESULTS
     results_df = pd.DataFrame(results_list, columns=headers)
+    print(results_df)
+    print(row_indexes)
     results_df['Row Indexes'] = row_indexes
     results_df.to_csv(outputPath+'/evaluation_summary.csv', index=False)
 
@@ -361,32 +409,17 @@ def main(argv):
     set_df.to_csv(outputPath+'/top_testing_model_rules.csv', index=False)
 
     #Save Plot Model Pop Pareto Front
-    resolution = 500
-    plot_models = True
-    #heros.get_model_pareto_landscape(resolution, heros.model_population, plot_models, show=True,save=True,output_path=outputPath) #original first submission
-    heros.get_model_pareto_fronts(show=True,save=True,output_path=outputPath)
+    model_tracking_df = heros.get_model_performance_tracking()
+    model_tracking_df.to_csv(outputPath+'/model_tracking.csv', index=False)
+    # Plot Model Learning Tracking
+    heros.get_model_tracking_plot(show=False,save=True,output_path=outputPath)
 
     #Save Plot Model Tracking
-    top_models = heros.export_model_growth()
-    top_models.to_csv(outputPath+'/model_tracking.csv', index=False)
-    
-
-    # Create the plot
-    fig, ax1 = plt.subplots()
-    # Plot the first line on the left y-axis
-    ax1.plot(top_models.index, top_models["Accuracy"], 'b-', label='Model Balanced Accuracy')  # 'b-' specifies a blue solid line
-    ax1.plot(top_models.index, top_models["Coverage"], 'g-', label='Model Coverage')  # 'b-' specifies a blue solid line
-
-    ax1.set_xlabel('Iteration')
-    ax1.set_ylabel('Balanced Accuracy (Blue) and Coverage (Green)')
-    ax1.tick_params(axis='y')
-    # Create a second y-axis sharing the same x-axis
-    ax2 = ax1.twinx()
-    ax2.plot(top_models.index, top_models["Number of Rules"], 'r--', label='Rules in Model')  # 'r--' specifies a red dashed line
-    ax2.set_ylabel('Rules in Model', color='r')
-    ax2.tick_params(axis='y', labelcolor='r')
-    plt.title(f'{"Top Model Accuracy and # of Rules"} vs Iteration')
-    plt.savefig(outputPath+'/model_tracking_line_graph.png', bbox_inches="tight")
+    # Save Phase 1 Rule Training Performance Estimates to .csv
+    rule_tracking_df = heros.get_performance_tracking()
+    rule_tracking_df.to_csv(outputPath+'/rule_pop_tracking.csv', index=False)
+    # Plot Rule Learning Tracking
+    heros.get_rule_tracking_plot(show=False,save=True,output_path=outputPath)
 
     # Save Runtime Summary
     time_df = heros.get_runtimes()
@@ -398,7 +431,7 @@ def main(argv):
 
 
 def get_best_testing_model_on_front(heros,test_X,test_y,iter):
-    model_pop_df = export_model_population(heros.model_population.pop_set_archive[iter])
+    model_pop_df = heros.model_population.export_model_population()
     #Identify model indexes of all models on front
     model_on_front_indexes = []
     model_on_front_rule_count = []

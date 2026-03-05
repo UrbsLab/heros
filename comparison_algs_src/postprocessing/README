@@ -1,0 +1,68 @@
+**************************************
+* 	University of Nottingham     *
+*	Maria Franco		     *
+*	mxf@cs.nott.ac.uk	     *
+*	Date: June 11th, 2012.	     *
+**************************************
+
+
+Post-processing Operators for Decision Lists
+
+1.- Installation
+
+To compile the code run the following comands:
+
+$ touch .depend
+$ make dep
+$ make
+
+2.- Configuration file
+
+Inside the compress file there is an example configuration file named "test-pp.conf". This file should be modified by the user depending on the operator or the combination of operators the user wants to use. The system allows up to 6 operators concatenated one after the other. 
+
+To specify an operator in the configuration file use the following line:
+
+operator {position} policy {oper-type}
+
+Position: allows numbers from 1 to 6
+Policy: allows the following values:
+
+	CL: Non-conservative cleaning
+	CL2: Conservative cleaning
+	PR: Pruning
+	SW: Rule swapping
+	NONE: Skip
+
+Also in the configuration file it is possible to specify which statistics should be dumped to the stardard output by changing the following lines
+
+trainset stats enabled {option}
+testset stats enabled {option}
+
+The options are:
+	START: Generates statistics before applying the operators
+	END: Generates statistics after applying the operators
+	ALL: Generates statistics before and after. 
+
+Commenting these lines stops the system from generating the respective statistics. 
+
+3.- To run the code over a final ruleset, execute the following comand:
+
+./postprocessing test-pp.conf <Ruleset> <Train set> [Test set]
+
+The test set is optional. Not including will stop the system from calculating statistics with it.
+
+4.- Example 
+
+The folder example/ inside the tar file contains and example training set, test set and ruleset to test our implementation over the Adult problem taken from the UCI repository.  Both the training set and the test set should be in WEKA format. The ruleset should have the attributes in the rules separated with "|" and expressed as follows:
+
+Continuous:
+	Att {att-name} is [{lower-bound},{upper-bound}]
+
+Discrete:
+	Att {att-name} is {valuea},{valueb},{valuec}
+
+5.- Contact
+
+For any questions or comments regarding this implementation please contact mxf@cs.nott.ac.uk.
+
+

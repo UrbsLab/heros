@@ -31,6 +31,9 @@ def main(argv):
     parser.add_argument('--cv', dest='cv_partitions', help='number of cv partitions', type=int, default = 10) 
     parser.add_argument('--r', dest='random_seeds', help='number of random seeds to run', type=int, default= 30)
     parser.add_argument('--m', dest='mode', help='alternation mode (Must be "limit", "converge", "equal", or "default")', type = str, default = 'default')
+    parser.add_argument('--fb', dest='feedback', action='store_true', help='use alternation weights')
+    parser.add_argument('--pt', dest='rule_pop_init', help='type of population initialization (load, dt, or None)', type=str, default='None')
+
 
     #Critical HEROS Parameters
     parser.add_argument('--ot', dest='outcome_type', help='outcome type', type=str, default='class')
@@ -51,7 +54,6 @@ def main(argv):
     parser.add_argument('--ft', dest='feat_track', help='feature tracking mechanism', type=str, default='None')
     parser.add_argument('--ng', dest='new_gen', help='proportion of max model population size', type=float, default=1.0)
     parser.add_argument('--mg', dest='merge_prob', help='probability of applying merge in model discovery', type=float, default=0.1)
-    parser.add_argument('--pt', dest='rule_pop_init', help='type of population initialization (load, dt, or None)', type=str, default='None')
     parser.add_argument('--c', dest='compaction', help='rule-compaction strategy', type=str, default='sub')
     parser.add_argument('--tp', dest='track_performance', help='performance tracking', type=int, default=1000)
     parser.add_argument('--sr', dest='stored_rule_iterations', help='comma-separated string indicating rule pop iterations to run full evaluation', type=str, default='None')
@@ -63,15 +65,17 @@ def main(argv):
     parser.add_argument('--rc', dest='run_cluster', help='cluster type', type=str, default='LSF')
     parser.add_argument('--rm', dest='reserved_memory', help='reserved memory for job', type=int, default= 4)
     parser.add_argument('--q', dest='queue', help='cluster queue name', type=str, default= 'i2c2_normal')
-    #parser.add_argument('--check', dest='check', help='boolean flag to check and report on what jobs have not yet completed', type=bool, default= False)
+    #parser.add_argument('--check', dest='check', help='boolean flag to check and report on what jobs have not yet completed', type=bool, action= False)
     parser.add_argument('--check', dest='check', help='boolean flag to check and report on what jobs have not yet completed', action='store_true')
     #parser.add_argument('--resub', dest='resubmit', help='boolean flag to resubmit incomplete jobs', type=bool, default= False)
     parser.add_argument('--resub', dest='resubmit', help='boolean flag to resubmit incomplete jobs', action='store_true')
     #----------------------------------------------------------------------------------------------
     options=parser.parse_args(argv[1:])
+    print(options)
     #Script Parameters
     datafolder = options.datafolder #full path to target dataset
     writepath = options.writepath
+    print(writepath)
     outputfolder = options.outputfolder
     ekfolder = options.ekfolder
     #Dataset Parameters
@@ -82,6 +86,7 @@ def main(argv):
     cv_partitions = options.cv_partitions
     random_seeds = options.random_seeds
     mode = options.mode
+    feedback = options.feedback
 
     #Critical HEROS Parameters
     outcome_type = options.outcome_type
@@ -131,7 +136,6 @@ def main(argv):
     check = options.check
     resubmit = options.resubmit
     algorithm = 'HEROS'
-
     #Folder Management------------------------------
     #Main Write Path-----------------
     if not os.path.exists(writepath):
@@ -155,7 +159,7 @@ def main(argv):
     # Experiment loop to submit jobs (datasets, random seeds, cv partitions)
     jobCount = 0
     missing_count = 0
-    for entry in os.listdir(datafolder): #for each subfolder within target dataset folder
+    for entry in os.listdir(datafolder): #for each subfolder within target dataset folder        
         if os.path.isdir(os.path.join(datafolder,entry)):
             datapath = os.path.join(datafolder,entry)
             #Specify output folder path
@@ -185,24 +189,25 @@ def main(argv):
 
                 if not check: #Regular Job submission run
                     if run_cluster == 'LSF':
-                        submit_lsf_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose)
+                        submit_lsf_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,mode,feedback)
                         jobCount +=1
                     elif run_cluster == 'SLURM':
-                        submit_slurm_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose)
+                        submit_slurm_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,mode,feedback)
                         jobCount +=1
                     else:
                         print('ERROR: Cluster type not found')
                 else: #check what runs have completed (based on last file generated by jobs)
                     target_file_path = outputPath+'/runtimes.csv'
+                    print(target_file_path)
                     if not os.path.exists(target_file_path):
                         print('Missing: '+str(outputPath))
                         missing_count += 1
                         if resubmit:
                             if run_cluster == 'LSF':
-                                submit_lsf_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose)
+                                submit_lsf_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,mode,feedback)
                                 jobCount +=1
                             elif run_cluster == 'SLURM':
-                                submit_slurm_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose)
+                                submit_slurm_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,mode,feedback)
                                 jobCount +=1
                             else:
                                 print('ERROR: Cluster type not found')
@@ -211,7 +216,7 @@ def main(argv):
         print(str(missing_count)+' jobs incomplete')
 
 #UPenn Cluster
-def submit_lsf_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose): 
+def submit_lsf_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,mode,feedback): 
     job_ref = str(time.time())
     job_name = 'HEROS_'+full_data_name+'_seed_'+str(target_random_seed)+'_'+job_ref
     job_path = scratchPath+'/'+job_name+ '_run.sh'
@@ -223,7 +228,8 @@ def submit_lsf_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_n
     sh_file.write('#BSUB -M ' + str(reserved_memory) + 'GB' + '\n')
     sh_file.write('#BSUB -o ' + logPath+'/'+job_name + '.o\n')
     sh_file.write('#BSUB -e ' + logPath+'/'+job_name + '.e\n')
-    sh_file.write('python job_heros_hpc.py'+' --d '+str(full_data_path)+' --o '+str(outputPath)+' --ekf '+str(ekfolder)+' --ol '+str(outcome_label) +' --il '+str(instanceID_label) +' --el '+str(excluded_column)+' --in '+str(model_pop_init)+' --ot '+str(outcome_type)+' --it '+str(iterations)+' --ps '+str(pop_size)+' --nu '+str(nu)+' --mi '+str(model_iterations)+' --ms '+str(model_pop_size)+' --cp '+str(cross_prob)+' --mp '+str(mut_prob)+' --b '+str(beta)+' --ts '+str(theta_sel)+' --ff '+str(fitness_function)+' --s '+str(subsumption)+' --rsl '+str(rsl)+' --ft '+str(feat_track)+' --ng '+str(new_gen)+' --mg '+str(merge_prob)+' --pt '+str(rule_pop_init)+' --c '+str(compaction)+' --tp '+str(track_performance)+' --sr '+str(stored_rule_iterations)+' --sm '+str(stored_model_iterations)+' --rs '+str(target_random_seed)+' --v '+str(verbose)+'\n')
+    fb_arg = ' --fb' if feedback else ''
+    sh_file.write('python I2C2-Documentation/job_heros_alt.py'+' --d '+str(full_data_path)+' --o '+str(outputPath)+' --ekf '+str(ekfolder)+' --ol '+str(outcome_label) +' --il '+str(instanceID_label) +' --el '+str(excluded_column)+ ' --m ' + str(mode) + fb_arg + ' --in '+str(model_pop_init)+' --ot '+str(outcome_type)+' --it '+str(iterations)+' --ps '+str(pop_size)+' --nu '+str(nu)+' --mi '+str(model_iterations)+' --ms '+str(model_pop_size)+' --cp '+str(cross_prob)+' --mp '+str(mut_prob)+' --b '+str(beta)+' --ts '+str(theta_sel)+' --ff '+str(fitness_function)+' --s '+str(subsumption)+' --rsl '+str(rsl)+' --ft '+str(feat_track)+' --ng '+str(new_gen)+' --mg '+str(merge_prob)+' --pt '+str(rule_pop_init)+' --c '+str(compaction)+' --tp '+str(track_performance)+' --sr '+str(stored_rule_iterations)+' --sm '+str(stored_model_iterations)+' --rs '+str(target_random_seed)+' --v '+ str(verbose) +'\n')
     sh_file.close()
     os.system('bsub < ' + job_path)
 
@@ -240,7 +246,7 @@ def submit_slurm_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data
     # sh_file.write('#BSUB -M '+str(maximum_memory)+'GB'+'\n')
     sh_file.write('#SBATCH -o ' + logPath+'/'+job_name + '.o\n')
     sh_file.write('#SBATCH -e ' + logPath+'/'+job_name + '.e\n')
-    sh_file.write('srun python job_heros_hpc.py'+' --d '+str(full_data_path)+' --o '+str(outputPath)+' --ekf '+str(ekfolder)+' --ol '+str(outcome_label) +' --il '+str(instanceID_label) +' --el '+str(excluded_column)+' --in '+str(model_pop_init)+' --ot '+str(outcome_type)+' --it '+str(iterations)+' --ps '+str(pop_size)+' --nu '+str(nu)+' --mi '+str(model_iterations)+' --ms '+str(model_pop_size)+' --cp '+str(cross_prob)+' --mp '+str(mut_prob)+' --b '+str(beta)+' --ts '+str(theta_sel)+' --ff '+str(fitness_function)+' --s '+str(subsumption)+' --rsl '+str(rsl)+' --ft '+str(feat_track)+' --ng '+str(new_gen)+' --mg '+str(merge_prob)+' --pt '+str(rule_pop_init)+' --c '+str(compaction)+' --tp '+str(track_performance)+' --sr '+str(stored_rule_iterations)+' --sm '+str(stored_model_iterations)+' --rs '+str(target_random_seed)+' --v '+str(verbose)+'\n')
+    sh_file.write('srun python job_heros_alt.py'+' --d '+str(full_data_path)+' --o '+str(outputPath)+' --ekf '+str(ekfolder)+' --ol '+str(outcome_label) +' --il '+str(instanceID_label) +' --el '+str(excluded_column)+' --in '+str(model_pop_init)+' --ot '+str(outcome_type)+' --it '+str(iterations)+' --ps '+str(pop_size)+' --nu '+str(nu)+' --mi '+str(model_iterations)+' --ms '+str(model_pop_size)+' --cp '+str(cross_prob)+' --mp '+str(mut_prob)+' --b '+str(beta)+' --ts '+str(theta_sel)+' --ff '+str(fitness_function)+' --s '+str(subsumption)+' --rsl '+str(rsl)+' --ft '+str(feat_track)+' --ng '+str(new_gen)+' --mg '+str(merge_prob)+' --pt '+str(rule_pop_init)+' --c '+str(compaction)+' --tp '+str(track_performance)+' --sr '+str(stored_rule_iterations)+' --sm '+str(stored_model_iterations)+' --rs '+str(target_random_seed)+' --v '+str(verbose)+'\n')
     sh_file.close()
     os.system('sbatch ' + job_path)
 

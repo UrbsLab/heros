@@ -1,0 +1,228 @@
+############################################################
+# SHARED: CREATE CV FOLDS (already same as HEROS)
+############################################################
+
+# GAMETES
+python run_CV_Partitioner.py \
+  --d /project/kamoun_shared/data_shared/heros_sim_data/gametes_data \
+  --w /project/kamoun_shared/data_shared/heros_sim_data \
+  --o gametes_data_cv \
+  --cv 10 \
+  --l Class
+
+# MULTIPLEXER
+python run_CV_Partitioner.py \
+  --d /project/kamoun_shared/data_shared/heros_sim_data/multiplexer_data \
+  --w /project/kamoun_shared/data_shared/heros_sim_data \
+  --o multiplexer_data_cv \
+  --cv 10 \
+  --l Class
+
+
+
+############################################################
+# BIOHEL PIPELINE
+############################################################
+
+# ------------------------------------------------------------
+# BioHEL single-fold debug run (no HPC) – Multiplexer example
+# ------------------------------------------------------------
+python job_biohel_hpc.py \
+  --d /project/kamoun_shared/data_shared/heros_sim_data/multiplexer_data_cv/A_multiplexer_6_bit_500_inst/A_multiplexer_6_bit_500_inst_CV_Train_1.txt \
+  --o /project/kamoun_shared/output_shared/biohel_debug/A_multiplexer_6_bit_500_inst/seed_0/cv_1 \
+  --ol Class \
+  --il InstanceID \
+  --el Group \
+  --rs 0 \
+  --enable_rpe \
+  --v 
+
+
+
+# ------------------------------------------------------------
+# BioHEL Training on HPC (LSF) – Multiplexer (seed × CV)
+# ------------------------------------------------------------
+python run_biohel_hpc.py \
+  --d /project/kamoun_shared/data_shared/heros_sim_data/multiplexer_data_cv \
+  --w /project/kamoun_shared/output_shared/biohel_gecco \
+  --o multiplexer_cv \
+  --ol Class \
+  --il InstanceID \
+  --el Group \
+  --rc LSF \
+  --rm 4 \
+  --q i2c2_normal \
+  --cv 10 \
+  --r 20 \
+  --enable_rpe
+
+
+# ------------------------------------------------------------
+# BioHEL Training on HPC (LSF) – GAMETES (seed × CV)
+# ------------------------------------------------------------
+python run_biohel_hpc.py \
+  --d /project/kamoun_shared/data_shared/heros_sim_data/gametes_data_cv \
+  --w /project/kamoun_shared/output_shared/biohel_gecco \
+  --o gametes_cv \
+  --ol Class \
+  --il InstanceID \
+  --el Model \
+  --rc LSF \
+  --rm 4 \
+  --q i2c2_normal \
+  --cv 10 \
+  --r 20 \
+  --enable_rpe
+
+
+
+# ------------------------------------------------------------
+# BioHEL SUMMARY (one summary job) – Multiplexer
+# ------------------------------------------------------------
+python run_biohel_sum_hpc.py \
+  --w /project/kamoun_shared/output_shared/biohel_gecco \
+  --o multiplexer_cv \
+  --rc LSF \
+  --rm 4 \
+  --q i2c2_normal \
+  --cv 10 \
+  --r 20
+
+
+# ------------------------------------------------------------
+# BioHEL SUMMARY (one summary job) – GAMETES
+# ------------------------------------------------------------
+python run_biohel_sum_hpc.py \
+  --w /project/kamoun_shared/output_shared/biohel_gecco \
+  --o gametes_cv \
+  --rc LSF \
+  --rm 4 \
+  --q i2c2_normal \
+  --cv 10 \
+  --r 20
+
+
+
+############################################################
+# RIPPER PIPELINE (wittgenstein)
+############################################################
+
+# ------------------------------------------------------------
+# RIPPER single-fold debug run (no HPC) – Multiplexer example
+# ------------------------------------------------------------
+python job_ripper_hpc.py \
+  --d /project/kamoun_shared/data_shared/heros_sim_data/multiplexer_data_cv/A_multiplexer_6_bit_500_inst/A_multiplexer_6_bit_500_inst_CV_Train_1.txt \
+  --o /project/kamoun_shared/output_shared/ripper_debug/A_multiplexer_6_bit_500_inst/seed_0/cv_1 \
+  --ol Class \
+  --il InstanceID \
+  --el Group \
+  --rs 0 \
+  --verbosity 0 \
+  --v
+
+
+
+# ------------------------------------------------------------
+# RIPPER Training on HPC (LSF) – Multiplexer (seed × CV)
+# ------------------------------------------------------------
+python run_ripper_hpc.py \
+  --d /project/kamoun_shared/data_shared/heros_sim_data/multiplexer_data_cv \
+  --w /project/kamoun_shared/output_shared/ripper_gecco \
+  --o multiplexer_cv \
+  --ol Class \
+  --il InstanceID \
+  --el Group \
+  --rc LSF \
+  --rm 4 \
+  --q i2c2_normal \
+  --cv 10 \
+  --r 20 \
+  --verbosity 0
+
+
+# ------------------------------------------------------------
+# RIPPER Training on HPC (LSF) – GAMETES (seed × CV)
+# ------------------------------------------------------------
+
+python run_ripper_hpc.py \
+  --d /project/kamoun_shared/data_shared/heros_sim_data/gametes_data_cv \
+  --w /project/kamoun_shared/output_shared/ripper_gecco \
+  --o gametes_cv \
+  --ol Class \
+  --il InstanceID \
+  --el Model \
+  --rc LSF \
+  --rm 4 \
+  --q i2c2_normal \
+  --cv 10 \
+  --r 20 \
+  --verbosity 0
+
+
+# ------------------------------------------------------------
+# RIPPER SUMMARY (one summary job) – Multiplexer
+# ------------------------------------------------------------
+python run_ripper_sum_hpc.py \
+  --w /project/kamoun_shared/output_shared/ripper_gecco \
+  --o multiplexer_cv \
+  --rc LSF \
+  --rm 4 \
+  --q i2c2_normal \
+  --cv 10 \
+  --r 20 \
+  --plots
+
+
+# ------------------------------------------------------------
+# RIPPER SUMMARY (one summary job) – GAMETES
+# ------------------------------------------------------------
+python run_ripper_sum_hpc.py \
+  --w /project/kamoun_shared/output_shared/ripper_gecco \
+  --o gametes_cv \
+  --rc LSF \
+  --rm 4 \
+  --q i2c2_normal \
+  --cv 10 \
+  --r 20 \
+  --plots
+
+
+############################################################
+# Final Paper Tables
+############################################################
+
+#  For Primary Empherical Performance Tables
+python job_sum_table_hpc.py \
+  --biohel_root /project/kamoun_shared/output_shared/biohel_gecco \
+  --ripper_root /project/kamoun_shared/output_shared/ripper_gecco \
+  --out /project/kamoun_shared/output_shared/paper_tables
+
+#  For Statistic Significance Test Tables
+## Runs from HEROS has to be complete
+
+python stats_scripts/combine_heros_for_stats.py \
+  --root /project/kamoun_shared/gabe/I2C2-Documentation/output \
+  --outdir /project/kamoun_shared/output_shared/paper_tables \
+  --outname combined_heros_cv_default_runs_long.csv
+
+python stats_scripts/job_statistical_test.py \
+  --heros_csv /project/kamoun_shared/output_shared/paper_tables/combined_heros_cv_default_runs_long.csv \
+  --other_csv /project/kamoun_shared/output_shared/paper_tables/combined_runs_long.csv \
+  --outdir /project/kamoun_shared/output_shared/paper_tables \
+  --prefix heros_baseline_wilcoxon \
+  --alpha 0.05
+
+
+############################################################
+# OPTIONAL: CLEANUP (remove scratch scripts + logs)
+############################################################
+
+# BioHEL cleanup
+python cleanup_hpc_artifacts.py \
+  --w /project/kamoun_shared/output_shared/biohel_gecco \
+  --yes
+
+# RIPPER cleanup
+python cleanup_hpc_artifacts.py \
+  --w /project/kamoun_shared/output_shared/ripper_gecco \
+  --yes
