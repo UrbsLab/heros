@@ -383,11 +383,7 @@ class HEROS(BaseEstimator, TransformerMixin):
 
         
 
-        #self.env.clear_data_from_memory()
-
-        #IMPLEMENT THAT IT JUMPS BACK ONCE ITERATIONS ARE RAN
-            
-        
+        #self.env.clear_data_from_memory()        
         return self
     
 
@@ -425,20 +421,20 @@ class HEROS(BaseEstimator, TransformerMixin):
             ## SWITCH EVALUATION AND STOP CRITERIA AND ADD COMPACTION IN BETWEEN
 
             ### STOP CRITERIA CHECK
-            if self.mode == "limit":
+            if self.mode == "limit": #EXPERIMENTAL 
                 if i >= self.phase_one_limit or self.iteration >= self.iterations:
                     phase_one_stop = False
-            elif self.mode == "converge":
+            elif self.mode == "converge": #EXPERIMENTAL: PHASE I CONVERGENCE 
                 # IMPLEMENT
 
                 # IDEAS: 
                 # CHECK AT EACH ITERATION IF OFFSPRING RULE IMPROVES MATCH SET PARETO FRONT
                 if improvement >= 250 or self.iteration >= self.iterations: 
                     phase_one_stop = False
-            elif self.mode == "equal": 
+            elif self.mode == "equal": #EQUAL DISTRIBUTION OF RESOURCES ACROSS AMOUNT OF ALTERNATION 
                 if i >= self.iterations / self.alternations:
                     phase_one_stop = False
-            else: 
+            else: #DEFAULT SEQUENTIAL HEROS 
                 if i >= self.iterations:
                     phase_one_stop = False
 
@@ -555,17 +551,17 @@ class HEROS(BaseEstimator, TransformerMixin):
 
 
                     # STOP CRITERIA CHECK 
-                    if self.mode == "limit":
+                    if self.mode == "limit": #EXPERIMENTAL 
                         if not (iter < self.phase_two_convergence and count < self.phase_two_limit and self.model_iteration < self.model_iterations - 1):
                             phase_two_stop = False
-                    elif self.mode == "converge":
+                    elif self.mode == "converge": #EXPERIMENTAL: PHASE I CONVERGENCE 
                         ## IMPLEMENT BASED ON PHASE I CONVERGENCE
                         if count >= int(self.model_iterations * self.phase_one_ratio) or self.model_iteration >= self.model_iterations - 1:
                             phase_two_stop = False
-                    elif self.mode == "equal":
+                    elif self.mode == "equal": #EQUAL DISTRIBUTION OF RESOURCES ACROSS AMOUNT OF ALTERNATION 
                         if count >= self.model_iterations / self.alternations:
                             phase_two_stop = False
-                    else:  #NAME DEFAULT MODE
+                    else:  #DEFAULT SEQUENTIAL HEROS
                         if self.model_iteration >= self.model_iterations:
                             phase_two_stop = False
 

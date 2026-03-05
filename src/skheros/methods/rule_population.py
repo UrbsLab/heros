@@ -623,6 +623,25 @@ class RULE_POP:
             {"n_estimators": 15, "max_depth": None, "random_state": heros.random_state},
         ]
 
+        RF_INIT_SHARED = {
+            "n_estimators": 10,
+            "bootstrap": False,
+            "oob_score": False,
+            "n_jobs": -1,
+            "random_state": heros.random_state,
+            "max_features": "sqrt",
+        }
+
+        max_depth_values = [1, 2, 3, 4, 5, 6, 7, None]
+
+        rf_settings = [
+            {
+                **RF_INIT_SHARED,
+                "max_depth": depth
+            }
+            for depth in max_depth_values
+        ]
+
         # STEP 2.5: One Hot Encode the categorical features for decision tree training
         # Decision trees need quantitative features, so we one-hot encode categorical features temporarily
         original_X = X.copy() if hasattr(X, 'copy') else X
@@ -728,13 +747,14 @@ class RULE_POP:
         tree_depths_by_rf = []
         for idx, params in enumerate(rf_settings):
             rf = RandomForestClassifier(
-                n_estimators=params["n_estimators"],
-                max_depth=params["max_depth"],
-                random_state=params["random_state"]
+                **params
             )
             rf.fit(X, y)
             rf_models.append(rf)
-            print(f"  Trained RF {idx+1}: n_estimators={params['n_estimators']}, max_depth={params['max_depth']}, random_state={params['random_state']}")
+            print(
+                f"  Trained RF {idx+1}: "
+                + ", ".join(f"{k}={params.get(k)}" for k in ["n_estimators","max_depth","random_state"])
+            )
             tree_depths = [estimator.tree_.max_depth for estimator in rf.estimators_]
             tree_depths_by_rf.append(tree_depths)
             print(f"    Tree depths: {tree_depths}")
