@@ -126,13 +126,13 @@ default class major
 fitness function mdl
 initialization min classifiers 20
 initialization max classifiers 20
-iterations 2000
+iterations 1000
 mdl initial tl ratio 0.25
-mdl iteration 50
+mdl iteration 10
 mdl weight relax factor 0.90
-pop size 2000
-prob crossover 0.8
-prob individual mutation 0.1
+pop size 1000
+prob crossover 0.6
+prob individual mutation 0.6
 prob one 0.75
 selection algorithm tournamentwor
 tournament size 5
@@ -501,8 +501,8 @@ def main(argv):
         "wall_time": float(wall_time),
 
         # trace: what BioHEL printed (if present)
-        "train_accuracy_reported": train_acc_reported,
-        "test_accuracy_reported": test_acc_reported,
+        # "train_accuracy_reported": train_acc_reported,
+        # "test_accuracy_reported": test_acc_reported,
     }
 
     pd.DataFrame([raw_row]).to_csv(outdir / "result_row_raw.csv", index=False)
