@@ -105,7 +105,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         if not self.check_is_float(merge_prob) or merge_prob < 0 or merge_prob > 1:
             raise Exception("'merge_prob' param must be float from 0 - 1")
 
-        if not rule_pop_init == 'load' and not rule_pop_init == 'dt' and not rule_pop_init == 'dt - verbose' and not rule_pop_init is None and not rule_pop_init == 'None':
+        if not rule_pop_init == 'load' and not rule_pop_init == 'dt' and not rule_pop_init == 'dt - verbose' and not rule_pop_init == 'dt - bstrap' and not rule_pop_init is None and not rule_pop_init == 'None':
             raise Exception("'rule_pop_init' param must be 'load', 'dt', or None")
 
         if not compaction == 'sub' and not compaction is None and not compaction == 'None':
@@ -343,6 +343,8 @@ class HEROS(BaseEstimator, TransformerMixin):
             self.rule_population.tree_init_population(X,y,self,random,np,True)
         elif self.rule_pop_init == 'dt':
             self.rule_population.tree_init_population(X,y,self,random,np)
+        elif self.rule_pop_init == 'dt - bstrap':
+            self.rule_population.tree_init_population(X,y,self,random,np, bstrap= True)
         else: # No rule population initialization other than standard LCS-algorithm-style 'covering' mechanism.
             pass
 
