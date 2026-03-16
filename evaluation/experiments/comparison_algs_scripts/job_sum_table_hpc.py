@@ -37,6 +37,7 @@ Run:
 import os
 import re
 import json
+import math
 import argparse
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -262,7 +263,8 @@ def fmt_mean_std(series: pd.Series, digits: Optional[int]) -> str:
         if float(mean).is_integer() and float(std).is_integer():
             return f"{int(mean)} ({int(std)})"
         return f"{mean} ({std})"
-    return f"{round(mean, digits)} ({round(std, digits)})"
+    return f"{float(mean):.{digits}f}({float(std):.{digits}f})"
+    # return f"{round(mean, digits)} ({round(std, digits)})"
 
 
 def build_summary(df_long: pd.DataFrame) -> pd.DataFrame:
@@ -276,8 +278,8 @@ def build_summary(df_long: pd.DataFrame) -> pd.DataFrame:
             "Scenario": scenario,
             "Test Acc.": fmt_mean_std(g["test_accuracy"], 3),
             "Test Cover": fmt_mean_std(g["test_coverage"], 3),
-            "Rule Count": fmt_mean_std(g["rule_count"], 3),
-            "Run Time": fmt_mean_std(g["run_time_minutes"], 3),
+            "Rule Count": fmt_mean_std(g["rule_count"], 1),
+            "Run Time": fmt_mean_std(g["run_time_minutes"], 1),
             "Ideal Solution": ideal_solution_k_over_n(g, dataset, scenario),
         })
 
