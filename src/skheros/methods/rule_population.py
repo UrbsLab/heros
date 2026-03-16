@@ -567,7 +567,7 @@ class RULE_POP:
             print('Loading Rule Population Complete: '+str(len(self.pop_set))+' unique rules and '+str(self.micro_pop_count)+' total rules loaded.')
 
 
-    def tree_init_population(self, X, y, heros, random, np, verbose = False):
+    def tree_init_population(self, X, y, heros, random, np, verbose = False, bstrap = False):
         """ Akshita Method: Extract rules from multiple random forests, deduplicate, convert to HEROS rules, and analyze. 
         Note that curently this method is not reproducible when setting random seed.  This needs to be fixed!
         """
@@ -612,20 +612,20 @@ class RULE_POP:
 
         # STEP 2: Train multiple Random Forests with diverse hyperparameters for rule extraction
         print("\nTraining multiple Random Forests with diverse hyperparameters for rule extraction...")
-        rf_settings = [
-            {"n_estimators": 10, "max_depth": 3, "random_state": heros.random_state},
-            {"n_estimators": 10, "max_depth": 5, "random_state": heros.random_state},
-            {"n_estimators": 10, "max_depth": 7, "random_state": heros.random_state},
-            {"n_estimators": 10, "max_depth": None, "random_state": heros.random_state},
-            {"n_estimators": 20, "max_depth": 4, "random_state": heros.random_state},
-            {"n_estimators": 20, "max_depth": 8, "random_state": heros.random_state},
-            {"n_estimators": 15, "max_depth": 6, "random_state": heros.random_state},
-            {"n_estimators": 15, "max_depth": None, "random_state": heros.random_state},
-        ]
+        # rf_settings = [
+        #     {"n_estimators": 10, "max_depth": 3, "random_state": heros.random_state},
+        #     {"n_estimators": 10, "max_depth": 5, "random_state": heros.random_state},
+        #     {"n_estimators": 10, "max_depth": 7, "random_state": heros.random_state},
+        #     {"n_estimators": 10, "max_depth": None, "random_state": heros.random_state},
+        #     {"n_estimators": 20, "max_depth": 4, "random_state": heros.random_state},
+        #     {"n_estimators": 20, "max_depth": 8, "random_state": heros.random_state},
+        #     {"n_estimators": 15, "max_depth": 6, "random_state": heros.random_state},
+        #     {"n_estimators": 15, "max_depth": None, "random_state": heros.random_state},
+        # ]
 
         RF_INIT_SHARED = {
             "n_estimators": 10,
-            "bootstrap": False,
+            "bootstrap": bstrap,
             "oob_score": False,
             "n_jobs": -1,
             "random_state": heros.random_state,
