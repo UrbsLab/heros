@@ -31,6 +31,7 @@ class SamplingConfig(SerializableDataclass):
     sample_size: int = 50
     seed: int = 42
     use_full_test_set: bool = True
+    instance_ids: List[str] = field(default_factory=list)
 
 
 @dataclass

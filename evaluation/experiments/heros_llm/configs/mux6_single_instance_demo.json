@@ -1,0 +1,55 @@
+{
+  "run_name": "mux6_single_instance_demo",
+  "dataset_name": "MUX6",
+  "split": "test",
+  "sampling": {
+    "strategy": "explicit_instance_id",
+    "sample_size": 1,
+    "seed": 42,
+    "use_full_test_set": false,
+    "instance_ids": ["165"]
+  },
+  "heros": {
+    "iterations": 10000,
+    "pop_size": 500,
+    "model_iterations": 40,
+    "model_pop_size": 100,
+    "random_state": 42,
+    "verbose": false
+  },
+  "prompt": {
+    "prompt_version": "v1",
+    "prediction_prompt_mode": "explicit",
+    "metadata_mode": "expert_only",
+    "key_rules_top_k": 3,
+    "conditions": ["condition_b", "condition_c"],
+    "audiences": ["layman", "clinician", "expert"]
+  },
+  "llm": {
+    "enabled": true,
+    "provider": "openai",
+    "model": "gpt-4.1-mini",
+    "api_key_env": "OPENAI_API_KEY",
+    "temperature": 0.0,
+    "max_tokens": 400,
+    "request_timeout_seconds": 60
+  },
+  "judge": {
+    "enabled": true,
+    "provider": "openai",
+    "model": "gpt-4.1-mini",
+    "api_key_env": "OPENAI_API_KEY",
+    "temperature": 0.0,
+    "max_tokens": 300,
+    "prompt_version": "v1"
+  },
+  "output": {
+    "base_dir": "output/heros_llm",
+    "write_packets": true,
+    "write_prompts": true,
+    "write_generations": true,
+    "write_records": true,
+    "write_csv": true,
+    "cache_dir_name": "cache"
+  }
+}

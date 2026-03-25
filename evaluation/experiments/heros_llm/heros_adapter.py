@@ -79,6 +79,7 @@ def train_heros_model(
     config: ExperimentConfig, dataset_definition: DatasetDefinition
 ) -> TrainedHerosContext:
     """Train HEROS on the dataset train split and select the target model."""
+    sys.path.append(Path(__file__).resolve().parents[2] / "src")
     from skheros.heros import HEROS
 
     train_split = _load_split(dataset_definition, "train")

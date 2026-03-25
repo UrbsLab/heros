@@ -63,8 +63,27 @@ def _packet_manifest_row(packet: InstanceExplanationPacket) -> Dict[str, Any]:
 
 
 def _select_packets(
-    packets: List[InstanceExplanationPacket], sample_size: int, seed: int, use_full_test_set: bool
+    packets: List[InstanceExplanationPacket],
+    sample_size: int,
+    seed: int,
+    use_full_test_set: bool,
+    instance_ids: Optional[List[Any]] = None,
 ) -> List[InstanceExplanationPacket]:
+    if instance_ids:
+        requested_ids = {str(instance_id) for instance_id in instance_ids}
+        filtered_packets = [
+            packet for packet in packets if str(packet.instance_id) in requested_ids
+        ]
+        found_ids = {str(packet.instance_id) for packet in filtered_packets}
+        missing_ids = sorted(requested_ids - found_ids)
+        if missing_ids:
+            raise ValueError(
+                "Requested instance_ids were not found in the selected split: {0}".format(
+                    ", ".join(missing_ids)
+                )
+            )
+        packets = filtered_packets
+
     if use_full_test_set or sample_size >= len(packets):
         return list(packets)
 
@@ -158,6 +177,7 @@ def run_experiment(config: ExperimentConfig) -> str:
         sample_size=config.sampling.sample_size,
         seed=config.sampling.seed,
         use_full_test_set=config.sampling.use_full_test_set,
+        instance_ids=config.sampling.instance_ids,
     )
 
     run_id = "{0}_{1}".format(config.run_name, _timestamp_utc())

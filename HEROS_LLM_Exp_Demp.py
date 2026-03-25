@@ -1,931 +1,313 @@
 # %% [markdown]
-# # HEROS: Demonstration Notebook
-# This notebook is set up as a demonstration for running the HEROS algorithm on different example datasets (with a binary outcome). This major sections of this notebook includes the following:
-# * Notebook Run Parameters
-# * Package Imports and Folder Management
-# * Example Data Setup
-# * Load and Prepare Training Dataset (including expert knowledge score generation - optionally used by HEROS)
-# * Run HEROS (Training)
-# * Testing Data Evaluation (focused on the top model from the model Pareto-front automatically chosen by the recommended strategy)
-# * Visualize Top Model (i.e. Rule-Set) For Interetation
-# * Calculating Top Model Feature Importance Estimates
-# * Example Prediction Reasoning Explanation (With Top Model)
-# * Visualize Rule and Model Population Pareto Fronts
-# * Saving Rule and Model Populations as Output
-# * Save and Visualize Learning Performance across Phase I and Phase 2 Training Iterations
-# * Saving Other Outputs
-# * Visual Interpretation and Predictions With the Whole Phase I Rule Population
-# * Testing Evaluation with Top Default Model or Custom Selected Model
-# * Evaluation of Stored Rule Populations (At User-Specified Iteration Checkpoints)
-# * Evaluation of Stored Top Model (At User-Specified Iteration Checkpoints)
+# # HEROS + LLM Single-Instance Demo
+# This notebook reruns the `MUX6` experiment pipeline on a single held-out test
+# instance, then shows all six explanation cases for that one packet:
 # 
-# ## Example Dataset Options
-# ### **MUX6: (6-bit Multiplexer Dataset)**
-# Prior to 90/10 partitioning (into train/test sets), included 500 instances (not all unique) and 6 total features (all predictive) with no noise (i.e. an trained model is capable of predicting with 100% accuracy). Features A_0 and A_1 are 'address-bits' that are predictive for every instance. Features R_0, R_1, R_2, and R_3 are 'register-bits' that are predictive for about 1/4 of all instances, each. All features and outcome (i.e. 'class') are binary-valued, and there are no missing values. MUX datasets involved feature interactions and heterogeneous patters of association. 
-# ### **MUX11: (11-bit Multiplexer Dataset)**
-# Prior to 90/10 partitioning, included 5000 instances and 11 total features (all predictive) with no noise. Features A_0, A_1, and A_2 are 'address-bits', while the rest are register bits.
-# ### **MUX20: (20-bit Multiplexer Dataset)**
-# Prior to 90/10 partitioning, included 10000 instances and 20 total features (all predictive) with no noise. Features A_0, A_1, A_2, and A_3 are 'address-bits', while the rest are register bits.
-# ### **GAM_A: (GAMETES Simulated Dataset A - 4 Additive Univariate Features)**
-# Prior to 90/10 partitioning, included 1600 instances and 100 total features (4 are predictive - M0P0, M1P0, M2P0, M3P0) with a small degree of overall simulated noise. Each feature has a univariate association with outcome, with the strongest association being an additive combination of all 4 predictive features. Outcome (i.e. 'Class') is binary-valued.
-# ### **GAM_C: (GAMETES Simulated Dataset C - 2-way Epistatic Interaction)**
-# Prior to 90/10 partitioning, included 1600 instances and 100 total features (2 are predictive - M0P0, M0P1) with about 60% simulated noise. Both predictive features have low/no univariate association with outcome. Outcome (i.e. 'Class') is binary-valued.
-# ### **GAM_E: (GAMETES Simulated Dataset E - 4 Heterogeneous Univariate Features)**
-# Prior to 90/10 partitioning, included 1600 instances and 100 total features (2 are predictive - M0P0, M0P1) with about 60% simulated noise. Both predictive features have low/no univariate association with outcome. Outcome (i.e. 'Class') is binary-valued.
+# - Condition B + Layman
+# - Condition B + Clinician
+# - Condition B + Expert
+# - Condition C + Layman
+# - Condition C + Clinician
+# - Condition C + Expert
+# 
+# Unlike the earlier summary notebook, this one performs a fresh end-to-end run:
+# 
+# 1. train HEROS on the `450`-instance `MUX6` training fold
+# 2. select one held-out `MUX6` test instance
+# 3. generate all six explanations
+# 4. compute programmatic metrics
+# 5. run the judge model for `Clarity` and `Technical Appropriateness`
+# 6. display the saved outputs
 
 # %% [markdown]
-# ***
-# ## Notebook Run Parameters
-# The parameters below control basic notebook functionality and allow users to change other HEROS run parameters for this demonstration.
+# ## Demo Setup
+# Change `DEMO_INSTANCE_ID` below if you want to rerun the same notebook for a
+# different held-out `MUX6` test case. The default remains `165` because it
+# activates three rules with one conflict, which makes the explanation differences
+# easy to see during a live demo.
 
 # %%
-# Notebook Operation Parameters ---------------------------------------------------------------------------------
-load_from_cloned_repo = False # Leave True if running from cloned repository, and change to False if relying on 'pip' installation of HEROS
-local_save = True # If True, saves output in pre-designated local folder within cloned repository folder
-folder_path = './output' # Specify new path for output files generated by this notebook (if local_save = False)
-run_all_cells = True # If True, run all cells of notebook (i.e. generate all example outputs and visualizations). False will only run key cells
+from __future__ import annotations
 
-# Specify which example dataset to run --------------------------------------------------------------------------
-example_dataset = 'GAM_C' # 'MUX6' # Dataset Options: 'MUX6', 'MUX11', 'MUX20', 'GAM_A', 'GAM_C', 'GAM_E'
+import json
+from pathlib import Path
+from typing import Any
 
-# Expert Knowldge Generation Run Parameters ---------------------------------------------------------------------
-max_instances = 2000 # Maximum number of available training instances to use in estimating feature importance scores with 'MultiSURF' algorithm.
-use_turf = False # Idicate whether to use TuRF wrapper algorithm in combination with MultiSURF (recommended for large feature spaces, e.g. > 10000 features)
-turf_pct = 0.2 # Controls the number of TuRF iterations as well as the number of features removed from calculations each iteration. (0.2 runs for 5 iterations with 20% of bottom scoring features removed each time)
-
-# HEROS Key Hyperparameters -------------------------------------------------------------------------------------
-iterations = 50000 # (Rule_I) Number of Phase I learning iterations (e.g. 50000)
-pop_size = 500 # (Rule_P) Maximum size of Phase I rule population (micro-population size) (e.g. 500)
-model_iterations = 100 # (Model_I) Number of Phase II learning iterations (e.g. 100)
-model_pop_size = 100 # (Model_P) Maximum size of Phase II model population (e.g. 100)
-nu = 1 # (v) Accuracy pressure (1 is neutral)
-
-# Other HEROS Hyperparameters -----------------------------------------------------------------------------------
-beta = 0.2 # (B) Average {M} size learning rate
-theta_sel = 0.5 # (0_sel) {M} proportion for Phase I tournament selection
-cross_prob = 0.8 # (p_cross) probability of applying crossover (Phase I and II)
-mut_prob = 0.04 # (p_mut) probability of applying mutation (Phase I and II)
-merge_prob = 0.1 # (p_merge) probability of applying merge (Phase II)
-new_gen = 1.0 # Controls size of {OMP} as function of Model_P
-model_pop_init = 'target_acc' # Model initialization method ('random' or 'target_acc')
-subsumption = 'both' # Use GA, {C} or 'both' subsumption mechanisms ('ga', or 'c', 'both', or None)
-rsl = 0 # Manually specify rule specificity limit (Give positive integer or leave 0 for automatic rule specificity limit determination from dataset properties)
-compaction = 'sub' # rule compaction method ('sub' or None)
-random_state = 42 # Applied random seed (for reproducibility)
-
-# HEROS Performance tracking hyperparameters --------------------------------------------------------------------
-track_performance = 1000 # Number of Phase I iterations where performance metrics are periodically estimated
-model_tracking = True # Track top model performance across training iterations
-stored_rule_iterations = '500,1000,5000,10000,50000' # Specified Phase I iterations where the current rule {P} is archived for external evaluation (e.g. '500,1000,5000,10000' or None)
-stored_model_iterations = '10,50,100' # Specified Phase II iterations where the current {MP} is archived for external evaluation (e.g. '10,50,100', or None)
-verbose = True # Run in 'verbose' mode - display run details
-
-# In-Development HEROS Hyperparameters (Recommend not changing) -------------------------------------------------
-outcome_type = 'class' # Only 'class' (i.e. classification outcome) is operational in current implementation
-fitness_function = 'pareto' # Fitness function for Phase I rule discovery ('accuracy' or 'pareto') Pareto is strongly recommended unless analyzing clean problems.
-feat_track = 'end' # Feature tracking strategy applied (None, 'add', 'wh', 'end') Experimental - recommended to leave to None
-rule_pop_init = None # Specifies rule population pre-initialization method (None, 'load', or 'dt') Experimental - recommended to leave to None
-
-
-# Visualization Parameters ------------------------------------------------------------------------------------
-output_to_pdf = True # If True, output visualizations to PDF
-
-
-# %% [markdown]
-# ***
-# ## Package Imports & Folder Management:
-
-# %%
-# Load heros algorithm ---------------------------------------------------------
-if load_from_cloned_repo: # Load HEROS algorithm locally from cloned github repository
-    from src.skheros.heros import HEROS
-else: # Load HEROS Notebook via pip installation
-    from skheros.heros import HEROS
-
-# Load all other packages used in this notebook --------------------------------
-import os
-import pickle
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from skrebate import MultiSURF, TURF # Install using: pip install skrebate==0.7
-from sklearn.metrics import classification_report
-from sklearn.inspection import permutation_importance
-from sklearn.metrics import roc_curve, roc_auc_score
 
-# Load visualization packages ------------------------------------------------
-from matplotlib.backends.backend_pdf import PdfPages 
-from groq import Groq
-import textwrap
-
-
-# Determine notebook output folder path ------------------------------------------------------
-if not os.path.exists(folder_path):
-        os.makedirs(folder_path)
-if local_save:
-    output_path = './output'
-else:
-    output_path = folder_path
-
-# Report current working directory ---------------------------------------------
-current_working_directory = os.getcwd()
-print(current_working_directory)
-
-# %%
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
-
-class PDFCollector:
-    """
-    Monkey-patches plt.show/plt.close with standalone wrapper functions
-    that capture every figure, and then dump them into one PDF.
-    """
-    def __init__(self):
-        self._closed = []
-        self._orig_show = plt.show
-        self._orig_close = plt.close
-
-    def patch(self):
-        orig_show  = self._orig_show
-        orig_close = self._orig_close
-        closed     = self._closed
-
-        # --- show wrapper ---
-        def show_wrapper(*args, **kwargs):
-            # capture all open figures just before they get closed/displayed
-            for num in plt.get_fignums():
-                closed.append(plt.figure(num))
-            return orig_show(*args, **kwargs)
-
-        # preserve the original signature so inline-backend is happy
-        try:
-            show_wrapper.__signature__ = orig_show.__signature__
-        except Exception:
-            pass
-
-        # --- close wrapper ---
-        def close_wrapper(fig=None):
-            # inline backend sometimes calls close(True/False)
-            if isinstance(fig, bool):
-                return orig_close(fig)
-
-            # capture everything if fig is None
-            if fig is None:
-                for n in plt.get_fignums():
-                    closed.append(plt.figure(n))
-            elif isinstance(fig, plt.Figure):
-                closed.append(fig)
-            elif isinstance(fig, int):
-                closed.append(plt.figure(fig))
-
-            return orig_close(fig)
-
-        try:
-            close_wrapper.__signature__ = orig_close.__signature__
-        except Exception:
-            pass
-
-        # apply our patch
-        plt.show  = show_wrapper
-        plt.close = close_wrapper
-
-    def restore(self):
-        """Put back the original plt.show/plt.close."""
-        plt.show  = self._orig_show
-        plt.close = self._orig_close
-
-    def save_pdf(self, path: str):
-        """Write all captured + currently open figures into one PDF."""
-        with PdfPages(path) as pdf:
-            # cover page
-            fig = plt.figure(figsize=(8,6))
-            fig.text(0.5, 0.5, 'Visualization Report', ha='center', va='center', fontsize=24)
-            pdf.savefig(fig)
-            plt.close(fig)
-
-            # currently open figures
-            for num in plt.get_fignums():
-                pdf.savefig(plt.figure(num))
-            # all the ones that got closed
-            for fig in self._closed:
-                try:
-                    pdf.savefig(fig)
-                except Exception:
-                    pass
-
-        print(f"📄 All figures saved to {path}")
-
-
-# %%
-collector = PDFCollector()
-collector._closed.clear()
-collector.patch()
-
-# %% [markdown]
-# ***
-# ## Example Data Setup
-# Sets up the various options for each possible example dataset (as selected above by the user).
-
-# %%
-#Initialize dataset parameters
-train_data_path = None
-test_data_path = None
-outcome_label = 'Class' # Class/outcome column label in target dataset
-instanceID_label = 'InstanceID' #None for datasets without an instance ID column
-excluded_column = None
-
-if example_dataset == 'MUX6': # 6-bit Multiplexer
-    train_data_path = 'evaluation/datasets/partitioned/multiplexer/A_multiplexer_6_bit_500_inst_CV_Train_1.txt'
-    test_data_path = 'evaluation/datasets/partitioned/multiplexer/A_multiplexer_6_bit_500_inst_CV_Test_1.txt'
-    excluded_column = 'Group'
-elif example_dataset == 'MUX11': # 11-bit Multiplexer
-    train_data_path = 'evaluation/datasets/partitioned/multiplexer/B_multiplexer_11_bit_5000_inst_CV_Train_1.txt'
-    test_data_path = 'evaluation/datasets/partitioned/multiplexer/B_multiplexer_11_bit_5000_inst_CV_Test_1.txt'
-    excluded_column = 'Group'
-elif example_dataset == 'MUX20': # 20-bit Multiplexer
-    train_data_path = 'evaluation/datasets/partitioned/multiplexer/C_multiplexer_20_bit_10000_inst_CV_Train_1.txt'
-    test_data_path = 'evaluation/datasets/partitioned/multiplexer/C_multiplexer_20_bit_10000_inst_CV_Test_1.txt'
-    excluded_column = 'Group'
-elif example_dataset == 'GAM_A': # GAMETES Dataset A (additive)
-    train_data_path = 'evaluation/datasets/partitioned/gametes/A_uni_4add_CV_Train_1.txt'
-    test_data_path = 'evaluation/datasets/partitioned/gametes/A_uni_4add_CV_Test_1.txt'
-elif example_dataset == 'GAM_C': # GAMETES Dataset C (epistasis)
-    train_data_path = 'evaluation/datasets/partitioned/gametes/C_2way_epistasis_CV_Train_1.txt'
-    test_data_path = 'evaluation/datasets/partitioned/gametes/C_2way_epistasis_CV_Test_1.txt'
-elif example_dataset == 'GAM_E': # GAMETES Dataset E (heterogeneous)
-    train_data_path = 'evaluation/datasets/partitioned/gametes/E_uni_4het_CV_Train_1.txt'
-    test_data_path = 'evaluation/datasets/partitioned/gametes/E_uni_4het_CV_Test_1.txt'
-    excluded_column = 'Model'
-else:
-    print("Specified Example Dataset Not Found!")
-
-# %% [markdown]
-# ***
-# ## Load and Prepare Training Dataset
-# Data used for training HEROS has the following requirements:
-# 1. The training data must be passed as separate array-like objects including:
-#     1. 'X' {n_samples, n_features} Training instance features.
-#     3. 'y' {n_samples} Training labels of the outcome variable.
-# 3. 'y must always be provided and must not include any missing values.
-# 4. Missing values are allowed in 'X' but data instances should be excluded that have missing values for all features. Note, HEROS treats missing values as missing, i.e. no imputation of values are made or needed. Any rule that specifies a given feature will not match an instance with a missing value at that instance. 
-# 
-# Required data preparation here includes separating the loaded dataset into X and y array-like objects, and removing unnecessary columns. 
-
-# %%
-# Load training dataset ------------------------
-train_df = pd.read_csv(train_data_path, sep="\t")
-print(train_df.head())
-
-# Create unique output folder for specific target dataset ------------------------
-file_name = os.path.splitext(os.path.basename(train_data_path))[0]
-output_path = output_path+'/'+file_name
-if not os.path.exists(output_path):
-        os.makedirs(output_path)
-
-#Prepare Training Data ------------------------
 try:
-    X = train_df.drop(excluded_column, axis=1) #Remove excluded column from consideration in this notebook
-except:
-    X = train_df
-    print('Excluded column not available')
-try:
-    X = X.drop(instanceID_label,axis=1)
-except:
-    print('Instance ID coulmn not available')
+    from IPython.display import Markdown, display
+except ImportError:
+    def Markdown(text: str) -> str:
+        return text
 
-X = X.drop(outcome_label, axis=1)
-feature_names = X.columns 
-cat_feat_indexes = list(range(X.shape[1])) #all feature are treated as categorical so provide indexes 0-5 in this list for 6-bit multiplexer dataset e.g. [0,1,2,3,4,5]
+    def display(value: Any) -> None:
+        print(value)
 
-#Finalize separate array-like objects for X and y
-X = X.values
-y = train_df[outcome_label].values #outcome values
-try:
-    row_id = train_df[instanceID_label].values #instance id values
-except:
-    row_id = None
-
-# %% [markdown]
-# ### Generate Expert Knowlege Scores for Features (Optional, but suggested in HEROS) 
-# Previous LCS research has indicated that using Relief-based algorithms such as 'MultiSURF' to generate feature importance scores as a guide for rule initialization improves evolutionary algorithm performance. Here we show how these scores can be generated, saved, and later used by HEROS for rule initialization. 
-# 
-# These scores only need to be generated once for a given training dataset and then can be saved for future use. This code only runs MultiSURF if the scores have not yet been generated for a training dataset with a unique name.
-# 
-# The MultiSURF (feature importance estimation) algorithm is found in our scikit-rebate respository at https://github.com/UrbsLab/scikit-rebate. 
-
-# %%
-def balanced_sampling(df,outcome_label, max_instances):
-    """ Returns a dataframe with a sampled number of rows from the original (retaining class balance if possible).
-        Assumes that outcome values are either 0 or 1. """
-    # Split the DataFrame by class
-    df_class_0 = df[df[outcome_label] == 0]
-    df_class_1 = df[df[outcome_label] == 1]
-    # Determine the number of rows to sample per class
-    n_class_0 = max_instances // 2
-    n_class_1 = max_instances - n_class_0  # Assign remaining rows to Class 1
-    # Ensure we don't sample more rows than available
-    n_class_0 = min(n_class_0, len(df_class_0))
-    n_class_1 = min(n_class_1, len(df_class_1))
-    # Sample rows from each class
-    sampled_class_0 = df_class_0.sample(n=n_class_0, replace=False)
-    sampled_class_1 = df_class_1.sample(n=n_class_1, replace=False)
-    # Combine the sampled rows
-    sampled_df = pd.concat([sampled_class_0, sampled_class_1]).reset_index(drop=True)
-    return sampled_df
-
-# %%
-# Further data preparation for expert knowldge generation (i.e. balanced subsampling of training instances for faster run times)
-fs_train_df = balanced_sampling(train_df, outcome_label, max_instances)
-try:
-    fs_X = fs_train_df.drop(excluded_column, axis=1) #Remove excluded column from consideration in this notebook
-except:
-    fs_X = fs_train_df
-    print('Excluded column not available')
-try:
-    fs_X = fs_X.drop(instanceID_label,axis=1)
-except:
-    print('Instance ID coulmn not available')
-fs_X = fs_X.drop(outcome_label, axis=1)
-#Finalize separate array-like objects for X and y
-fs_X = fs_X.values
-fs_y = fs_train_df[outcome_label].values #outcome values
-#Optional TURF Parameters --------------
-num_scores_to_return = int(X.shape[1]/2.0)
-# --------------------------------------
-score_path_name = None
-if use_turf:
-    score_path_name = output_path+'/MultiSURF_TuRF_Scores.csv' #No need to change
-else:
-    score_path_name = output_path+'/MultiSURF_Scores.csv' #No need to change
-# Calculate or load feature importance estimates with MultiSURF or MultiSURF+TuRF ------------------------------------
-if not os.path.isfile(score_path_name):
-    if use_turf: # Run MultiSURF with TuRF wrapper
-        print("Generating MultiSURF/TuRF Scores:")
-        clf = TURF(MultiSURF(n_jobs=None), pct=turf_pct, num_scores_to_return=num_scores_to_return).fit(fs_X, fs_y)
-        ek = clf.feature_importances_
-        score_data = pd.DataFrame({'Feature':feature_names,'Score':ek})
-        score_data.to_csv(score_path_name,index=False)
-    else: #Just run MultiSURF
-        print("Generating MultiSURF Scores:")
-        clf = MultiSURF(n_jobs=None).fit(fs_X, fs_y)
-        ek = clf.feature_importances_
-        score_data = pd.DataFrame({'Feature':feature_names,'Score':ek})
-        score_data.to_csv(score_path_name,index=False)
-else: #load previously trained scores
-    print("Loading MultiSURF Scores")
-    loaded_data = pd.read_csv(score_path_name)
-    ek = loaded_data['Score'].tolist()
-print(list(feature_names))
-print(ek)
-
-# %% [markdown]
-# ***
-# ## Run HEROS (Training)
-# 
-# 1. (OPTIONAL) 'pop_df' is a DataFrame of a previously trained HEROS rule population that can be uploaded to initialize a new HEROS run.
-# 2. (OPTIONAL) 'ek' is a numpy array or list of expert knowledge weights for all quantitative and categorical features in the dataset. They must be formatted as follows:
-#     1. This list must have the same number of elements as there are total features in the dataset (ordered in the same way)
-#     2. If a mix of quantiative and categorical features are loaded, HEROS will combine them with all quantitative features first, followed by all categorical features in the same order as provided in 'X' or 'Xc'.
-
-# %%
-# Initialize HEROS algorithm with run parameters
-heros = HEROS(outcome_type=outcome_type,iterations=iterations,pop_size=pop_size,cross_prob=cross_prob,mut_prob=mut_prob,nu=nu,beta=beta,theta_sel=theta_sel,
-              fitness_function=fitness_function,subsumption=subsumption,rsl=rsl,feat_track=feat_track, model_iterations=model_iterations,
-              model_pop_size=model_pop_size,model_pop_init=model_pop_init,new_gen=new_gen,merge_prob=merge_prob,rule_pop_init=rule_pop_init,compaction=compaction,
-              track_performance=track_performance,model_tracking=model_tracking,stored_rule_iterations=stored_rule_iterations,stored_model_iterations=stored_model_iterations,random_state=random_state, verbose=verbose)
-
-heros = heros.fit(X, y, row_id, cat_feat_indexes=cat_feat_indexes, ek=ek)
-
-# %% [markdown]
-# ***
-# ## Testing Data Evaluation
-# ### Load and Prepare Testing Data
-
-# %%
-# Load testing dataset ---------------------------
-test_df = pd.read_csv(test_data_path, sep="\t")
-print(test_df.head())
-#Prepare Testing Data ----------------------------
-try:
-    X_test = test_df.drop(excluded_column, axis=1)
-except:
-    X_test = test_df
-try:
-    X_test = X_test.drop(instanceID_label, axis=1)
-except:
-    pass
-X_test = X_test.drop(outcome_label, axis=1)
-#Finalize separate array-like objects for X and y
-X_test = X_test.values
-y_test = test_df[outcome_label].values #outcome values
-
-# %% [markdown]
-# ### Identify Top Model from the Model Pareto Front
-# Evaluates the testing data performance of all non-dominated models on the top-ranking Phase II Pareto front, each treated as a candidate solution. Stepping through all non-dominated models, we replace the current best if the next model either (1) has > balanced testing accuracy and >= testing coverage, or (2) has >= balanced testing accuracy, >= testing coverage, and a smaller rule count.
-
-# %%
-best_model_index = heros.auto_select_top_model(X_test,y_test,verbose=True)
-set_df = heros.get_model_rules(best_model_index)
-print(set_df) #Print all rules of the top model
-
-# %% [markdown]
-# ### Evaluate Top Model Performance
-
-# %%
-# Report performance results for the top model
-predictions = heros.predict(X_test,whole_rule_pop=False, target_model=best_model_index)
-print("HEROS Top Model Testing Data Performance Report:")
-print(classification_report(predictions, y_test, digits=8))
-
-# %% [markdown]
-# ### Get Prediction Probabilities and Coverage Confirmation for all Testing Instances
-
-# %%
-predict_prob = heros.predict_proba(X_test,whole_rule_pop=False, target_model=best_model_index)
-print("Prediction Probabilities for all Testing Instances:")
-print(predict_prob)
-
-predict_cover = heros.predict_covered(X_test,whole_rule_pop=False, target_model=best_model_index)
-print("Coverage for all Testing Instances:")
-print(predict_cover)
-print(str(sum(predict_cover))+' instances covered out of '+str(len(predict_cover)))
-
-# %% [markdown]
-# ### ROC Plot of Top Model Testing Performance
-# Set up for binary classification tasks.
-
-# %%
-# Get false positive rate, true positive rate, and thresholds
-fpr, tpr, thresholds = roc_curve(y_test, predict_prob[:, 1]) #based on class 1
-# Calculate AUC
-roc_auc = roc_auc_score(y_test, predict_prob[:, 1]) #based on class 1
-# Plot ROC curve
-plt.figure(figsize=(8, 6))
-plt.plot(fpr, tpr, label=f"ROC Curve (AUC = {roc_auc:.2f})", color='blue')
-plt.plot([0, 1], [0, 1], 'k--', label="Random Classifier")  # diagonal line
-plt.xlabel("False Positive Rate")
-plt.ylabel("True Positive Rate")
-plt.title("Receiver Operating Characteristic (ROC) Curve")
-plt.legend(loc="lower right")
-plt.grid(True)
-plt.tight_layout()
-plt.show()
-
-# %% [markdown]
-# ### Save Rules of Top Model
-
-# %%
-set_df = heros.get_model_rules(best_model_index)
-set_df.to_csv(output_path+'/top_testing_model_rules.csv', index=False)
-
-# %% [markdown]
-# ### Redirect Visualizations to PDF
-
-# %% [markdown]
-# ***
-# ## Visualize Top Model (i.e. Rule-Set) For Interetation
-# ### Specified Features Heatmap
-
-# %%
-if run_all_cells:
-    heros.get_rule_set_heatmap(feature_names, best_model_index, weighting='useful_accuracy', specified_filter=1, display_micro=False, show=True, save=True, output_path=output_path)
-
-# %% [markdown]
-# ### Feature Specification as Network with Feature Co-Occurence as Edges
-
-# %%
-if run_all_cells:
-    node_size = 1000
-    edge_size = 10
-    heros.get_rule_set_network(feature_names, best_model_index, weighting='useful_accuracy', display_micro=False, node_size=node_size, edge_size=edge_size, show=True, save=True, output_path=output_path)
-
-# %% [markdown]
-# ### Feature Tracking Scores (Across Training Instances)
-
-# %%
-if run_all_cells and feat_track != None:
-    heros.run_model_feature_tracking(best_model_index)
-    # Save Feature Tracking Scores to .csv
-    ft_df = heros.get_model_ft(feature_names)
-    ft_df.shape
-    ft_df.to_csv(output_path+'/rule_set_'+str(best_model_index)+'_feature_tracking_scores.csv', index=False)
-    # Visualize feature tracking scores as clustered heatmap
-    heros.get_clustered_model_ft_heatmap(feature_names, specified_filter=1, show=True, save=True, output_path=output_path)
+from evaluation.experiments.heros_llm.config import load_experiment_config
+from evaluation.experiments.heros_llm.env_utils import discover_default_env_files, load_env_file
+from evaluation.experiments.heros_llm.runner import run_experiment
 
 
-# %% [markdown]
-# ***
-# ## Calculating Top Model Feature Importance Estimates
-# Using scikit-learn's permutation importance package function.
+CONFIG_PATH = Path("evaluation/experiments/heros_llm/configs/mux6_single_instance_demo.json")
+DEMO_INSTANCE_ID = 165
+CONDITION_ORDER = ["condition_b", "condition_c"]
+AUDIENCE_ORDER = ["layman", "clinician", "expert"]
 
-# %%
-# Run permutation importance
-result = permutation_importance(heros, X_test, y_test, n_repeats=100, random_state=random_state, scoring='balanced_accuracy')
-# Extract importance means
-importances = result.importances_mean
-std = result.importances_std
-# Sort features by importance
-sorted_idx = importances.argsort()[::-1]
-# Generate Simple Feature Importance Plot
-plt.figure(figsize=(10, 6))
-plt.barh(feature_names[sorted_idx], importances[sorted_idx], xerr=std[sorted_idx])
-plt.xlabel("Permutation Importance (Mean Decrease in Balanced Accuracy)")
-plt.title("Estimated Model Feature Importance")
-plt.gca().invert_yaxis()  # Most important on top
-plt.tight_layout()
-plt.show()
+CONDITION_LABELS = {
+    "condition_b": "Condition B: Evidence + Instance Values",
+    "condition_c": "Condition C: Full Context",
+}
 
-# %% [markdown]
-# ***
-# ## Example Prediction Reasoning Explanation (With Top Model)
-# When applying the trained models to unlabeled data for prediction, the cells in this section give a basic example of how the prediction reasoning may be explained in clear human interpretable terms. 
-
-# %%
-# Get example testing instance (with no label) --------------------------------
-print("Total Number of Available Testing Instances: "+str(len(X_test)))
-target_testing_instance_index = 40 #arbitrarily chosen as an example
-target_testing_instance = X_test[target_testing_instance_index]
-print("Making Prediction on Testing Instance Index: "+str(target_testing_instance_index))
-# Apply prediction to target instance -----------------------------------------
-heros.predict_explanation(target_testing_instance, feature_names, whole_rule_pop=False, target_model=best_model_index)
-
-# %% [markdown]
-# In this example, we are using Groq to run our text output through an LLM. To do this, we are passing an api key, which authenticates our session. I have used my personal token in this example. Essentially, what this does is it tells Groq that we are accessing their servers with an authenticated session and that we are allowed to query their LLM service.
-
-# %%
-api_key = "[REDACTED]" #Replace with your Groq API key. Get one for free at https://www.groq.com/
-
-client = Groq(api_key=api_key)
+AUDIENCE_LABELS = {
+    "layman": "Layman / Patient",
+    "clinician": "Clinician / Informed User",
+    "expert": "Expert / Data Scientist",
+}
 
 
-# %% [markdown]
-# Here is the function which takes in a narrative string (raw text output from heros), and takes in an optional parameter of the specific LLM model (in this case the default is llama 3.3), along with a max_token parameter, which is the maximum for how much text you can pass to the LLM at once.
-# 
-# The function consists of two parts: the system prompt and the narrative. The system prompt is basically added on before our raw text output narrative, and tells the LLM the context of what we want to do. In this case, we are telling it how we want the output to look like, and then we pass in the actual narrative after that prompt. We then pass this entire block of text into the LLM, and return the response as a string.
+def _parse_json(value: Any) -> Any:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    if isinstance(value, str) and not value.strip():
+        return None
+    if isinstance(value, str):
+        return json.loads(value)
+    return value
 
-# %% [markdown]
-# OPEN AI
-# 
-# You can optionally set `heros_algorithm_pdf_path` to a PDF (e.g. a HEROS paper or method description). The extracted text is passed to the LLM as context so explanations use accurate algorithm terminology and concepts.
-# 
 
-# %%
-import openai
-import textwrap
-from pypdf import PdfReader
+def _as_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() == "true"
 
-key = "[REDACTED]" #Replace with your OpenAI API key. Get one for free at https://platform.openai.com/account/api-keys
-client = openai.OpenAI(api_key=key)
 
-# Optional: path to a PDF with HEROS/algorithm documentation. If set, its text is included
-# so the LLM has better context when rewriting explanations (e.g. paper or method description).
-heros_algorithm_pdf_path = "./HEROS_GECCO26.pdf"  # e.g. "docs/HEROS_algorithm.pdf" or "path/to/paper.pdf"
-
-def _load_pdf_text(pdf_path: str) -> str:
-    """Extract plain text from a PDF file for use as LLM context."""
+def _metric_cell(value: Any, digits: int = 3) -> str:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return "NA"
     try:
-        reader = PdfReader(pdf_path)
-        parts = []
-        for page in reader.pages:
-            text = page.extract_text()
-            if text:
-                parts.append(text)
-        return "\n\n".join(parts).strip() if parts else ""
-    except Exception as e:
-        print(f"Warning: could not load PDF '{pdf_path}': {e}")
-        return ""
+        return f"{float(value):.{digits}f}"
+    except (TypeError, ValueError):
+        return str(value)
 
-def extract_heros_raw_data(heros, feature_names, model_index=0, include_table=True):
-    """
-    Extract raw algorithm output (rule-set as readable IF-THEN lines and optional full table)
-    using only the public HEROS API. No changes to the algorithm. Use this string as
-    raw_algorithm_data in text_to_natural_language() so the LLM has full context.
-    """
-    rules_df = heros.get_model_rules(index=model_index)
-    if rules_df is None or len(rules_df) == 0:
-        return ""
-    # Build readable IF-THEN lines from the dataframe (Condition Indexes, Condition Values, Action, etc.)
-    lines = ["Top model rules (IF-THEN form):", "---"]
-    for i, row in rules_df.iterrows():
-        idxs = row["Condition Indexes"]
-        vals = row["Condition Values"]
-        action = row["Action"]
-        numerosity = row["Numerosity"]
-        acc = row["Accuracy"] if row["Accuracy"] is not None and not (isinstance(row["Accuracy"], float) and np.isnan(row["Accuracy"])) else 0.0
-        match_cover = row["Match Cover"]
-        if hasattr(idxs, "__len__") and not isinstance(idxs, str) and len(idxs) > 0:
-            cond_parts = []
-            for j, fi in enumerate(idxs):
-                fname = feature_names[int(fi)] if int(fi) < len(feature_names) else str(fi)
-                v = vals[j] if j < len(vals) else vals
-                if hasattr(v, "__len__") and not isinstance(v, str) and len(v) == 2:
-                    cond_parts.append(f"({fname} in [{v[0]}-{v[1]}])")
-                else:
-                    cond_parts.append(f"({fname} = {v})")
-            cond_str = " AND ".join(cond_parts)
-        else:
-            cond_str = str(idxs) + " " + str(vals)
-        line = f"Rule {i+1}: IF {cond_str} THEN predict '{action}' (numerosity={numerosity}, accuracy={acc:.4f}, match_cover={match_cover})"
-        lines.append(line)
-    out = "\n".join(lines)
-    if include_table:
-        out += "\n\nFull rule-set table:\n" + rules_df.to_string()
-    return out
 
-def text_to_natural_language(narrative: str,
-                             model: str = "gpt-5.2",
-                             max_tokens: int = 512,
-                             algorithm_pdf_path: "str | None" = None,
-                             raw_algorithm_data: "str | None" = None) -> str:
-    """
-    Rewrite a technical model explanation into natural language using OpenAI's API (v1.0+).
-    - algorithm_pdf_path: optional PDF with algorithm docs (included in system context).
-    - raw_algorithm_data: optional string (e.g. from extract_heros_raw_data()) so the LLM sees
-      the actual rules/tables when rewriting; do not change the algorithm, build this in the notebook.
-    """
-    pdf_path = algorithm_pdf_path
-    algorithm_context = ""
-    if pdf_path:
-        algorithm_context = _load_pdf_text(pdf_path)
-    #print(algorithm_context)
-    if algorithm_context:
-        system_content = (
-            "You are a helpful assistant. Use the following algorithm documentation as context "
-            "when rewriting the model explanation. Use its terminology and concepts where relevant, "
-            "and stay consistent with how the algorithm is described.\n\n"
-            "--- Algorithm documentation (from PDF) ---\n\n"
-            + algorithm_context#[:50000]  # cap size to avoid token limits
-            + "\n\n--- End of algorithm documentation ---"
-            
-        )
-    else:
-        system_content = "You are a helpful assistant."
+for env_path in discover_default_env_files():
+    load_env_file(env_path)
 
-    prompt = (
-        "Rewrite the following technical model explanation into a clear, concise paragraph "
-        "for a non-technical audience. Be specific about the decision made and the confidence, "
-        "explain how each rule contributed (or contradicted), and highlight what factors were most and "
-        "least important. Do not invent anything not in the data. Support all claims with details. Also, have the tone of a skeptical scientist,"
-        "meaning that you aren't aren't using words with too strong connotations. Additionally, be concise but precise, and structure it in an easily digestable way."
-        "Your goal is to interpret the data in a way that connects what the model predicted to the broader context of the problem and explain that clearly to the user. Concision is also a factor, but not at the expense of quality. Only tell the user what is relevant. \n\n"
-        "Here are clarifications on the terms:\n"
-        "- 'Confidence' means how often a rule was satisfied and agreed with the final decision — it's not model certainty.\n"
-        "- More training instances and higher rule confidence make a rule more reliable, and that the number of training instances is correlated to reliability as well.\n\n"
+config = load_experiment_config(str(CONFIG_PATH))
+config.run_name = f"mux6_single_instance_demo_{DEMO_INSTANCE_ID}"
+config.sampling.instance_ids = [str(DEMO_INSTANCE_ID)]
+config.sampling.sample_size = 1
+config.sampling.use_full_test_set = False
+config.judge.enabled = True
+config.llm.enabled = True
+
+run_dir = Path(run_experiment(config))
+records_df = pd.read_csv(run_dir / "records.csv")
+demo_df = records_df[
+    records_df["packet.instance_id"].astype(str) == str(DEMO_INSTANCE_ID)
+].copy()
+
+if len(demo_df) != 6:
+    raise ValueError(
+        f"Expected 6 rows for instance {DEMO_INSTANCE_ID}, found {len(demo_df)}."
     )
-    if raw_algorithm_data:
-        prompt += (
-            "The following is raw algorithm output (rules and rule-set table) for context.\n"
-            "Use it to ground your explanation; do not invent details.\n\n"
-            "--- Raw data ---\n\n" + raw_algorithm_data[:30000] + "\n\n--- End raw data ---\n\n"
+
+first_row = demo_df.iloc[0]
+active_rules = _parse_json(first_row["packet.active_rules"]) or []
+glossary_entries = _parse_json(first_row["packet.glossary"]) or []
+
+display(
+    Markdown(
+        "\n".join(
+            [
+                "## Fresh Run Complete",
+                "",
+                f"- Run directory: `{run_dir}`",
+                f"- Demo instance: `{DEMO_INSTANCE_ID}`",
+                f"- Records: `{len(demo_df)}` explanation rows",
+            ]
         )
-    prompt += "Now here is the summary output from the run:\n\n" + narrative
-    #print(prompt)
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_content},
-                {"role": "user", "content": prompt}
-            ],
-            #max_completion_tokens=max_tokens,
-            temperature=0.5
+    )
+)
+
+# %% [markdown]
+# ## Selected HEROS Packet
+# The tables below show the structured HEROS evidence for the single held-out test
+# instance used in this fresh run.
+
+# %%
+packet_summary = pd.DataFrame(
+    [
+        {
+            "dataset": first_row["packet.dataset_name"],
+            "instance_id": int(first_row["packet.instance_id"]),
+            "prediction": int(first_row["packet.model_context.prediction"]),
+            "prob_class_0": float(first_row["packet.model_context.prediction_probabilities.0"]),
+            "prob_class_1": float(first_row["packet.model_context.prediction_probabilities.1"]),
+            "agreement_status": first_row["packet.model_context.agreement_status"],
+            "conflict_present": _as_bool(first_row["packet.model_context.conflict_present"]),
+            "matching_rules": int(first_row["packet.model_context.num_matching_rules"]),
+            "supporting_rules": int(first_row["packet.model_context.num_supporting_rules"]),
+            "contradictory_rules": int(first_row["packet.model_context.num_contradictory_rules"]),
+            "evidence_strength": first_row["packet.model_context.evidence_strength_label"],
+        }
+    ]
+)
+
+feature_columns = sorted(
+    column
+    for column in demo_df.columns
+    if column.startswith("packet.feature_values.")
+)
+feature_rows = []
+for column in feature_columns:
+    feature_name = column.split("packet.feature_values.", 1)[1]
+    feature_rows.append({"feature": feature_name, "value": first_row[column]})
+feature_df = pd.DataFrame(feature_rows)
+
+rule_rows = []
+for rule in active_rules:
+    metadata = rule.get("metadata") or {}
+    meta_parts = []
+    for field in ["numerosity", "fitness", "accuracy", "match_cover", "correct_cover"]:
+        value = metadata.get(field)
+        if value is None:
+            continue
+        if isinstance(value, float):
+            meta_parts.append(f"{field}={value:.4f}")
+        else:
+            meta_parts.append(f"{field}={value}")
+    rule_rows.append(
+        {
+            "rule_id": rule["rule_id"],
+            "support_label": (
+                "supports prediction"
+                if rule.get("supports_prediction")
+                else "contradicts prediction"
+            ),
+            "predicted_class": rule["action"],
+            "conditions": " AND ".join(
+                condition["human_text"] for condition in rule.get("conditions", [])
+            ),
+            "metadata": "; ".join(meta_parts),
+        }
+    )
+rules_df = pd.DataFrame(rule_rows)
+
+display(packet_summary)
+display(feature_df)
+display(rules_df)
+
+# %% [markdown]
+# ## Condition C Glossary Entries
+# These one-sentence feature definitions are included only for Condition C.
+
+# %%
+glossary_df = pd.DataFrame(glossary_entries)
+display(
+    glossary_df
+    if not glossary_df.empty
+    else pd.DataFrame(
+        [{"feature_name": "None", "one_sentence_definition": "No glossary entries available."}]
+    )
+)
+
+# %% [markdown]
+# ## Six Demo Explanations
+# These are the six outputs generated in the fresh single-instance run.
+
+# %%
+for condition in CONDITION_ORDER:
+    display(Markdown(f"### {CONDITION_LABELS[condition]}"))
+
+    for audience in AUDIENCE_ORDER:
+        row = demo_df[
+            (demo_df["generation.condition"] == condition)
+            & (demo_df["generation.audience"] == audience)
+        ].iloc[0]
+
+        hallucination = _as_bool(row["programmatic_metrics.hallucination_present"])
+        causal_overclaim = _as_bool(row["programmatic_metrics.causal_overclaim_present"])
+
+        body = "\n".join(
+            [
+                f"#### {AUDIENCE_LABELS[audience]}",
+                "",
+                "**Explanation**",
+                "",
+                row["generation.raw_text"],
+                "",
+                (
+                    "**Scores**: "
+                    f"Clarity={_metric_cell(row['judge_metrics.clarity_score'])}, "
+                    f"TAS={_metric_cell(row['judge_metrics.technical_appropriateness_score'])}, "
+                    f"WordCount={int(float(row['programmatic_metrics.word_count']))}, "
+                    f"Hallucination={hallucination}, "
+                    f"CausalOverclaim={causal_overclaim}"
+                ),
+                "",
+                f"**Judge note**: {row['judge_metrics.judge_notes']}",
+            ]
         )
-        return textwrap.fill(response.choices[0].message.content, width=80)
-
-    except Exception as e:
-        print(f"Error calling OpenAI API: {e}")
-        return narrative
-
-# %%
-explanation = heros.explain_prediction_natural(target_testing_instance, feature_names, best_model_index)
-print(explanation)
+        display(Markdown(body))
 
 # %% [markdown]
-# You can see below the output of the LLM-processed text (in this example we passed in the newly formatted input text above)
+# ## Compact Comparison Table
+# This final table gives a quick side-by-side view of the six fresh outputs.
 
 # %%
-from IPython.display import Markdown, display
-raw_data = extract_heros_raw_data(heros, feature_names, model_index=0, include_table=True)
-NLP_explanation = text_to_natural_language(explanation, raw_algorithm_data=raw_data, algorithm_pdf_path=heros_algorithm_pdf_path)
-print("Natural Language Explanation of Prediction:")
+comparison_df = demo_df[
+    [
+        "generation.condition",
+        "generation.audience",
+        "judge_metrics.clarity_score",
+        "judge_metrics.technical_appropriateness_score",
+        "programmatic_metrics.word_count",
+        "programmatic_metrics.hallucination_present",
+        "programmatic_metrics.causal_overclaim_present",
+        "programmatic_metrics.feature_grounding_score",
+        "programmatic_metrics.key_feature_coverage",
+        "programmatic_metrics.prediction_consistency",
+    ]
+].copy()
 
-display(Markdown(NLP_explanation))
+comparison_df["generation.condition"] = comparison_df["generation.condition"].map(
+    CONDITION_LABELS
+)
+comparison_df["generation.audience"] = comparison_df["generation.audience"].map(
+    AUDIENCE_LABELS
+)
+comparison_df["programmatic_metrics.hallucination_present"] = (
+    comparison_df["programmatic_metrics.hallucination_present"].map(_as_bool)
+)
+comparison_df["programmatic_metrics.causal_overclaim_present"] = (
+    comparison_df["programmatic_metrics.causal_overclaim_present"].map(_as_bool)
+)
+comparison_df = comparison_df.rename(
+    columns={
+        "generation.condition": "condition",
+        "generation.audience": "audience",
+        "judge_metrics.clarity_score": "clarity",
+        "judge_metrics.technical_appropriateness_score": "tas",
+        "programmatic_metrics.word_count": "word_count",
+        "programmatic_metrics.hallucination_present": "hallucination",
+        "programmatic_metrics.causal_overclaim_present": "causal_overclaim",
+        "programmatic_metrics.feature_grounding_score": "fgs",
+        "programmatic_metrics.key_feature_coverage": "kfc",
+        "programmatic_metrics.prediction_consistency": "pc",
+    }
+)
 
-# %% [markdown]
-# Here, we are printing the LLM output (with the same system prompt) that results from passing in the original formatting of the data. We have printed first the raw input, and then the LLM processed data afterwards.
-
-# %%
-print("\n\nRaw Explanation of Prediction:")
-raw_explanation = heros.predict_explanation_string(target_testing_instance, feature_names)
-raw_data = extract_heros_raw_data(heros, feature_names)
-print("\n\nLLM Explanation of Prediction:")
-print(text_to_natural_language(raw_explanation, raw_algorithm_data=raw_data))
-
-
-# %% [markdown]
-# ***
-# ## Visualize Rule and Model Population Pareto Fronts
-# ### **Rule Population**
-
-# %%
-if run_all_cells:
-    resolution = 500
-    plot_rules = True
-    color_rules = True
-    heros.get_rule_pareto_landscape(resolution, heros.rule_population, plot_rules, color_rules,show=True,save=True,output_path=output_path)
-
-# %% [markdown]
-# ### **Model Population**
-
-# %%
-if run_all_cells:
-    resolution = 500
-    plot_models = True
-    heros.get_model_pareto_fronts(show=True,save=True,output_path=output_path)
-
-# %% [markdown]
-# ***
-# ## Saving Rule and Model Populations as Output
-
-# %%
-# Save Rule Population as .csv
-rule_pop_df = heros.get_pop()
-rule_pop_df.to_csv(output_path+'/rule_pop.csv', index=False)
-# Save Model Population as .csv
-model_pop_df = heros.get_model_pop()
-model_pop_df.to_csv(output_path+'/model_pop.csv', index=False)
-
-# %% [markdown]
-# ***
-# ## Save and Visualize Learning Performance across Phase I and Phase 2 Training Iterations
-# ### **Phase I (Rule Learning)**
-
-# %%
-# Save Phase 1 Rule Training Performance Estimates to .csv
-rule_tracking_df = heros.get_performance_tracking()
-rule_tracking_df.to_csv(output_path+'/rule_pop_tracking.csv', index=False)
-# Plot Rule Learning Tracking
-heros.get_rule_tracking_plot(show=True,save=True,output_path=output_path)
-
-# %% [markdown]
-# ### **Phase II (Model Learning)**
-
-# %%
-model_tracking_df = heros.get_model_performance_tracking()
-model_tracking_df.to_csv(output_path+'/model_tracking.csv', index=False)
-# Plot Model Learning Tracking
-heros.get_model_tracking_plot(show=True,save=True,output_path=output_path)
-
-# %% [markdown]
-# ***
-# ## Saving Other Outputs
-# ### Pickle Trained HEROS Object (For Future Use)
-
-# %%
-# Pickle HEROS object
-with open(output_path+'/heros.pickle', 'wb') as f:
-    pickle.dump(heros, f)
-# Load previously pickled HEROS Object
-with open(output_path+'/heros.pickle', 'rb') as f:
-    heros = pickle.load(f)
-
-# %% [markdown]
-# ### Document HEROS Run Paramter Settings
-
-# %%
-heros.save_run_params(output_path+'/heros_run_parameters.txt')
-
-# %% [markdown]
-# ### Save Run Time Summary
-
-# %%
-time_df = heros.get_runtimes()
-time_df.to_csv(output_path+'/runtimes.csv', index=False)
-print(time_df)
-
-# %% [markdown]
-# ***
-# ## Visual Interpretation and Predictions With the Whole Phase I Rule Population
-# ### Vizualize Rule Population (Feature Specification) as a Rule-Clustered Heatmap (With Optional Rule-Weighting)
-# Parameters:
-# * *feature_names*: a list of feature names for the entire training dataset (given in original dataset order)
-# *  *weighting*: indicates what (if any) weighting is applied to individual rules for the plot ('useful_accuracy', 'fitness', None)
-# *  *specified_filter*: the number of times a given feature must be specified in rules of the population to be included in the plot (must be a positive integer or None)
-# *  *display_micro*: controls whether or not additional copies of rules (based on rule numerosity) should be included in the heatmap (True or False) 
-# *  *show*: indicates whether or not to show the plot (True or False)
-# *  *save*: indicates whether or not to save the plot to a specified path/filename (True or False)
-# *  *output_path*: a valid folder path within which to save the plot (str of folder path)
-# *  *data_name*: a unique name precursor to give to the plot (str)
-
-# %%
-if run_all_cells:
-    heros.get_rule_pop_heatmap(feature_names, weighting='useful_accuracy', specified_filter=1, display_micro=True, show=True, save=True, output_path=output_path)
-
-# %% [markdown]
-# ### Vizualize Rule Population (Feature Specification) as a Network (With Optional Rule-Weighting)
-
-# %%
-if run_all_cells:
-    node_size = 1000
-    edge_size = 10
-    weighting = 'useful_accuracy'# 'useful_accuracy', 'fitness', None
-    display_micro = True
-    heros.get_rule_pop_network(feature_names, weighting=weighting, display_micro=display_micro, node_size=node_size, edge_size=edge_size, show=True, save=True, output_path=output_path)
-
-
-# %% [markdown]
-# ### Vizualize Rule Population Feature Tracking Scores
-
-# %%
-# Save Feature Tracking Scores to .csv
-if heros.feat_track != None:
-    ft_df = heros.get_ft(feature_names)
-    ft_df.shape
-    ft_df.to_csv(output_path+'/feature_tracking_scores.csv', index=False)
-# Visualize clustered heatmap of feature tracking scores across all training instances
-if heros.feat_track != None and run_all_cells:
-    heros.get_clustered_ft_heatmap(feature_names, show=True, save=True, output_path=output_path)
-
-# %% [markdown]
-# ### Prediction with Whole Phase I Rule Population
-
-# %%
-predictions = heros.predict(X_test,whole_rule_pop=True)
-print("HEROS Whole Rule Population Testing Data Performance Report:")
-print(classification_report(predictions, y_test, digits=8))
-
-# %% [markdown]
-# ***
-# ## Testing Evaluation with Top Default Model or Custom Selected Model
-# ### **Top Default Model** (i.e. selected as model on front with highest training accuracy)
-# Ranked by accuracy, then coverage, then rule-count (as tie-breakers)
-
-# %%
-# Save Top Model selected by Default from the Front (Model on front with highest training accuracy)
-set_df = heros.get_model_rules() #returns top training model by default based on balanced accuracy, then covering, then rule-set size.
-set_df.to_csv(output_path+'/top_default_model_rules.csv', index=False)
-print(set_df)
-# Model Predictions and Evaluation using this 'Default' top model
-predictions = heros.predict(X_test)
-print("HEROS Top 'Default' Model Testing Data Performance Report:")
-print(classification_report(predictions, y_test, digits=8))
-
-# %% [markdown]
-# ### **Custom Selected Model** (Any Model in Trained Model Population)
-# The model index represents the index of the model in the final trained model population.
-
-# %%
-# Save Top Model selected by Default from the Front (Model on front with highest training accuracy)
-desired_model_index = 1
-set_df = heros.get_model_rules(index=desired_model_index) #returns top training model by default based on balanced accuracy, then covering, then rule-set size.
-print(set_df)
-# Model Predictions and Evaluation using this 'Default' top model
-predictions = heros.predict(X_test,whole_rule_pop=False,target_model=desired_model_index)
-print("HEROS Top 'Default' Model Testing Data Performance Report:")
-print(classification_report(predictions, y_test, digits=8))
-
-# %% [markdown]
-# ***
-# ## Evaluation of Stored Rule Populations (At User-Specified Iteration Checkpoints)
-# To facilitate comparing algorithm performance at earlier learning iterations.
-
-# %%
-if stored_rule_iterations != None:
-    rule_iteration_list = [int(x) for x in stored_rule_iterations.split(',')]
-    for iterations in rule_iteration_list:
-        print("Rule population evaluation at iteration "+str(iterations))
-        print("Run Time: "+str(heros.timer.rule_time_archive[iterations]))
-        predictions = heros.predict(X_test,whole_rule_pop=True,rule_pop_iter=iterations)
-        print(classification_report(predictions, y_test, digits=8))
-
-# %% [markdown]
-# ***
-# ## Evaluation of Stored Top Model (At User-Specified Iteration Checkpoints)
-# To facilitate comparing algorithm performance at earlier learning iterations.
-# ### **With Default Top Model**
-
-# %%
-if stored_model_iterations != None:
-    model_iteration_list = [int(x) for x in stored_model_iterations.split(',')]
-    for iterations in model_iteration_list:
-        print("Top default model evaluation at iteration "+str(iterations))
-        print("Run Time: "+str(heros.timer.model_time_archive[iterations]))
-        predictions = heros.predict(X_test,whole_rule_pop=False,model_pop_iter=iterations)
-        print(classification_report(predictions, y_test, digits=8))
-
-# %% [markdown]
-# ### **With Top Model Selected From Pareto-Front Using Testing Data**
-
-# %%
-if stored_model_iterations != None:
-    model_iteration_list = [int(x) for x in stored_model_iterations.split(',')]
-    for iterations in model_iteration_list:
-        print('---------------------------------------------------------------------------------------------')
-        print("Top model evaluation at iteration "+str(iterations))
-        print("Run Time: "+str(heros.timer.model_time_archive[iterations]))
-        iter_best_model_index = heros.auto_select_top_model(X_test,y_test,verbose=True,model_pop_iter=iterations)
-        predictions = heros.predict(X_test,whole_rule_pop=False, target_model=iter_best_model_index)
-        print(classification_report(predictions, y_test, digits=8))
-
-
-
+comparison_df["condition"] = pd.Categorical(
+    comparison_df["condition"],
+    categories=[CONDITION_LABELS[key] for key in CONDITION_ORDER],
+    ordered=True,
+)
+comparison_df["audience"] = pd.Categorical(
+    comparison_df["audience"],
+    categories=[AUDIENCE_LABELS[key] for key in AUDIENCE_ORDER],
+    ordered=True,
+)
+comparison_df = comparison_df.sort_values(["condition", "audience"]).reset_index(drop=True)
+display(comparison_df)
