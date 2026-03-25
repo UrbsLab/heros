@@ -129,6 +129,8 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
+!.env.example
 .venv
 env/
 venv/
@@ -173,6 +175,8 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-#Project specific
+# Project specific
+# Experiment outputs and run artifacts
 output/
+output/heros_llm/
 .DS_Store

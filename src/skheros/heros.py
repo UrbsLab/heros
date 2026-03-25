@@ -829,6 +829,147 @@ class HEROS(BaseEstimator, TransformerMixin):
             structured["narrative"] = None
 
         return structured
+    
+    def predict_explanation_dict(self, x, feature_names, whole_rule_pop=False, target_model=0):
+        """
+        Like predict_explanation, but returns a dict of:
+        - prediction: the chosen class
+        - probas:  dict of class→probability
+        - match_set: list of rule‐indices that fired
+        - rule_list: the list of RULE objects examined
+        - weights:   parallel list of each rule's useful_accuracy (or 1.0)
+        """
+        # 1) clean / validate x
+        x_clean = []
+        for v in x:
+            if np.isnan(v):
+                x_clean.append(None)
+            elif not self.check_is_float(v) and self.check_is_int(v):
+                raise ValueError("X must be fully numeric")
+            else:
+                x_clean.append(v)
+        x = x_clean
+
+
+        # 2) choose rule‐population vs model‐population
+        if whole_rule_pop:
+            pop = self.rule_population
+            pop.make_eval_match_set(x, self)
+            pred_obj = RULE_PREDICTION(self, pop, random)
+        else:
+            pop = self.model_population
+            pop.get_target_model(target_model)
+            pop.make_eval_match_set(x, self)
+            pred_obj = MODEL_PREDICTION(self, pop, random)
+
+
+        # 3) extract results
+        prediction    = pred_obj.get_prediction()
+        probas        = pred_obj.get_prediction_proba_dictionary()
+        match_set     = pop.match_set.copy()
+        # clear for next time
+        pop.clear_sets()
+
+
+        # 4) build rule_list + weights
+        if whole_rule_pop:
+            rule_list = pop.rule_set
+        else:
+            rule_list = pop.target_rule_set
+
+
+        weights = []
+        for i in match_set:
+            rule = rule_list[i]
+            wt = getattr(rule, 'useful_accuracy', None)
+            weights.append(float(wt) if wt is not None else 1.0)
+
+
+        return {
+            'prediction': prediction,
+            'probas': probas,
+            'match_set': match_set,
+            'rule_list': rule_list,
+            'weights': weights
+        }
+    
+    def explain_prediction_natural(self,
+                               x_instance,
+                               feature_names,
+                               best_model_index: int):
+        """
+        Returns a plain-English explanation with numeric reliability comparisons.
+        """
+        # 1) Get a structured prediction output (you'll need to refactor predict_explanation
+        #    to return this dict rather than just printing).
+        tech = self.predict_explanation_dict(
+            x_instance, feature_names,
+            whole_rule_pop=False,
+            target_model=best_model_index
+        )
+        pred     = tech['prediction']
+        proba    = tech['probas'].get(pred, 0.0)
+        match_idxs = tech['match_set']
+        rules      = tech['rule_list']
+        weights    = tech['weights']  # parallel to match_idxs
+
+
+        # 2) Separate supporting vs contradictory and pick top_k by weight
+        sup_entries = []
+        con_entries = []
+        for idx, wt in zip(match_idxs, weights):
+            entry = (wt, idx, rules[idx])
+            if rules[idx].action == pred:
+                sup_entries.append(entry)
+            else:
+                con_entries.append(entry)
+
+
+        top_sup = sorted(sup_entries, key=lambda x: x[0], reverse=True)
+        top_con = sorted(con_entries, key=lambda x: x[0], reverse=True)
+
+
+        # compute highest-contradictory-weight for comparison (or 0 if none)
+        max_con_wt = top_con[0][0] if top_con else 0.0
+
+
+        # 3) Build bullet-list narrative
+        lines = []
+        lines.append(f"The model predicted '{pred}' with confidence {proba:.2%}.")
+        lines.append(f"It matched {len(match_idxs)} rules in the chosen model.\n")
+
+
+        if top_sup:
+            lines.append(f"The supporting rules (sorted by reliability, most reliable first):")
+            for wt, idx, rule in top_sup:
+                conds = rule.describe_conditions(feature_names)
+                diff = wt - max_con_wt
+                lines.append(
+                    f"  • Rule {idx} (reliability {wt:.2f}): {conds}  \n"
+                    f"    – This outscored the strongest opposing rule by **{diff:.2f}**"
+                )
+        else:
+            lines.append("No rules explicitly supported this prediction.\n")
+
+
+        if top_con:
+            # for contrast, show the top contradictory rule’s weight
+            lines.append(f"\n The top contradictory rules (sorted by reliability, most reliable first):")
+            for wt, idx, rule in top_con:
+                conds = rule.describe_conditions(feature_names)
+                diff = max_con_wt - wt
+                lines.append(
+                    f"  • Rule {idx} (reliability {wt:.2f}): {conds}  \n"
+                    f"    – This was **{diff:.2f}** below the top supporting rule"
+                )
+            lines.append(
+                "\nBecause the supporting rules had higher reliability scores, "
+                "they carried more weight in the final decision."
+            )
+
+
+        narrative = "\n".join(lines)
+        return narrative
 
     def predict(self, X, whole_rule_pop=False, target_model=0, rule_pop_iter=None, model_pop_iter=None):
         """Scikit-learn required: Apply trained model to predict outcomes of instances. 
