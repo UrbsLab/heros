@@ -10,14 +10,29 @@ from .config import JudgeConfig
 from .data_models import ExplanationRecord, JudgeMetrics
 
 
-JUDGE_SYSTEM_PROMPT = """You are a strict evaluation assistant for a model explanation experiment.
+JUDGE_SYSTEM_PROMPTS = {
+    "v1": """You are a strict evaluation assistant for a model explanation experiment.
 
 Evaluate the explanation only against the supplied packet and audience label. Return JSON with:
 - clarity_score: float from 0 to 1
 - technical_appropriateness_score: float from 0 to 1
 - judge_notes: short justification
 
-Do not invent facts not present in the packet."""
+Do not invent facts not present in the packet.""",
+    "v2": """You are a strict evaluation assistant for a model explanation experiment.
+
+Evaluate the explanation only against the supplied packet, the intended audience, and the stated constraints. Return JSON with:
+- audience_understandability_score: float from 0 to 1
+- audience_technical_fit_score: float from 0 to 1
+- judge_notes: short justification
+
+Scoring rules:
+- Understandability should reflect whether the explanation is easy to follow for the target audience.
+- Technical fit should reflect whether the explanation uses an appropriate level of detail for the audience.
+- Penalize explanations that add domain meaning beyond the packet evidence.
+- Do not invent facts not present in the packet.
+- Return JSON only.""",
+}
 
 
 @dataclass
@@ -38,7 +53,7 @@ Evidence strength: {evidence_strength}
 Explanation:
 {explanation}
 
-Score clarity and technical appropriateness for the intended audience, then return only JSON.""".format(
+Score audience understandability and audience technical fit for the intended audience, then return only JSON.""".format(
         audience=record.prompt.audience,
         condition=record.prompt.condition,
         prediction=record.packet.model_context.prediction,
@@ -47,7 +62,10 @@ Score clarity and technical appropriateness for the intended audience, then retu
         explanation=record.generation.raw_text,
     )
     return JudgePrompt(
-        system_prompt=JUDGE_SYSTEM_PROMPT,
+        system_prompt=JUDGE_SYSTEM_PROMPTS.get(
+            judge_config.prompt_version,
+            JUDGE_SYSTEM_PROMPTS["v2"],
+        ),
         user_prompt=user_prompt,
         prompt_version=judge_config.prompt_version,
     )
@@ -64,8 +82,14 @@ def parse_judge_response(response_text: str, judge_config: JudgeConfig) -> Judge
             judge_prompt_version=judge_config.prompt_version,
         )
     return JudgeMetrics(
-        clarity_score=payload.get("clarity_score"),
-        technical_appropriateness_score=payload.get("technical_appropriateness_score"),
+        audience_understandability_score=payload.get(
+            "audience_understandability_score",
+            payload.get("clarity_score"),
+        ),
+        audience_technical_fit_score=payload.get(
+            "audience_technical_fit_score",
+            payload.get("technical_appropriateness_score"),
+        ),
         judge_notes=payload.get("judge_notes", ""),
         judge_model=judge_config.model,
         judge_prompt_version=judge_config.prompt_version,

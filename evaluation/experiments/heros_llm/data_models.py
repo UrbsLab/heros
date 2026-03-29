@@ -57,6 +57,9 @@ class RuleMetadata(SerializableDataclass):
     accuracy: Optional[float] = None
     match_cover: Optional[int] = None
     correct_cover: Optional[int] = None
+    match_fraction_train: Optional[float] = None
+    correct_fraction_train: Optional[float] = None
+    predicted_class_share_given_match: Optional[float] = None
     useful_accuracy: Optional[float] = None
     useful_coverage: Optional[float] = None
     vote_contribution: Dict[str, float] = field(default_factory=dict)
@@ -77,6 +80,8 @@ class ActiveRule(SerializableDataclass):
 class ModelContextSummary(SerializableDataclass):
     prediction: Any
     prediction_probabilities: Dict[str, float]
+    predicted_class_probability: float
+    confidence_bin: str
     covered: bool
     num_matching_rules: int
     num_supporting_rules: int
@@ -86,6 +91,7 @@ class ModelContextSummary(SerializableDataclass):
     prediction_margin: float
     selection_reason: Optional[str]
     evidence_strength_label: str
+    train_instance_count: Optional[int] = None
 
 
 @dataclass
@@ -136,19 +142,21 @@ class GeneratedExplanation(SerializableDataclass):
 
 @dataclass
 class ProgrammaticMetrics(SerializableDataclass):
-    feature_grounding_score: Optional[float] = None
+    evidence_grounding_precision: Optional[float] = None
     hallucination_present: bool = False
     unsupported_feature_mentions: List[str] = field(default_factory=list)
     unsupported_claim_spans: List[str] = field(default_factory=list)
-    key_feature_coverage: Optional[float] = None
-    prediction_consistency: Optional[int] = None
+    key_evidence_coverage: Optional[float] = None
+    prediction_explanation_agreement: Optional[int] = None
     word_count: int = 0
     uncertainty_ack_required: bool = False
     uncertainty_ack_present: bool = False
     causal_overclaim_present: bool = False
-    rule_mention_coverage: Optional[float] = None
-    conflict_awareness_score: Optional[float] = None
-    confidence_calibration_pass: bool = True
+    rule_coverage: Optional[float] = None
+    conflict_acknowledgment_score: Optional[float] = None
+    confidence_wording_calibration: bool = True
+    flesch_reading_ease: Optional[float] = None
+    flesch_kincaid_grade_level: Optional[float] = None
     raw_feature_mentions: List[str] = field(default_factory=list)
     raw_rule_mentions: List[str] = field(default_factory=list)
     raw_flags: Dict[str, Any] = field(default_factory=dict)
@@ -156,8 +164,8 @@ class ProgrammaticMetrics(SerializableDataclass):
 
 @dataclass
 class JudgeMetrics(SerializableDataclass):
-    clarity_score: Optional[float] = None
-    technical_appropriateness_score: Optional[float] = None
+    audience_understandability_score: Optional[float] = None
+    audience_technical_fit_score: Optional[float] = None
     judge_notes: str = ""
     judge_model: Optional[str] = None
     judge_prompt_version: Optional[str] = None

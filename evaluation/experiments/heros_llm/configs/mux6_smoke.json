@@ -17,9 +17,9 @@
     "verbose": false
   },
   "prompt": {
-    "prompt_version": "v1",
+    "prompt_version": "v2_minimal",
     "prediction_prompt_mode": "explicit",
-    "metadata_mode": "expert_only",
+    "metadata_mode": "clinician_and_expert",
     "key_rules_top_k": 3,
     "conditions": ["condition_b", "condition_c"],
     "audiences": ["layman", "clinician", "expert"]
@@ -40,7 +40,7 @@
     "api_key_env": "OPENAI_API_KEY",
     "temperature": 0.0,
     "max_tokens": 300,
-    "prompt_version": "v1"
+    "prompt_version": "v2"
   },
   "output": {
     "base_dir": "output/heros_llm",

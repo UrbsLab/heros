@@ -1,13 +1,12 @@
 {
-  "run_name": "mux6_single_instance_demo",
+  "run_name": "mux6_v2_live_smoke",
   "dataset_name": "MUX6",
   "split": "test",
   "sampling": {
-    "strategy": "explicit_instance_id",
-    "sample_size": 1,
+    "strategy": "stratified_prediction_rule_bucket",
+    "sample_size": 3,
     "seed": 42,
-    "use_full_test_set": false,
-    "instance_ids": ["165"]
+    "use_full_test_set": false
   },
   "heros": {
     "iterations": 10000,
@@ -35,7 +34,7 @@
     "request_timeout_seconds": 60
   },
   "judge": {
-    "enabled": true,
+    "enabled": false,
     "provider": "openai",
     "model": "gpt-4.1-mini",
     "api_key_env": "OPENAI_API_KEY",

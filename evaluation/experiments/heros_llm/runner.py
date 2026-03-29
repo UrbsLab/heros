@@ -24,7 +24,7 @@ from .judge import build_judge_prompt, parse_judge_response
 from .metrics_programmatic import compute_programmatic_metrics
 from .openai_client import OpenAIClientWrapper
 from .prompt_builder import build_prompt_bundle
-from .results import ResultsWriter
+from .results import ResultsWriter, write_summary_tables
 
 
 def _timestamp_utc() -> str:
@@ -316,17 +316,13 @@ def run_experiment(config: ExperimentConfig) -> str:
         writer.write_jsonl(writer.run_paths.generations_path, generation_rows)
         writer.write_jsonl(writer.run_paths.judge_requests_path, judge_request_rows)
         writer.write_jsonl(writer.run_paths.judge_results_path, judge_result_rows)
+    serialized_records = [to_serializable(record) for record in explanation_records]
     if config.output.write_records:
-        writer.write_jsonl(
-            writer.run_paths.records_path,
-            [to_serializable(record) for record in explanation_records],
-        )
+        writer.write_jsonl(writer.run_paths.records_path, serialized_records)
     if config.output.write_csv:
-        writer.write_csv(
-            writer.run_paths.records_csv_path,
-            [to_serializable(record) for record in explanation_records],
-        )
+        writer.write_csv(writer.run_paths.records_csv_path, serialized_records)
     writer.write_aggregate_metrics(explanation_records)
+    write_summary_tables(writer.run_paths.run_dir, serialized_records)
     return str(writer.run_paths.run_dir)
 
 

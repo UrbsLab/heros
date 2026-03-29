@@ -16,7 +16,7 @@
 # 2. select one held-out `MUX6` test instance
 # 3. generate all six explanations
 # 4. compute programmatic metrics
-# 5. run the judge model for `Clarity` and `Technical Appropriateness`
+# 5. run the judge model for `Audience Understandability` and `Audience Technical Fit`
 # 6. display the saved outputs
 
 # %% [markdown]
@@ -240,8 +240,8 @@ for condition in CONDITION_ORDER:
                 "",
                 (
                     "**Scores**: "
-                    f"Clarity={_metric_cell(row['judge_metrics.clarity_score'])}, "
-                    f"TAS={_metric_cell(row['judge_metrics.technical_appropriateness_score'])}, "
+                    f"AudienceUnderstandability={_metric_cell(row['judge_metrics.audience_understandability_score'])}, "
+                    f"AudienceTechnicalFit={_metric_cell(row['judge_metrics.audience_technical_fit_score'])}, "
                     f"WordCount={int(float(row['programmatic_metrics.word_count']))}, "
                     f"Hallucination={hallucination}, "
                     f"CausalOverclaim={causal_overclaim}"
@@ -261,14 +261,14 @@ comparison_df = demo_df[
     [
         "generation.condition",
         "generation.audience",
-        "judge_metrics.clarity_score",
-        "judge_metrics.technical_appropriateness_score",
+        "judge_metrics.audience_understandability_score",
+        "judge_metrics.audience_technical_fit_score",
         "programmatic_metrics.word_count",
         "programmatic_metrics.hallucination_present",
         "programmatic_metrics.causal_overclaim_present",
-        "programmatic_metrics.feature_grounding_score",
-        "programmatic_metrics.key_feature_coverage",
-        "programmatic_metrics.prediction_consistency",
+        "programmatic_metrics.evidence_grounding_precision",
+        "programmatic_metrics.key_evidence_coverage",
+        "programmatic_metrics.prediction_explanation_agreement",
     ]
 ].copy()
 
@@ -288,14 +288,14 @@ comparison_df = comparison_df.rename(
     columns={
         "generation.condition": "condition",
         "generation.audience": "audience",
-        "judge_metrics.clarity_score": "clarity",
-        "judge_metrics.technical_appropriateness_score": "tas",
+        "judge_metrics.audience_understandability_score": "audience_understandability",
+        "judge_metrics.audience_technical_fit_score": "audience_technical_fit",
         "programmatic_metrics.word_count": "word_count",
         "programmatic_metrics.hallucination_present": "hallucination",
         "programmatic_metrics.causal_overclaim_present": "causal_overclaim",
-        "programmatic_metrics.feature_grounding_score": "fgs",
-        "programmatic_metrics.key_feature_coverage": "kfc",
-        "programmatic_metrics.prediction_consistency": "pc",
+        "programmatic_metrics.evidence_grounding_precision": "evidence_grounding_precision",
+        "programmatic_metrics.key_evidence_coverage": "key_evidence_coverage",
+        "programmatic_metrics.prediction_explanation_agreement": "prediction_explanation_agreement",
     }
 )
 

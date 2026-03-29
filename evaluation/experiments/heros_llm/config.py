@@ -67,11 +67,16 @@ class HerosConfig(SerializableDataclass):
 @dataclass
 class PromptConfig(SerializableDataclass):
     heros_description: str = DEFAULT_HEROS_DESCRIPTION
-    prompt_version: str = "v1"
+    prompt_version: str = "v2_minimal"
     prediction_prompt_mode: str = "explicit"
-    metadata_mode: str = "expert_only"
+    metadata_mode: str = "clinician_and_expert"
     strong_evidence_threshold: float = 0.8
     mixed_evidence_threshold: float = 0.6
+    confidence_strong_threshold: float = 0.80
+    confidence_moderate_threshold: float = 0.65
+    confidence_slight_threshold: float = 0.55
+    rule_support_strong_threshold: float = 0.85
+    rule_support_moderate_threshold: float = 0.70
     key_rules_top_k: int = 3
     conditions: List[str] = field(default_factory=lambda: ["condition_b", "condition_c"])
     audiences: List[str] = field(default_factory=lambda: ["layman", "clinician", "expert"])
@@ -96,7 +101,8 @@ class JudgeConfig(SerializableDataclass):
     api_key_env: str = "OPENAI_API_KEY"
     temperature: float = 0.0
     max_tokens: int = 300
-    prompt_version: str = "v1"
+    prompt_version: str = "v2"
+    request_timeout_seconds: int = 60
 
 
 @dataclass

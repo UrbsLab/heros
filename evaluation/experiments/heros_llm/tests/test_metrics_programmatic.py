@@ -54,6 +54,8 @@ class ProgrammaticMetricsTests(unittest.TestCase):
             model_context=ModelContextSummary(
                 prediction=1,
                 prediction_probabilities={"0": 0.0, "1": 1.0},
+                predicted_class_probability=1.0,
+                confidence_bin="strong",
                 covered=True,
                 num_matching_rules=1,
                 num_supporting_rules=1,
@@ -63,17 +65,19 @@ class ProgrammaticMetricsTests(unittest.TestCase):
                 prediction_margin=1.0,
                 selection_reason=None,
                 evidence_strength_label="strong",
+                train_instance_count=450,
             ),
             heros_description="desc",
             glossary=[],
+            audience="layman",
         )
 
-    def test_feature_grounding_and_hallucination(self) -> None:
+    def test_evidence_grounding_precision_and_hallucination(self) -> None:
         metrics = compute_programmatic_metrics(
             self._packet(),
             "The model leaned toward class 1 because A_0 and R_0 match the active rule.",
         )
-        self.assertEqual(metrics.feature_grounding_score, 1.0)
+        self.assertEqual(metrics.evidence_grounding_precision, 1.0)
         self.assertFalse(metrics.hallucination_present)
 
     def test_detects_unsupported_feature(self) -> None:
@@ -83,6 +87,50 @@ class ProgrammaticMetricsTests(unittest.TestCase):
         )
         self.assertTrue(metrics.hallucination_present)
         self.assertIn("A_9", metrics.unsupported_feature_mentions)
+
+    def test_reserved_meta_labels_do_not_count_as_unsupported_features(self) -> None:
+        metrics = compute_programmatic_metrics(
+            self._packet(),
+            (
+                "The model leaned toward class 1. "
+                "Predicted class confidence was about 100%, and this was a model-based explanation."
+            ),
+        )
+        self.assertFalse(metrics.hallucination_present)
+        self.assertEqual(metrics.unsupported_feature_mentions, [])
+
+    def test_generic_feature_names_are_grounded(self) -> None:
+        packet = self._packet()
+        packet.feature_values = {"Age": 54, "BMI": 31.2}
+        packet.active_rules[0].conditions = [
+            RuleCondition(
+                feature_index=0,
+                feature_name="Age",
+                operator="=",
+                value=54,
+                is_categorical=True,
+            )
+        ]
+        metrics = compute_programmatic_metrics(
+            packet,
+            "The model leaned toward class 1 because Age matched the active rule.",
+        )
+        self.assertEqual(metrics.evidence_grounding_precision, 1.0)
+        self.assertFalse(metrics.hallucination_present)
+
+    def test_readability_only_for_layman(self) -> None:
+        layman_metrics = compute_programmatic_metrics(
+            self._packet(),
+            "The model leaned toward class 1 because A_0 matched the rule.",
+        )
+        self.assertIsNotNone(layman_metrics.flesch_reading_ease)
+        packet = self._packet()
+        packet.audience = "expert"
+        expert_metrics = compute_programmatic_metrics(
+            packet,
+            "The model leaned toward class 1 because A_0 matched the rule.",
+        )
+        self.assertIsNone(expert_metrics.flesch_reading_ease)
 
 
 if __name__ == "__main__":

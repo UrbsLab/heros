@@ -144,6 +144,20 @@ def _prediction_margin(prediction_probabilities: Dict[str, float]) -> float:
     return float(values[0] - values[1])
 
 
+def _predicted_class_probability(prediction: Any, prediction_probabilities: Dict[str, float]) -> float:
+    return float(prediction_probabilities.get(str(prediction), 0.0))
+
+
+def _confidence_bin(predicted_probability: float, prompt_config: PromptConfig) -> str:
+    if predicted_probability >= prompt_config.confidence_strong_threshold:
+        return "strong"
+    if predicted_probability >= prompt_config.confidence_moderate_threshold:
+        return "moderate"
+    if predicted_probability >= prompt_config.confidence_slight_threshold:
+        return "slight_lean"
+    return "uncertain"
+
+
 def _agreement_status(covered: bool, num_matching_rules: int, num_contradictory_rules: int) -> str:
     if not covered or num_matching_rules == 0:
         return "no_match"
@@ -172,7 +186,12 @@ def _evidence_strength_label(
     return "mixed"
 
 
-def _convert_rule(rule_payload: Dict[str, Any], fallback_id: str, prediction: Any) -> ActiveRule:
+def _convert_rule(
+    rule_payload: Dict[str, Any],
+    fallback_id: str,
+    prediction: Any,
+    train_instance_count: int,
+) -> ActiveRule:
     conditions: List[RuleCondition] = []
     for condition in rule_payload.get("conditions", []):
         operator = condition.get("operator", "=")
@@ -190,12 +209,33 @@ def _convert_rule(rule_payload: Dict[str, Any], fallback_id: str, prediction: An
             )
         )
 
+    match_cover = _normalize_scalar(rule_payload.get("match_cover"))
+    correct_cover = _normalize_scalar(rule_payload.get("correct_cover"))
+    accuracy = _normalize_scalar(rule_payload.get("accuracy"))
+    if match_cover not in (None, 0) and correct_cover is not None:
+        predicted_class_share_given_match = float(correct_cover) / float(match_cover)
+    else:
+        predicted_class_share_given_match = None
+    match_fraction_train = (
+        float(match_cover) / float(train_instance_count)
+        if match_cover is not None and train_instance_count
+        else None
+    )
+    correct_fraction_train = (
+        float(correct_cover) / float(train_instance_count)
+        if correct_cover is not None and train_instance_count
+        else None
+    )
+
     metadata = RuleMetadata(
         fitness=_normalize_scalar(rule_payload.get("fitness")),
         numerosity=_normalize_scalar(rule_payload.get("numerosity")),
-        accuracy=_normalize_scalar(rule_payload.get("accuracy")),
-        match_cover=_normalize_scalar(rule_payload.get("match_cover")),
-        correct_cover=_normalize_scalar(rule_payload.get("correct_cover")),
+        accuracy=accuracy,
+        match_cover=match_cover,
+        correct_cover=correct_cover,
+        match_fraction_train=match_fraction_train,
+        correct_fraction_train=correct_fraction_train,
+        predicted_class_share_given_match=predicted_class_share_given_match,
         useful_accuracy=_normalize_scalar(rule_payload.get("useful_accuracy")),
         useful_coverage=_normalize_scalar(rule_payload.get("useful_coverage")),
         vote_contribution={
@@ -243,7 +283,12 @@ def build_packet_for_instance(
     contradictory_rules = list(structured.get("contradictory_rules", []))
     all_rule_payloads = supporting_rules + contradictory_rules
     active_rules = [
-        _convert_rule(rule_payload, "R{0}".format(index + 1), prediction)
+        _convert_rule(
+            rule_payload,
+            "R{0}".format(index + 1),
+            prediction,
+            len(context.train_split.instance_ids),
+        )
         for index, rule_payload in enumerate(all_rule_payloads)
     ]
 
@@ -256,6 +301,7 @@ def build_packet_for_instance(
     num_supporting_rules = len([rule for rule in active_rules if rule.supports_prediction])
     num_contradictory_rules = len([rule for rule in active_rules if rule.contradicts_prediction])
     margin = _prediction_margin(prediction_probabilities)
+    predicted_probability = _predicted_class_probability(prediction, prediction_probabilities)
     agreement_status = _agreement_status(covered, num_matching_rules, num_contradictory_rules)
     evidence_strength_label = _evidence_strength_label(
         agreement_status,
@@ -264,10 +310,13 @@ def build_packet_for_instance(
         num_contradictory_rules,
         prompt_config,
     )
+    confidence_bin = _confidence_bin(predicted_probability, prompt_config)
 
     model_context = ModelContextSummary(
         prediction=prediction,
         prediction_probabilities=prediction_probabilities,
+        predicted_class_probability=predicted_probability,
+        confidence_bin=confidence_bin,
         covered=covered,
         num_matching_rules=num_matching_rules,
         num_supporting_rules=num_supporting_rules,
@@ -277,6 +326,7 @@ def build_packet_for_instance(
         prediction_margin=margin,
         selection_reason=structured.get("selection_reason"),
         evidence_strength_label=evidence_strength_label,
+        train_instance_count=len(context.train_split.instance_ids),
     )
 
     return InstanceExplanationPacket(

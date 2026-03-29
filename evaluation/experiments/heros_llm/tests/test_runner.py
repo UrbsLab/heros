@@ -21,6 +21,8 @@ def _packet(instance_id: int) -> InstanceExplanationPacket:
         model_context=ModelContextSummary(
             prediction=0,
             prediction_probabilities={"0": 0.7, "1": 0.3},
+            predicted_class_probability=0.7,
+            confidence_bin="moderate",
             covered=True,
             num_matching_rules=1,
             num_supporting_rules=1,
@@ -30,6 +32,7 @@ def _packet(instance_id: int) -> InstanceExplanationPacket:
             prediction_margin=0.4,
             selection_reason="test",
             evidence_strength_label="strong",
+            train_instance_count=450,
         ),
         heros_description="demo",
     )
