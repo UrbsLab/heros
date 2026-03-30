@@ -312,6 +312,12 @@ def _summary_rows_from_serialized(records: List[Dict[str, Any]]) -> List[Dict[st
                 "Audience Technical Fit": _metric_value(
                     jm, JUDGE_METRIC_ALIASES, "audience_technical_fit_score"
                 ),
+                "Flesch Reading Ease": _metric_value(
+                    pm, PROGRAMMATIC_METRIC_ALIASES, "flesch_reading_ease"
+                ),
+                "Flesch-Kincaid Grade Level": _metric_value(
+                    pm, PROGRAMMATIC_METRIC_ALIASES, "flesch_kincaid_grade_level"
+                ),
                 "WordCount": _metric_value(pm, PROGRAMMATIC_METRIC_ALIASES, "word_count"),
             }
         )
@@ -349,6 +355,8 @@ def write_summary_tables(run_dir: Path, records: List[Dict[str, Any]]) -> None:
         "Confidence Wording Calibration": ("Confidence Wording Calibration", "mean"),
         "Audience Understandability": ("Audience Understandability", "mean"),
         "Audience Technical Fit": ("Audience Technical Fit", "mean"),
+        "Flesch Reading Ease": ("Flesch Reading Ease", "mean"),
+        "Flesch-Kincaid Grade Level": ("Flesch-Kincaid Grade Level", "mean"),
         "WordCount": ("WordCount", "mean"),
     }
 
@@ -356,9 +364,15 @@ def write_summary_tables(run_dir: Path, records: List[Dict[str, Any]]) -> None:
     audience = df.groupby(["Audience"], dropna=False).agg(**agg_map).reset_index()
     condition_audience = df.groupby(["Condition", "Audience"], dropna=False).agg(**agg_map).reset_index()
 
-    condition = condition[["Condition"] + SUMMARY_COLUMN_ORDER[2:]]
-    audience = audience[["Audience"] + SUMMARY_COLUMN_ORDER[2:]]
-    condition_audience = condition_audience[["Condition", "Audience"] + SUMMARY_COLUMN_ORDER[2:]]
+    summary_columns = SUMMARY_COLUMN_ORDER[2:-1] + [
+        "Flesch Reading Ease",
+        "Flesch-Kincaid Grade Level",
+        "WordCount",
+    ]
+
+    condition = condition[["Condition"] + summary_columns]
+    audience = audience[["Audience"] + summary_columns]
+    condition_audience = condition_audience[["Condition", "Audience"] + summary_columns]
 
     condition.to_csv(run_dir / "summary_by_condition.csv", index=False)
     audience.to_csv(run_dir / "summary_by_audience.csv", index=False)
@@ -380,6 +394,11 @@ def write_summary_tables(run_dir: Path, records: List[Dict[str, Any]]) -> None:
     def wc(value: Any) -> str:
         return "{0:.1f}".format(float(value))
 
+    def readability(value: Any) -> str:
+        if value is None or pd.isna(value):
+            return "NA"
+        return "{0:.2f}".format(float(value))
+
     def display_df(dataframe: "pd.DataFrame") -> "pd.DataFrame":
         output = dataframe.copy()
         percentage_columns = [
@@ -400,6 +419,8 @@ def write_summary_tables(run_dir: Path, records: List[Dict[str, Any]]) -> None:
             output[column] = output[column].map(pct)
         for column in ["Audience Understandability", "Audience Technical Fit"]:
             output[column] = output[column].map(score)
+        for column in ["Flesch Reading Ease", "Flesch-Kincaid Grade Level"]:
+            output[column] = output[column].map(readability)
         output["n"] = output["n"].map(count)
         output["WordCount"] = output["WordCount"].map(wc)
         return output
@@ -416,7 +437,7 @@ def write_summary_tables(run_dir: Path, records: List[Dict[str, Any]]) -> None:
 
     markdown = "\n".join(
         [
-            "# MUX6 HEROS-LLM Summary Tables",
+            "# HEROS-LLM Summary Tables",
             "",
             "Source run: `{0}`".format(run_dir.name),
             "",

@@ -5,28 +5,63 @@
 \renewcommand\footnotetextcopyrightpermission[1]{}
 \pagestyle{plain}
 
-\title{Audience-Conditioned Natural-Language Explanations from Rule-Based Evidence: A HEROS+LLM Pipeline on Multiplexer Benchmarks}
+\title{Audience-Conditioned Translation of Rule-Based Evidence with Large Language Models Across Multiplexer Benchmarks}
 
-\author{Gabe Lipschutz-Villa}
-\affiliation{%
-  \institution{Author affiliations to match the HEROS paper before submission}}
 \author{Harsh Bandhey}
+\email{harsh.bandhey@cshs.org}
+\orcid{0000-0002-4113-0616}
 \affiliation{%
-  \institution{Author affiliations to match the HEROS paper before submission}}
-\author{Ruonan Yin}
+  \institution{Cedars Sinai Health Sciences University}
+  \city{Los Angeles}
+  \state{CA}
+  \country{USA}
+}
+
+\author{Gabriel Lipschutz-Villa}
+\email{gabelip@sas.upenn.edu}
+\orcid{0009-0008-0389-1984}
 \affiliation{%
-  \institution{Author affiliations to match the HEROS paper before submission}}
+  \institution{University of Pennsylvania}
+  \city{Philadelphia}
+  \state{PA}
+  \country{USA}
+}
+
+\author{Khoi Dinh}
+\email{khoidinh@seas.upenn.edu}
+\orcid{0009-0007-6499-9967}
+\affiliation{%
+  \institution{University of Pennsylvania}
+  \city{Philadelphia}
+  \state{PA}
+  \country{USA}
+}
+
 \author{Malek Kamoun}
+\email{malekkam@pennmedicine.upenn.edu}
+\orcid{0000-0002-2568-1733}
 \affiliation{%
-  \institution{Author affiliations to match the HEROS paper before submission}}
+  \institution{University of Pennsylvania}
+  \city{Philadelphia}
+  \state{PA}
+  \country{USA}
+}
+
 \author{Ryan J. Urbanowicz}
+\authornote{Corresponding Author}
+\email{ryan.urbanowicz@cshs.org}
+\orcid{0000-0002-0487-5555}
 \affiliation{%
-  \institution{Author affiliations to match the HEROS paper before submission}}
+  \institution{Cedars Sinai Health Sciences University}
+  \city{Los Angeles}
+  \state{CA}
+  \country{USA}
+}
 
 \begin{document}
 
 \begin{abstract}
-Interpretable rule-based models can expose instance-level evidence, yet their raw outputs are often too technical for end users. We study a constrained HEROS+LLM pipeline in which a large language model serves only as a translator of structured rule evidence rather than a free-form explainer. The system receives prediction output, active rules, instance values, and optional glossary entries, then produces audience-conditioned explanations for lay, clinician, and expert readers. We evaluate the approach on the held-out MUX6 test fold with two prompt conditions, yielding 300 explanations. The pipeline converts active rules into readable IF--THEN text, maps internal feature indices to feature names before prompting, and instructs the generator to describe model behavior rather than domain truth. Across all outputs, evidence precision is 1.000, evidence recall is 0.9994, evidence F1 is 0.9997, prediction--explanation agreement is 1.000, and rule coverage is 1.000. Adding glossary context improves audience-oriented judge scores but slightly increases hallucination. The results support a narrow but useful role for LLMs in explanation workflows: translating structured rule evidence into audience-appropriate language while remaining tightly grounded in the interpretable model.
+Rule-based models expose instance-level evidence, yet their raw outputs are often too technical for different users. We study a constrained HEROS+LLM pipeline in which a language model translates structured rule evidence rather than generating free-form explanations. HEROS is trained on MUX6, MUX11, and MUX20, and explanations are generated for 50 held-out instances per dataset under two prompt conditions and three audiences, yielding 900 explanations. The pipeline converts active rules into readable IF--THEN text, maps feature indices to names before prompting, and instructs the generator to describe model behavior rather than domain truth. Across datasets, evidence precision and prediction--explanation agreement remain 1.000. However, increasing benchmark complexity reduces evidence recall from 0.999 on MUX6 to 0.709 on MUX20 and increases hallucination from 4.0\% to 10.0\%. Adding a concise glossary improves audience-oriented judge scores but slightly increases hallucination. Expert explanations achieve the strongest technical-fit scores, whereas layman explanations minimize hallucination and causal overclaim but lose evidence coverage on harder benchmarks. These results support a narrow role for LLMs in interpretable pipelines: faithful translation remains feasible, but coverage becomes harder to preserve as rule interactions grow more complex.
 \end{abstract}
 
 \keywords{interpretable machine learning, rule-based learning, natural language explanations, large language models, explainable AI, evaluation}
@@ -34,146 +69,165 @@ Interpretable rule-based models can expose instance-level evidence, yet their ra
 \maketitle
 
 \section{Introduction}
-Interpretable machine learning is often motivated by settings where model outputs must be inspected, questioned, or communicated to stakeholders with different technical backgrounds. HEROS is a recent rule-based machine learning system designed to produce compact and human-readable predictive models through separate optimization of individual rules and rule sets~\cite{lipschutzvilla2025heros}. Because HEROS exposes matched rules, predicted classes, and prediction probabilities for a single instance, it provides a strong starting point for explanation. At the same time, rule outputs that are readable to machine learning researchers are not necessarily readable to clinicians, patients, or other applied users.
+Interpretable machine learning is often motivated by settings where model behavior must be inspected, challenged, or communicated to stakeholders with very different technical backgrounds. Rule-based models are especially attractive in this context because they expose explicit evidence in the form of matched conditions and predicted outcomes. HEROS is a recent rule-based machine learning system that separates optimization of individual rules from optimization of whole rule sets, producing compact models together with instance-level rule evidence~\cite{lipschutzvilla2025heros}. Even so, rule outputs that are intelligible to machine learning researchers are not automatically appropriate for clinicians, patients, or other non-expert users.
 
-Large language models are natural candidates for improving the linguistic quality of explanations, but recent work shows that free-text explanations produced by LLMs are often not faithful to the underlying model behavior~\cite{atanasova2023faithfulness,madsen2024self,parcalabescu2024measuring,lyu2024survey}. That risk is especially problematic in high-stakes domains, where users may incorrectly treat a fluent explanation as a causal or factual account of reality rather than a description of what a predictive model is doing~\cite{carriero2025describe}. This motivates a narrower design goal: use an LLM only as a translator of structured evidence that has already been produced by an interpretable model.
+Large language models appear well suited for this communication problem, but recent work on natural-language explanations warns that fluent text is often only weakly coupled to the actual reasoning process that produced a prediction~\cite{atanasova2023faithfulness,madsen2024self,parcalabescu2024measuring,lyu2024survey}. In high-stakes settings, that gap is especially problematic because readers may mistake an explanation of model behavior for an explanation of the world itself~\cite{carriero2025describe}. These concerns motivate a narrower design goal than generic explanation generation. Instead of asking an LLM to infer reasons from raw data or to rationalize a black-box model after the fact, we ask it to translate evidence that already comes from an interpretable model.
 
-In this paper, we present a HEROS+LLM explanation pipeline built around that constraint. The LLM does not infer reasons from scratch. Instead, it receives a structured explanation packet derived from active HEROS rules, instance feature values, model context, and optional glossary entries. The prompting strategy is audience-conditioned, but the evidence is fixed. We evaluate the system on the MUX6 multiplexer benchmark using a held-out 50-instance test split and two prompt conditions. The first condition provides prediction output, active rules, and instance values. The second adds a concise feature glossary. For each instance we generate three explanations, targeting a layman/patient, clinician/informed user, and expert/data scientist audience.
+This paper studies that translation setting using HEROS and three multiplexer benchmarks of increasing complexity. The LLM receives only structured evidence derived from active HEROS rules, instance feature values, a model-context summary, and optional glossary entries. It is explicitly instructed to explain what the model is doing, not what is true in reality, and to avoid causal claims. We compare two prompt conditions and three target audiences, then evaluate the generated explanations with literature-grounded evidence metrics, safety-oriented diagnostics, readability measures, and judge-model proxies for audience fit.
 
-Our contribution is threefold. First, we operationalize a modular explanation pipeline that preserves the interpretability benefits of HEROS while adding audience conditioning through constrained LLM prompting. Second, we define an evaluation protocol that separates packet-grounded evidence metrics from audience-oriented judge metrics, following the distinction between functionally grounded and human-grounded evaluation~\cite{doshivelez2017rigorous}. Third, we report an empirical study showing that tightly constrained translation can maintain near-perfect evidence grounding on a held-out synthetic benchmark while revealing measurable trade-offs between contextual richness, audience fit, and safety-oriented failure modes.
+The paper extends our initial MUX6 prototype into a cross-benchmark study on MUX6, MUX11, and MUX20. This extension matters because it reveals not only whether grounded translation is possible, but also how performance changes as the underlying rule interactions become denser. Across all three datasets, evidence precision and prediction--explanation agreement remain perfect, suggesting that the translation framing successfully constrains unsupported feature invention. At the same time, evidence recall, rule coverage, and readability degrade as dataset complexity increases, showing that omission and compression become the dominant failure modes. We argue that this distinction is scientifically useful: it suggests that future work should focus less on preventing arbitrary hallucination and more on preserving evidence coverage under complex multi-rule settings.
 
-\section{Background and Related Work}
-\subsection{Interpretable rule-based modeling}
-Rule-based learning systems remain attractive when a model itself, rather than only a post-hoc explanation, must be interpretable. HEROS belongs to the learning classifier systems lineage, but differs from earlier systems by separately optimizing individual rules and whole rule sets under distinct objectives~\cite{lipschutzvilla2025heros}. For the present study, the important property is not HEROS training itself but the form of its explanation output: for an individual instance, HEROS can identify matching rules, contradictory rules, predicted class probabilities, and whether the instance is covered by the selected model.
+\section{Methods}
+\subsection{Pipeline design}
+The pipeline is built around a strict division of labor between HEROS and the language model. HEROS performs prediction and identifies the active supporting and contradictory rules for a given instance. The LLM receives only a structured explanation packet derived from those outputs. It is never asked to infer feature importance from scratch, summarize the full rule population, or recover dataset semantics from internal feature indices.
 
-\subsection{Faithful natural-language explanations}
-Recent work on natural-language explanations emphasizes that fluency alone is not evidence of faithfulness. Atanasova et al.~\cite{atanasova2023faithfulness} develop tests for whether generated natural-language explanations reflect changes in the underlying decision. Parcalabescu and Frank~\cite{parcalabescu2024measuring} further argue that many widely used ``faithfulness'' tests for language explanations are better understood as output-level self-consistency checks than direct measurements of internal model faithfulness. Madsen et al.~\cite{madsen2024self} reach a similar conclusion for self-explanations from instruction-tuned LLMs, showing that persuasive explanations should not be trusted by default. Lyu et al.~\cite{lyu2024survey} survey faithful explanation in NLP and highlight the central role of evidence-based and intervention-based evaluation.
+For each held-out instance, the system constructs a packet containing the predicted class, class probabilities, model coverage status, active supporting and contradictory rules, relevant instance feature values, and a model-context summary describing the number of matching rules and whether the evidence is consistent or mixed. When available, the packet also includes rule metadata such as numerosity, accuracy, fitness, vote contribution, and training-support counts. Internal feature indices are converted to feature names before prompt construction. Each active rule is then rendered as readable IF--THEN text so that the generator receives a textual but still structured view of the model evidence.
 
-These concerns are particularly relevant for our setting. We are not asking an LLM to explain its own prediction, nor to rationalize the output of a black-box classifier. Instead, we ask it to restate evidence from an interpretable model. This narrower task avoids part of the faithfulness problem, but it does not eliminate it: the LLM may still hallucinate unsupported feature meanings, overstate certainty, or convert associative rule evidence into causal-sounding prose.
+The prompt design follows the same constrained translation philosophy. Condition B provides prediction output, active rules, and relevant instance values. Condition C adds concise one-sentence glossary entries for features that appear in the active rules. The audience setting determines how much technical detail is exposed. Layman explanations use plain language with qualitative confidence wording only. Clinician explanations use concise feature--value reasoning with moderate technical detail and rounded support information. Expert explanations include exact probability language, rule identifiers, and metadata when available. In all cases, the prompt instructs the LLM to discuss model behavior only, to acknowledge conflicting rules when they are present, and to avoid causal or factual claims that go beyond the provided evidence.
 
-\subsection{Human-centered evaluation and audience fit}
-Doshi-Velez and Kim~\cite{doshivelez2017rigorous} distinguish functionally grounded, human-grounded, and application-grounded evaluation, providing a useful framework for explanation studies. More recent XAI reviews emphasize that explanation quality is inherently user- and task-dependent~\cite{kim2024human,hoffman2023measures}. In healthcare-oriented settings, this issue becomes sharper because stakeholders often want information that is actionable or causal, while many XAI methods can only describe patterns used by a predictive model~\cite{carriero2025describe}. This distinction is aligned with our prompting policy: the system is instructed to explain what the model is doing, not what is true in the world.
+\subsection{Benchmarks and experimental design}
+We evaluate on the multiplexer benchmarks distributed with the HEROS repository. MUX6 contains 500 total instances split into 450 training and 50 held-out test cases. MUX11 contains 5{,}000 total instances split into 4{,}500 training and 500 held-out test cases. MUX20 contains 10{,}000 total instances split into 9{,}000 training and 1{,}000 held-out test cases. HEROS is trained on the standard training split for each benchmark. For MUX6, we evaluate on the full 50-instance held-out test fold. For MUX11 and MUX20, we evaluate on stratified 50-instance subsets drawn from the held-out test folds in order to keep the LLM evaluation budget fixed across datasets while preserving variation in predicted class and rule-matching profile.
 
-\subsection{Evaluation metrics for generated explanations}
-Evidence-centric evaluation has become a major theme in explanation research. The ERASER benchmark formalized evidence precision, recall, and intervention-style faithfulness metrics such as comprehensiveness and sufficiency for rationalized NLP models~\cite{deyoung2020eraser}. More recently, Xing et al.~\cite{xing2025evidence} focus on evidence attribution quality in generated fact-checking explanations. We adapt the evidence precision/recall tradition to rule-based explanation packets: the explanation is rewarded for mentioning evidence features that are actually present in the active rule set and penalized when it introduces unsupported features or claims.
+This design yields 50 evaluated instances per dataset, two prompt conditions, and three audience targets, for a total of 300 explanations per dataset and 900 explanations overall. Table~\ref{tab:benchmarks} summarizes the benchmark setup together with the mean number of active matching rules observed in the selected evaluation instances. The increase in mean matching rules from MUX6 to MUX20 provides an intuitive measure of how explanation burden grows across the benchmarks.
 
-For subjective evaluation we use an LLM judge to proxy audience fit, drawing methodological inspiration from G-Eval~\cite{liu2023geval} while explicitly treating judge scores as supportive rather than definitive, following Huang et al.~\cite{huang2025judge}. We also monitor hallucination as a first-class failure mode, motivated by the taxonomy and benchmarking perspective of HalluLens~\cite{bang2025hallulens}.
+The generation model was \texttt{gpt-4.1-mini} with temperature fixed at 0.0. Judge scoring used the same model family at temperature 0.0 under a separate JSON-only rubric. We used deterministic settings throughout to improve reproducibility and to reduce sampling variance.
 
-\section{HEROS+LLM Pipeline}
-\subsection{Design goals}
-The system was designed around four constraints. First, the LLM should never infer model evidence from raw instances on its own. Second, only active rules should be passed to the generator for a given instance. Third, all internal feature indices must be converted to feature names before prompt construction. Fourth, the generated text should describe model behavior only and avoid causal interpretations.
+\begin{table}[t]
+\caption{Benchmark configuration. Each benchmark contributes 50 evaluated held-out instances, producing 300 generated explanations per dataset and 900 explanations overall. Mean matching rules are computed on the evaluated instances.}
+\label{tab:benchmarks}
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Dataset} & \textbf{Train} & \textbf{Held-out Test} & \textbf{Evaluated} & \textbf{Mean Matching Rules} \\
+\midrule
+MUX6  & 450  & 50   & 50 & 3.08 \\
+MUX11 & 4{,}500 & 500  & 50 & 7.24 \\
+MUX20 & 9{,}000 & 1{,}000 & 50 & 14.86 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\subsection{Structured explanation packets}
-For each test instance, the pipeline builds a structured packet containing the predicted class and class probabilities, whether the selected HEROS model covers the instance, the active supporting and contradictory rules, the instance feature values relevant to those rules, optional rule metadata such as numerosity, accuracy, fitness, vote contribution, and training-support counts, and a model-context summary describing the number of matching rules together with whether evidence is consistent or mixed.
+\section{Evaluation Metrics}
+Our evaluation follows the distinction between functionally grounded and human-grounded explanation assessment~\cite{doshivelez2017rigorous}. The functionally grounded metrics are computed directly from the structured HEROS packet and the generated explanation text. The human-grounded quantities are approximated with an LLM judge, which we treat as a scalable proxy rather than a substitute for participant studies~\cite{liu2023geval,huang2025judge}. We prioritize literature-backed constructs whenever possible and use task-specific diagnostics only where this explanation setting introduces constraints that are not captured by standard metrics.
 
-Each rule is converted into readable IF--THEN text before prompting. For example, an internal rule with conditions on \texttt{A\_0} and \texttt{R\_3} is rendered as a sentence such as ``If \texttt{A\_0 = 1} and \texttt{R\_3 = 0}, then predict class 0.'' Optional metadata is appended only when needed for the target audience.
+The core evidence metrics follow the evidence attribution and rationale-evaluation literature~\cite{deyoung2020eraser,xing2025evidence}. For an explanation with mentioned evidence set $M$ and packet-derived evidence set $E$, Evidence Precision is $\lvert M \cap E \rvert / \lvert M \rvert$, Evidence Recall is $\lvert M \cap E \rvert / \lvert E \rvert$, and Evidence F1 is the harmonic mean of the two. In this paper, the packet-derived evidence set is defined by the features appearing in the active HEROS rules for the target instance. Hallucination Rate marks explanations that introduce unsupported features or unsupported claims, following the broader LLM hallucination literature~\cite{bang2025hallulens}. Prediction--Explanation Agreement checks whether the explanation remains consistent with the model's predicted class, while Rule Coverage measures whether the explanation captures the key active rules used by the model.
 
-\subsection{Audience-conditioned prompting}
-We define two prompt conditions and three audience profiles. Condition B contains the prediction output, active rules, and instance values. Condition C adds one-sentence glossary entries for the features that appear in the active rules. The layman or patient audience receives plain language with minimal jargon and no quantitative support metadata. The clinician or informed-user audience receives moderate technical detail with concise feature--value reasoning and qualitative or rounded quantitative support. The expert or data-scientist audience receives explicit rule identifiers, exact probability information, and rule metadata when available.
+Because the prompts explicitly forbid causal language and require acknowledgment of mixed evidence, we also report safety and calibration diagnostics that are specific to this task. Uncertainty Acknowledgment Rate measures whether an explanation signals uncertainty when the active rules are mixed or conflicting. Conflict Acknowledgment Score measures whether the explanation correctly recognizes rule disagreement. Causal Overclaim Rate flags statements that imply causes or real-world mechanisms instead of model behavior. Confidence Wording Calibration checks whether the certainty language in the explanation is compatible with the prediction probability and evidence-strength bucket supplied by the packet.
 
-The system prompt forbids unsupported feature meanings, causal language, and claims about real-world truth. It also instructs the model to acknowledge conflicting evidence when rules disagree. Confidence is verbalized differently by audience: layman explanations use qualitative bins only, clinician explanations use rounded percentages plus bins, and expert explanations receive exact predicted-class probabilities.
-
-\subsection{Why this is translation rather than explanation synthesis}
-The proposed workflow intentionally narrows the role of the LLM. The language model does not search for new evidence, summarize the full rule population, or invent domain semantics for feature names. Instead, it receives already-structured evidence and rewrites that evidence for a specified reader. This distinction is central to the scientific framing of the study: we evaluate whether an LLM can preserve packet faithfulness while improving audience fit.
-
-\section{Experimental Design}
-\subsection{Dataset and split}
-We focus on the MUX6 multiplexer benchmark included with the HEROS repository. The benchmark contains 500 total instances, partitioned into 450 training instances and 50 held-out test instances. All experiments in this paper use the full 50-instance test fold as a held-out evaluation set. Because MUX6 is synthetic, it is useful for controlled proof-of-concept evaluation before moving to biomedical datasets.
-
-\subsection{Model training and inference}
-HEROS was trained on the 450-instance training split using the repository's script-first experiment framework. For each test instance, the selected model produced an explanation packet with active rules, probabilities, and model-context summaries. We then generated explanations for every combination of 2 conditions and 3 audiences, producing 300 explanations in total.
-
-\subsection{Generation and judge models}
-The generation model was \texttt{gpt-4.1-mini} with temperature fixed at 0.0. The judge pass used the same model family at temperature 0.0, but under a separate scoring prompt. We chose deterministic settings to improve reproducibility and to reduce variance from prompt sampling.
-
-\subsection{Evaluation metrics}
-Our evaluation follows the functionally grounded versus human-grounded distinction~\cite{doshivelez2017rigorous}. The primary functionally grounded metrics are Evidence Precision, defined as the fraction of mentioned evidence features that belong to the active-rule evidence set; Evidence Recall, defined as the fraction of the active-rule evidence set that is captured by the explanation; Evidence F1, the harmonic mean of evidence precision and recall; Hallucination Rate, the proportion of explanations containing unsupported features or unsupported claims; Prediction--Explanation Agreement, which checks whether the explanation remains consistent with the model prediction; and Rule Coverage, which evaluates whether the explanation reflects the key active rules.
-
-We also report task-specific safety and calibration checks that are necessary for this setting, namely Uncertainty Acknowledgment Rate, Causal Overclaim Rate, Conflict Acknowledgment Score, and Confidence Wording Calibration.
-
-For layman outputs we additionally compute Flesch Reading Ease and Flesch--Kincaid Grade Level as supporting readability indicators~\cite{flesch1948readability,kincaid1975derivation}.
-
-Human-grounded metrics were approximated with an LLM judge through Audience Understandability and Audience Technical Fit.
-
-These judge metrics are best interpreted as scalable proxies rather than replacements for human studies~\cite{liu2023geval,huang2025judge}. We intentionally do not report comprehensiveness or sufficiency in the results because the current implementation does not yet rerun HEROS under perturbation-based feature removal or keep-only conditions.
+Audience-oriented quality is approximated with two judge-model scores. Audience Understandability measures whether the explanation is understandable for the requested audience, while Audience Technical Fit measures whether the level of detail and terminology match that audience. We also compute Flesch Reading Ease and Flesch--Kincaid Grade Level for all audiences as descriptive readability indicators~\cite{flesch1948readability,kincaid1975derivation}. In our interpretation, these values are most directly meaningful for layman outputs and are primarily descriptive for clinician and expert outputs, because formula-based readability can diverge from audience appropriateness in technical writing. We do not report comprehensiveness or sufficiency, although both are well established in rationale evaluation~\cite{deyoung2020eraser}, because their proper computation here requires rerunning HEROS under feature-removal and keep-only perturbations rather than estimating them from the text alone.
 
 \begin{table*}[t]
-\caption{Prompt conditions and target audiences used in the study.}
-\label{tab:design}
+\caption{Metrics used in the study. The first block is literature-grounded and packet-computable. The second block contains task-specific diagnostics motivated by the non-causal and audience-conditioned constraints of the pipeline. Judge metrics are supportive proxies rather than direct human-study outcomes.}
+\label{tab:metrics}
 \centering
-\begin{tabular}{p{1.2cm}p{4.9cm}p{7.2cm}}
+\begin{tabular}{p{2.8cm}p{2.7cm}p{10.1cm}}
 \toprule
-\textbf{Axis} & \textbf{Setting} & \textbf{Content passed to the LLM} \\
+\textbf{Category} & \textbf{Metric} & \textbf{Operationalization and role in this study} \\
 \midrule
-Condition & B & Predicted class, confidence wording, active rules only, relevant instance feature values, and rule-conflict summary. No glossary. \\
-Condition & C & Same as Condition B, plus one-sentence glossary entries for features appearing in the active rules. \\
-Audience & Layman / patient & Plain-language restatement of rule evidence, no rule IDs, no quantitative support metadata, explicit non-causal limitation. \\
-Audience & Clinician / informed user & Moderate technical detail with concise feature--value matches and rounded training-support information when available. \\
-Audience & Expert / data scientist & Technical summary with rule IDs, exact predicted-class probability, and rule metadata including support and vote information when available. \\
+Evidence grounding & Evidence Precision & Fraction of mentioned evidence features that are actually present in the active-rule packet. High precision indicates that the LLM stays within supported evidence when it chooses to mention features. \\
+Evidence grounding & Evidence Recall & Fraction of packet evidence captured by the generated explanation. Lower recall indicates omission or compression of relevant rule evidence. \\
+Evidence grounding & Evidence F1 & Harmonic mean of Evidence Precision and Evidence Recall, used as a balanced summary of grounding and coverage. \\
+Faithfulness & Prediction--Explanation Agreement & Checks whether the explanation remains consistent with the model's predicted class. This metric is task-specific but important because the LLM is given the final prediction explicitly. \\
+Faithfulness & Rule Coverage & Measures whether the explanation reflects the key active rules rather than only isolated feature mentions. \\
+Hallucination & Hallucination Rate & Percentage of explanations containing unsupported features or unsupported claims, following the broader hallucination literature. \\
+Safety and calibration & Uncertainty Acknowledgment Rate & Measures whether the explanation acknowledges uncertainty when the active rules provide mixed or conflicting evidence. \\
+Safety and calibration & Conflict Acknowledgment Score & Measures whether rule disagreement is recognized correctly rather than ignored or fabricated. \\
+Safety and calibration & Causal Overclaim Rate & Percentage of explanations containing causal or real-world-mechanism language that exceeds the packet evidence. \\
+Safety and calibration & Confidence Wording Calibration & Checks whether certainty language is compatible with the packet's prediction probability and evidence-strength label. \\
+Audience quality & Audience Understandability & Judge-model proxy for whether the explanation is understandable for the requested audience. \\
+Audience quality & Audience Technical Fit & Judge-model proxy for whether the level of technical detail matches the requested audience. \\
+Readability & Flesch Reading Ease and Flesch--Kincaid Grade Level & Standard readability diagnostics computed for all audiences. In this study they are interpreted primarily as quality targets for layman explanations and as descriptive complexity indicators for clinician and expert explanations. \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
 \section{Results}
-Across all 300 generated explanations, the pipeline achieved mean evidence precision of 1.000, evidence recall of 0.9994, evidence F1 of 0.9997, prediction--explanation agreement of 1.000, and rule coverage of 1.000. These values indicate that the prompt-constrained LLM almost always stayed within the feature evidence supplied by the active HEROS rules. The remaining failure modes were therefore concentrated in explanation style rather than core evidential grounding: hallucination rate was 4.0\%, causal overclaim rate was 13.3\%, and conflict acknowledgment averaged 73.3\%.
+\subsection{Cross-benchmark performance}
+Table~\ref{tab:dataset-results} reports the overall cross-benchmark results. Across all three datasets, Evidence Precision remained 1.000 and Prediction--Explanation Agreement remained 1.000. This is an important result because it shows that the LLM almost never invented unsupported evidence features when it explicitly referred to model evidence, even as the underlying rule interactions became more complex. The dominant failure mode was therefore not unsupported insertion but incomplete coverage.
 
-Table~\ref{tab:condition-results} compares the two prompt conditions. Adding glossary context in Condition C improved both audience-oriented judge scores, but slightly worsened packet-grounded safety metrics. Audience understandability increased from 0.820 to 0.846 and audience technical fit from 0.820 to 0.835, while hallucination rose from 3.3\% to 4.7\%. Evidence recall remained extremely high in both conditions.
+That coverage problem becomes visible as benchmark complexity increases. Mean matching rules rose from 3.08 on MUX6 to 7.24 on MUX11 and 14.86 on MUX20. Over the same progression, Evidence Recall dropped from 0.999 to 0.921 and then to 0.709, while Evidence F1 dropped from 0.9997 to 0.9522 and then to 0.8113. Rule Coverage followed the same trend, falling from 1.000 on MUX6 to 0.9889 on MUX11 and 0.9078 on MUX20. Hallucination Rate increased from 4.0\% to 6.0\% and then to 10.0\%, while Causal Overclaim Rate increased from 13.3\% to 29.7\% and then to 33.3\%. These results suggest that as more rules become simultaneously relevant, the LLM still stays precise about mentioned evidence but compresses or abstracts away a growing share of the available support.
+
+The conflict-related metrics move in the opposite direction. Conflict Acknowledgment Score increased from 0.733 on MUX6 to 0.897 on MUX11 and 0.987 on MUX20, while Uncertainty Acknowledgment Rate increased from 0.940 to 0.973 and then to 1.000. This pattern indicates that once rule conflict becomes prominent, the prompts successfully steer the model to acknowledge it. In other words, the system becomes worse at exhaustively covering evidence, but better at correctly describing that the evidence is mixed.
 
 \begin{table*}[t]
-\caption{Condition-level results on the held-out MUX6 test fold. Judge scores are on a 0--1 scale; percentage-style metrics are shown as percentages.}
-\label{tab:condition-results}
+\caption{Overall results by dataset. Judge scores are on a 0--1 scale. Percentage-style metrics are shown as percentages. Flesch Reading Ease and Flesch--Kincaid Grade Level are averaged over all explanations within each dataset.}
+\label{tab:dataset-results}
 \centering
-\begin{tabular}{lrrrrrrrrr}
+\small
+\begin{tabular}{lrrrrrrrrrrrr}
 \toprule
-\textbf{Condition} & \textbf{n} & \textbf{Ev. Prec.} & \textbf{Ev. Recall} & \textbf{Ev. F1} & \textbf{Halluc.} & \textbf{UAR} & \textbf{COR} & \textbf{Aud. Und.} & \textbf{Aud. Tech. Fit} \\
+\textbf{Dataset} & \textbf{Ev. Prec.} & \textbf{Ev. Recall} & \textbf{Ev. F1} & \textbf{Halluc.} & \textbf{Rule Cov.} & \textbf{Conflict Ack.} & \textbf{UAR} & \textbf{COR} & \textbf{Aud. Und.} & \textbf{Aud. Tech. Fit} & \textbf{FRE} & \textbf{FKGL} \\
 \midrule
-B & 150 & 100.0 & 100.0 & 100.0 & 3.3 & 95.3 & 14.7 & 0.820 & 0.820 \\
-C & 150 & 100.0 & 99.9 & 99.9 & 4.7 & 92.7 & 12.0 & 0.846 & 0.835 \\
+MUX6  & 100.0 & 99.9 & 100.0 & 4.0 & 100.0 & 73.3 & 94.0 & 13.3 & 0.833 & 0.827 & 62.55 & 9.35 \\
+MUX11 & 100.0 & 92.1 & 95.2  & 6.0 & 98.9  & 89.7 & 97.3 & 29.7 & 0.805 & 0.820 & 57.48 & 10.74 \\
+MUX20 & 100.0 & 70.9 & 81.1  & 10.0 & 90.8 & 98.7 & 100.0 & 33.3 & 0.797 & 0.817 & 52.37 & 11.79 \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-Audience-level results reveal a different trade-off pattern (Table~\ref{tab:audience-results}). Expert explanations achieved the strongest audience-understandability (0.900) and audience-technical-fit (0.953) scores, but also had the highest hallucination rate (7.0\%). Layman explanations were the shortest and safest overall, with a hallucination rate of 2.0\% and causal overclaim rate of 3.0\%, but they received the weakest judge scores. Clinician explanations offered the most balanced audience-fit profile, but under our lexical causal-overclaim detector they exhibited the highest causal overclaim rate (26.0\%), suggesting that concise technical summaries can still drift into over-strong causal language if not explicitly constrained enough.
+\subsection{Effect of glossary context}
+The condition comparison is strikingly consistent across benchmarks. Pooled across MUX6, MUX11, and MUX20, Condition C, which includes concise glossary entries, improved Audience Understandability from 0.802 to 0.821 and Audience Technical Fit from 0.814 to 0.828. At the same time, Hallucination Rate rose from 5.8\% to 7.6\%. Evidence Recall and Evidence F1 were essentially unchanged across the two conditions, and Causal Overclaim Rate was slightly lower in Condition C than in Condition B. The readability diagnostics shifted only slightly: mean Flesch Reading Ease declined from 57.86 in Condition B to 57.08 in Condition C, while mean Flesch--Kincaid Grade Level rose from 10.59 to 10.67. This suggests that the glossary helps the model produce more audience-tailored phrasing without substantially changing how much evidence it retains, but it also creates slightly more room for unsupported elaboration.
+
+\subsection{Audience trade-offs}
+The pooled audience comparison reveals three distinct explanation regimes. Expert explanations achieved the strongest Audience Understandability and Audience Technical Fit, both near 0.90 or above, and they also had the highest Evidence Recall and Evidence F1. However, they came with the highest Hallucination Rate at 18.0\% and the longest outputs on average. Layman explanations behaved almost inversely. Their Hallucination Rate was only 1.0\% and their Causal Overclaim Rate was 5.7\%, but their Evidence Recall dropped to 0.830 and their Audience Technical Fit was only 0.635. Clinician explanations occupied a middle position on recall and judge scores while showing an important weakness: their Causal Overclaim Rate reached 56.0\% under our lexical detector, even though their Hallucination Rate was only 1.0\%.
+
+This audience pattern suggests that the main trade-off is not simply between faithfulness and readability. Expert prompts preserve the most evidence but invite over-elaboration. Layman prompts suppress unsupported language effectively, but often do so by compressing evidence too aggressively, especially on MUX20. Clinician prompts retain more evidence than layman prompts and remain highly interpretable, yet they need stronger causal-language controls. The readability diagnostics add an important nuance. Across pooled audience rows, Clinician, Expert, and Layman explanations had mean Flesch Reading Ease values of 52.38, 62.03, and 57.99, with corresponding Flesch--Kincaid Grade Levels of 12.26, 9.65, and 9.97. This counterintuitive ranking suggests that formula-based readability is driven strongly by sentence length and word length, not only by audience fit. We therefore treat these scores as descriptive measures of linguistic surface form and rely on the judge-model metrics as the primary indicators of audience appropriateness.
 
 \begin{table*}[t]
-\caption{Audience-level results on the held-out MUX6 test fold. Judge scores are on a 0--1 scale; percentage-style metrics are shown as percentages.}
-\label{tab:audience-results}
+\caption{Pooled condition and audience trends across the three benchmarks. Each condition row aggregates 450 explanations and each audience row aggregates 300 explanations. Judge scores are on a 0--1 scale. Percentage-style metrics are shown as percentages. Readability values are averaged over all explanations in the corresponding category.}
+\label{tab:pooled-trends}
 \centering
-\begin{tabular}{lrrrrrrrrrr}
+\small
+\begin{tabular}{llrrrrrrrr}
 \toprule
-\textbf{Audience} & \textbf{n} & \textbf{Ev. Prec.} & \textbf{Ev. Recall} & \textbf{Ev. F1} & \textbf{Halluc.} & \textbf{UAR} & \textbf{COR} & \textbf{Conflict Ack.} & \textbf{Aud. Und.} & \textbf{Aud. Tech. Fit} \\
+\textbf{Group} & \textbf{Setting} & \textbf{Ev. Recall} & \textbf{Ev. F1} & \textbf{Halluc.} & \textbf{COR} & \textbf{Aud. Und.} & \textbf{Aud. Tech. Fit} & \textbf{FRE} & \textbf{FKGL} \\
 \midrule
-Clinician & 100 & 100.0 & 100.0 & 100.0 & 3.0 & 82.0 & 26.0 & 78.0 & 0.860 & 0.873 \\
-Expert & 100 & 100.0 & 99.8 & 99.9 & 7.0 & 100.0 & 11.0 & 60.0 & 0.900 & 0.953 \\
-Layman & 100 & 100.0 & 100.0 & 100.0 & 2.0 & 100.0 & 3.0 & 82.0 & 0.739 & 0.657 \\
+Condition & B & 87.6 & 92.1 & 5.8 & 27.6 & 0.802 & 0.814 & 57.86 & 10.59 \\
+Condition & C & 87.7 & 92.1 & 7.6 & 23.3 & 0.821 & 0.828 & 57.08 & 10.67 \\
+\midrule
+Audience & Clinician & 86.9 & 91.8 & 1.0 & 56.0 & 0.819 & 0.880 & 52.38 & 12.26 \\
+Audience & Expert & 93.1 & 95.9 & 18.0 & 14.7 & 0.900 & 0.951 & 62.03 & 9.65 \\
+Audience & Layman & 83.0 & 88.6 & 1.0 & 5.7 & 0.718 & 0.635 & 57.99 & 9.97 \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-The layman readability diagnostics were directionally sensible. Across layman outputs, Flesch Reading Ease averaged 63.97 and Flesch--Kincaid Grade Level averaged 8.90. These values are not substitutes for user studies, but they suggest that the layman prompt produced text that was materially simpler than the clinician and expert variants.
-
-The condition-by-audience breakdown further clarifies the trade-offs. The safest cell was Condition B + Layman, which achieved 0.0\% hallucination and 0.0\% causal overclaim at the cost of the lowest audience-fit scores. The best audience-fit cell was Condition C + Expert, with audience understandability of 0.900 and audience technical fit of 0.951, but it also exhibited the highest hallucination rate at 10.0\%. This pattern is consistent with the broader explanation literature: richer contextualization and higher technical detail can improve plausibility and usefulness while simultaneously increasing opportunities for unsupported elaboration~\cite{madsen2024self,parcalabescu2024measuring}.
+\begin{table*}[t]
+\caption{Final consolidated summary table spanning dataset, condition, and audience categories. This compact view mirrors the standalone artifact saved with the paper source. Judge scores are on a 0--1 scale. Percentage-style metrics are shown as percentages.}
+\label{tab:final-summary}
+\centering
+\small
+\begin{tabular}{llrrrrrrrr}
+\toprule
+\textbf{Group} & \textbf{Setting} & \textbf{Ev. Recall} & \textbf{Ev. F1} & \textbf{Halluc.} & \textbf{Rule Cov.} & \textbf{COR} & \textbf{Aud. Und.} & \textbf{FRE} & \textbf{FKGL} \\
+\midrule
+Dataset & MUX6 & 99.9 & 100.0 & 4.0 & 100.0 & 13.3 & 0.833 & 62.55 & 9.35 \\
+Dataset & MUX11 & 92.1 & 95.2 & 6.0 & 98.9 & 29.7 & 0.805 & 57.48 & 10.74 \\
+Dataset & MUX20 & 70.9 & 81.1 & 10.0 & 90.8 & 33.3 & 0.797 & 52.37 & 11.79 \\
+\midrule
+Condition & B & 87.6 & 92.1 & 5.8 & 97.1 & 27.6 & 0.802 & 57.86 & 10.59 \\
+Condition & C & 87.7 & 92.1 & 7.6 & 96.0 & 23.3 & 0.821 & 57.08 & 10.67 \\
+\midrule
+Audience & Clinician & 86.9 & 91.8 & 1.0 & 97.6 & 56.0 & 0.819 & 52.38 & 12.26 \\
+Audience & Expert & 93.1 & 95.9 & 18.0 & 98.6 & 14.7 & 0.900 & 62.03 & 9.65 \\
+Audience & Layman & 83.0 & 88.6 & 1.0 & 93.6 & 5.7 & 0.718 & 57.99 & 9.97 \\
+\bottomrule
+\end{tabular}
+\end{table*}
 
 \section{Discussion}
-The main empirical result is that an LLM can be used as a tightly constrained translator of rule-based evidence without materially degrading evidential fidelity on this benchmark. The strongest evidence for that claim is not the judge score pattern, but the near-perfect evidence precision, recall, F1, prediction--explanation agreement, and rule coverage. In other words, the system largely succeeded at staying grounded in active HEROS rules while rewriting them for different audiences.
+The cross-benchmark results sharpen the central claim of the paper. A large language model can act as a faithful translator of rule-based evidence when the evidence is supplied explicitly and the prompts are tightly constrained. The strongest support for that claim is the perfect Evidence Precision and perfect Prediction--Explanation Agreement observed on all three datasets. These values indicate that the system almost never fabricates new evidence features or contradicts the underlying HEROS prediction.
 
-At the same time, the experiment reveals why faithful explanation generation should not be framed as a solved problem. Condition C improved both audience-oriented judge scores, suggesting that even a minimal glossary helps the model produce explanations that are easier to follow and better matched to the requested audience. But the same condition also slightly increased hallucination rate and did not improve uncertainty handling. This indicates that additional contextualization can improve readability while widening the space for unsupported elaboration.
+At the same time, the broader benchmark sweep shows that grounded translation does not guarantee exhaustive translation. As the number of active rules rises, the generator increasingly omits valid evidence rather than inventing invalid evidence. This distinction matters because it changes the failure analysis. On MUX20, the key weakness is not that the explanation becomes unfaithful in the sense of naming the wrong features; rather, it covers only part of an increasingly large and conflicting evidence set. From a design perspective, this suggests that future improvements should focus on evidence summarization, evidence ranking, or multi-stage compression rather than only on hallucination suppression.
 
-The audience results show a similarly informative trade-off. Expert explanations were best aligned with the requested technical level, which is unsurprising because the expert prompt explicitly exposes rule identifiers, exact probabilities, and metadata. Yet those same degrees of freedom make expert outputs more vulnerable to unsupported additions. Layman explanations showed the opposite pattern: they were shortest, safest, and easiest to constrain, but they did not score as highly on audience-fit because raw feature tokens such as \texttt{A\_0} and \texttt{R\_2} remain difficult to translate into genuinely intuitive language without introducing stronger domain semantics.
+The condition comparison suggests that compact glossary support is useful but not free. Across all three datasets, glossary context improved both audience-oriented judge metrics and slightly reduced causal overclaim, yet it also increased hallucination. A plausible interpretation is that the glossary gives the model more latitude to paraphrase, which improves readability but also expands the surface for unsupported elaboration. The fact that Evidence Recall hardly changed across conditions suggests that the glossary affects phrasing more than evidence selection.
 
-The conflict acknowledgment results are also notable. Even with explicit instructions about mixed evidence, the average conflict score remained well below the other packet-grounded metrics. That suggests a concrete next optimization target: future prompt revisions should allocate more of the explanation budget to summarizing rule agreement versus contradiction, especially in multi-rule settings.
+The audience comparison is equally informative. Expert explanations preserve the most evidence and achieve the strongest technical-fit scores, but they are also the easiest to over-extend. Layman explanations are safest under our hallucination and causal-overclaim detectors, but they lose coverage and become harder to keep genuinely intuitive as the packet grows more complex. Clinician explanations appear promising because they combine high audience fit with very low hallucination, yet their causal-overclaim rate remains too high. That finding makes clinician prompting a concrete target for refinement before any biomedical deployment.
 
-\section{Limitations and Future Work}
-This study has several limitations. First, the empirical evaluation is restricted to MUX6, a synthetic benchmark with binary features and relatively clean semantics. The experiment therefore validates the pipeline design, but not yet its usefulness in biomedical settings where feature names, feature types, and stakeholder expectations are more heterogeneous.
-
-Second, the audience-oriented metrics come from an LLM judge rather than human participants. This is a practical starting point and is consistent with recent judge-model evaluation work~\cite{liu2023geval}, but such scores should not be treated as a substitute for application-grounded user studies~\cite{huang2025judge,kim2024human}. Future work should incorporate clinician and lay-user evaluations, potentially using established scales for explanation satisfaction or system causability~\cite{hoffman2023measures,holzinger2020scs}.
-
-Third, we intentionally do not report perturbation-based faithfulness metrics such as comprehensiveness and sufficiency. Those measures are well grounded in the literature~\cite{deyoung2020eraser}, but computing them properly here requires rerunning HEROS under feature-removal and keep-only perturbations. We view that as important future work rather than something to approximate heuristically.
-
-Finally, the current study uses a single generator family and a single judge family. A more complete evaluation should test whether the translation behavior is robust across different generation models, different judge models, and eventually across biomedical datasets where feature glossaries carry domain-specific meaning.
+This study has several limitations. The datasets are synthetic multiplexer benchmarks rather than biomedical cohorts, so the current results should be interpreted as a controlled proof of concept. MUX11 and MUX20 were evaluated on stratified 50-instance subsets of their held-out folds rather than the full held-out folds in order to keep the LLM budget fixed across datasets. Judge metrics remain proxy measures rather than participant-based outcomes~\cite{liu2023geval,huang2025judge}. Finally, we do not report perturbation-based metrics such as comprehensiveness and sufficiency because they require rerunning HEROS under controlled feature perturbations rather than inspecting the generated text alone~\cite{deyoung2020eraser}. Future work should extend the pipeline to biomedical datasets, strengthen clinician-oriented non-causal prompting, add perturbation-based faithfulness checks, and complement judge scoring with human evaluation using established explanation measures~\cite{hoffman2023measures,holzinger2020scs}.
 
 \section{Conclusion}
-We introduced a script-first HEROS+LLM pipeline for generating audience-conditioned natural-language explanations from structured rule-based evidence. The key design choice is to treat the LLM as a translator of active rules and instance values, not as a source of new explanatory content. On the held-out MUX6 test fold, this design achieved near-perfect evidence precision, recall, F1, prediction--explanation agreement, and rule coverage across 300 explanations. The results also expose a useful trade-off: richer context improves audience-oriented scores, but can slightly increase unsupported elaboration. Overall, the study suggests that faithful explanation translation is a viable intermediate role for LLMs in interpretable machine learning workflows, and that rule-based models such as HEROS offer a particularly suitable substrate for this style of constrained generation.
+We presented a script-first HEROS+LLM explanation pipeline that treats the LLM as a translator of structured rule-based evidence rather than a generator of free-form reasons. Across MUX6, MUX11, and MUX20, the system maintained perfect evidence precision and perfect prediction--explanation agreement while exposing a clear scaling trade-off: as rule interactions became denser, evidence coverage declined and unsupported elaboration increased. Compact glossary context improved audience-oriented scores, and audience targeting produced distinct regimes with different safety and coverage profiles. Together, these results suggest that LLM-mediated explanation translation is a viable role for language models in interpretable machine learning, provided that the surrounding pipeline keeps the evidence explicit, the prompts narrow, and the evaluation focused on grounding, coverage, and audience-appropriate safety.
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{references}

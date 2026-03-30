@@ -269,10 +269,7 @@ def compute_programmatic_metrics(
     ):
         confidence_wording_calibration = False
 
-    flesch_reading_ease = None
-    flesch_kincaid_grade_level = None
-    if packet.audience == "layman":
-        flesch_reading_ease, flesch_kincaid_grade_level = _readability_metrics(explanation_text)
+    flesch_reading_ease, flesch_kincaid_grade_level = _readability_metrics(explanation_text)
 
     return ProgrammaticMetrics(
         evidence_precision=evidence_precision,

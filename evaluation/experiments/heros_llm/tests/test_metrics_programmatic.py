@@ -139,7 +139,7 @@ class ProgrammaticMetricsTests(unittest.TestCase):
         self.assertIn("comprehensiveness_scaffold", metrics.raw_flags)
         self.assertIn("sufficiency_scaffold", metrics.raw_flags)
 
-    def test_readability_only_for_layman(self) -> None:
+    def test_readability_available_for_all_audiences(self) -> None:
         layman_metrics = compute_programmatic_metrics(
             self._packet(),
             "The model leaned toward class 1 because A_0 matched the rule.",
@@ -151,7 +151,8 @@ class ProgrammaticMetricsTests(unittest.TestCase):
             packet,
             "The model leaned toward class 1 because A_0 matched the rule.",
         )
-        self.assertIsNone(expert_metrics.flesch_reading_ease)
+        self.assertIsNotNone(expert_metrics.flesch_reading_ease)
+        self.assertIsNotNone(expert_metrics.flesch_kincaid_grade_level)
 
 
 if __name__ == "__main__":
