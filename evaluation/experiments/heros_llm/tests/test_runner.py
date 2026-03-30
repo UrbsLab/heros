@@ -39,6 +39,19 @@ def _packet(instance_id: int) -> InstanceExplanationPacket:
 
 
 class SelectPacketsTests(unittest.TestCase):
+    def test_select_packets_can_take_deterministic_random_subset(self) -> None:
+        packets = [_packet(101), _packet(165), _packet(303), _packet(404), _packet(505)]
+
+        selected = _select_packets(
+            packets=packets,
+            sample_size=3,
+            seed=42,
+            use_full_test_set=False,
+            strategy="random_test_subset",
+        )
+
+        self.assertEqual([packet.instance_id for packet in selected], [404, 165, 303])
+
     def test_select_packets_filters_explicit_instance_ids(self) -> None:
         packets = [_packet(101), _packet(165), _packet(303)]
 
@@ -47,6 +60,7 @@ class SelectPacketsTests(unittest.TestCase):
             sample_size=1,
             seed=42,
             use_full_test_set=False,
+            strategy="stratified_prediction_rule_bucket",
             instance_ids=["165"],
         )
 
@@ -61,6 +75,7 @@ class SelectPacketsTests(unittest.TestCase):
                 sample_size=1,
                 seed=42,
                 use_full_test_set=False,
+                strategy="stratified_prediction_rule_bucket",
                 instance_ids=["999"],
             )
 

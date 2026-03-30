@@ -142,11 +142,14 @@ class GeneratedExplanation(SerializableDataclass):
 
 @dataclass
 class ProgrammaticMetrics(SerializableDataclass):
-    evidence_grounding_precision: Optional[float] = None
+    evidence_precision: Optional[float] = None
+    evidence_recall: Optional[float] = None
+    evidence_f1: Optional[float] = None
     hallucination_present: bool = False
     unsupported_feature_mentions: List[str] = field(default_factory=list)
     unsupported_claim_spans: List[str] = field(default_factory=list)
-    key_evidence_coverage: Optional[float] = None
+    comprehensiveness: Optional[float] = None
+    sufficiency: Optional[float] = None
     prediction_explanation_agreement: Optional[int] = None
     word_count: int = 0
     uncertainty_ack_required: bool = False

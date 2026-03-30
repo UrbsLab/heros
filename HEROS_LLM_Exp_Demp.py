@@ -266,8 +266,9 @@ comparison_df = demo_df[
         "programmatic_metrics.word_count",
         "programmatic_metrics.hallucination_present",
         "programmatic_metrics.causal_overclaim_present",
-        "programmatic_metrics.evidence_grounding_precision",
-        "programmatic_metrics.key_evidence_coverage",
+        "programmatic_metrics.evidence_precision",
+        "programmatic_metrics.evidence_recall",
+        "programmatic_metrics.evidence_f1",
         "programmatic_metrics.prediction_explanation_agreement",
     ]
 ].copy()
@@ -293,8 +294,9 @@ comparison_df = comparison_df.rename(
         "programmatic_metrics.word_count": "word_count",
         "programmatic_metrics.hallucination_present": "hallucination",
         "programmatic_metrics.causal_overclaim_present": "causal_overclaim",
-        "programmatic_metrics.evidence_grounding_precision": "evidence_grounding_precision",
-        "programmatic_metrics.key_evidence_coverage": "key_evidence_coverage",
+        "programmatic_metrics.evidence_precision": "evidence_precision",
+        "programmatic_metrics.evidence_recall": "evidence_recall",
+        "programmatic_metrics.evidence_f1": "evidence_f1",
         "programmatic_metrics.prediction_explanation_agreement": "prediction_explanation_agreement",
     }
 )

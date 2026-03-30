@@ -67,6 +67,7 @@ def _select_packets(
     sample_size: int,
     seed: int,
     use_full_test_set: bool,
+    strategy: str = "stratified_prediction_rule_bucket",
     instance_ids: Optional[List[Any]] = None,
 ) -> List[InstanceExplanationPacket]:
     if instance_ids:
@@ -87,12 +88,17 @@ def _select_packets(
     if use_full_test_set or sample_size >= len(packets):
         return list(packets)
 
+    rng = random.Random(seed)
+    if strategy == "random_test_subset":
+        shuffled_packets = list(packets)
+        rng.shuffle(shuffled_packets)
+        return shuffled_packets[:sample_size]
+
     grouped: Dict[Tuple[str, str], List[InstanceExplanationPacket]] = {}
     for packet in packets:
         key = (str(packet.model_context.prediction), _rule_bucket(packet.model_context.num_matching_rules))
         grouped.setdefault(key, []).append(packet)
 
-    rng = random.Random(seed)
     group_keys = sorted(grouped.keys())
     for key in group_keys:
         rng.shuffle(grouped[key])
@@ -177,6 +183,7 @@ def run_experiment(config: ExperimentConfig) -> str:
         sample_size=config.sampling.sample_size,
         seed=config.sampling.seed,
         use_full_test_set=config.sampling.use_full_test_set,
+        strategy=config.sampling.strategy,
         instance_ids=config.sampling.instance_ids,
     )
 

@@ -78,6 +78,31 @@ def _derive_key_features(rules: Sequence[ActiveRule]) -> Set[str]:
     return features
 
 
+def _evidence_f1(precision: float | None, recall: float | None) -> float | None:
+    if precision is None or recall is None:
+        return None
+    if precision == 0.0 and recall == 0.0:
+        return 0.0
+    return 2.0 * precision * recall / (precision + recall)
+
+
+def _perturbation_scaffold(
+    metric_name: str,
+    gold_evidence_features: Set[str],
+    mentioned_evidence_features: Set[str],
+) -> Dict[str, object]:
+    return {
+        "metric_name": metric_name,
+        "ready": False,
+        "reason": (
+            "Requires model reruns under feature-removal or keep-only perturbations; "
+            "current implementation stores the candidate evidence set only."
+        ),
+        "gold_evidence_features": sorted(gold_evidence_features),
+        "mentioned_evidence_features": sorted(mentioned_evidence_features),
+    }
+
+
 def _mentions_conflict(text: str) -> bool:
     return bool(CONFLICT_PATTERN.search(text))
 
@@ -205,22 +230,25 @@ def compute_programmatic_metrics(
     unsupported_claim_spans = _extract_spans(REALITY_CLAIM_PATTERN, explanation_text)
     causal_spans = _extract_spans(CAUSAL_PATTERN, explanation_text)
     mentioned_feature_set = set(explicit_feature_mentions)
+    gold_evidence_features = _derive_key_features(packet.active_rules)
     key_rules = _derive_key_rules(packet, top_k_rules)
     key_features = _derive_key_features(key_rules)
+    mentioned_evidence_features = mentioned_feature_set.intersection(gold_evidence_features)
 
     if explicit_feature_mentions:
-        evidence_grounding_precision = float(
-            len([feature for feature in explicit_feature_mentions if feature in supported_features])
+        evidence_precision = float(
+            len([feature for feature in explicit_feature_mentions if feature in gold_evidence_features])
         ) / float(len(explicit_feature_mentions))
     else:
-        evidence_grounding_precision = None
+        evidence_precision = None
 
-    if key_features:
-        key_evidence_coverage = float(
-            len(key_features.intersection(mentioned_feature_set))
-        ) / float(len(key_features))
+    if gold_evidence_features:
+        evidence_recall = float(
+            len(mentioned_evidence_features)
+        ) / float(len(gold_evidence_features))
     else:
-        key_evidence_coverage = 0.0
+        evidence_recall = None
+    evidence_f1 = _evidence_f1(evidence_precision, evidence_recall)
 
     uncertainty_required = packet.model_context.conflict_present or packet.model_context.evidence_strength_label in {
         "mixed",
@@ -247,11 +275,14 @@ def compute_programmatic_metrics(
         flesch_reading_ease, flesch_kincaid_grade_level = _readability_metrics(explanation_text)
 
     return ProgrammaticMetrics(
-        evidence_grounding_precision=evidence_grounding_precision,
+        evidence_precision=evidence_precision,
+        evidence_recall=evidence_recall,
+        evidence_f1=evidence_f1,
         hallucination_present=bool(unsupported_features or unsupported_claim_spans),
         unsupported_feature_mentions=unsupported_features,
         unsupported_claim_spans=unsupported_claim_spans,
-        key_evidence_coverage=key_evidence_coverage,
+        comprehensiveness=None,
+        sufficiency=None,
         prediction_explanation_agreement=_prediction_explanation_agreement(packet, explanation_text),
         word_count=len(WORD_PATTERN.findall(explanation_text)),
         uncertainty_ack_required=uncertainty_required,
@@ -268,8 +299,20 @@ def compute_programmatic_metrics(
             "causal_spans": causal_spans,
             "conflict_mentioned": conflict_mentioned,
             "uncertainty_mentioned": uncertainty_present,
+            "gold_evidence_features": sorted(gold_evidence_features),
+            "mentioned_evidence_features": sorted(mentioned_evidence_features),
             "key_features": sorted(key_features),
             "key_rule_ids": [rule.rule_id for rule in key_rules],
             "matched_feature_aliases": matched_aliases,
+            "comprehensiveness_scaffold": _perturbation_scaffold(
+                metric_name="comprehensiveness",
+                gold_evidence_features=gold_evidence_features,
+                mentioned_evidence_features=mentioned_evidence_features,
+            ),
+            "sufficiency_scaffold": _perturbation_scaffold(
+                metric_name="sufficiency",
+                gold_evidence_features=gold_evidence_features,
+                mentioned_evidence_features=mentioned_evidence_features,
+            ),
         },
     )

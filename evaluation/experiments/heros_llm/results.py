@@ -14,9 +14,20 @@ from .data_models import ExplanationRecord, SerializableDataclass, to_serializab
 
 
 PROGRAMMATIC_METRIC_ALIASES = {
-    "evidence_grounding_precision": ["evidence_grounding_precision", "feature_grounding_score"],
+    "evidence_precision": [
+        "evidence_precision",
+        "evidence_grounding_precision",
+        "feature_grounding_score",
+    ],
+    "evidence_recall": [
+        "evidence_recall",
+        "key_evidence_coverage",
+        "key_feature_coverage",
+    ],
+    "evidence_f1": ["evidence_f1"],
     "hallucination_present": ["hallucination_present"],
-    "key_evidence_coverage": ["key_evidence_coverage", "key_feature_coverage"],
+    "comprehensiveness": ["comprehensiveness"],
+    "sufficiency": ["sufficiency"],
     "prediction_explanation_agreement": ["prediction_explanation_agreement", "prediction_consistency"],
     "word_count": ["word_count"],
     "uncertainty_ack_required": ["uncertainty_ack_required"],
@@ -44,9 +55,12 @@ SUMMARY_COLUMN_ORDER = [
     "Condition",
     "Audience",
     "n",
-    "Evidence Grounding Precision",
+    "Evidence Precision",
+    "Evidence Recall",
+    "Evidence F1",
     "Hallucination Rate",
-    "Key Evidence Coverage",
+    "Comprehensiveness",
+    "Sufficiency",
     "Prediction-Explanation Agreement",
     "Uncertainty Acknowledgment Rate",
     "Causal Overclaim Rate",
@@ -90,8 +104,11 @@ def aggregate_serialized_records(records: List[Dict[str, Any]]) -> Dict[str, Any
         return {
             "record_count": 0,
             "hallucination_rate": None,
-            "mean_evidence_grounding_precision": None,
-            "mean_key_evidence_coverage": None,
+            "mean_evidence_precision": None,
+            "mean_evidence_recall": None,
+            "mean_evidence_f1": None,
+            "mean_comprehensiveness": None,
+            "mean_sufficiency": None,
             "mean_prediction_explanation_agreement": None,
             "mean_word_count": None,
             "uncertainty_ack_rate_on_required_cases": None,
@@ -122,19 +139,43 @@ def aggregate_serialized_records(records: List[Dict[str, Any]]) -> Dict[str, Any
                 for metrics in programmatic_payloads
             ]
         ),
-        "mean_evidence_grounding_precision": _mean(
+        "mean_evidence_precision": _mean(
             [
                 float(value)
                 for metrics in programmatic_payloads
-                for value in [_metric_value(metrics, PROGRAMMATIC_METRIC_ALIASES, "evidence_grounding_precision")]
+                for value in [_metric_value(metrics, PROGRAMMATIC_METRIC_ALIASES, "evidence_precision")]
                 if value is not None
             ]
         ),
-        "mean_key_evidence_coverage": _mean(
+        "mean_evidence_recall": _mean(
             [
                 float(value)
                 for metrics in programmatic_payloads
-                for value in [_metric_value(metrics, PROGRAMMATIC_METRIC_ALIASES, "key_evidence_coverage")]
+                for value in [_metric_value(metrics, PROGRAMMATIC_METRIC_ALIASES, "evidence_recall")]
+                if value is not None
+            ]
+        ),
+        "mean_evidence_f1": _mean(
+            [
+                float(value)
+                for metrics in programmatic_payloads
+                for value in [_metric_value(metrics, PROGRAMMATIC_METRIC_ALIASES, "evidence_f1")]
+                if value is not None
+            ]
+        ),
+        "mean_comprehensiveness": _mean(
+            [
+                float(value)
+                for metrics in programmatic_payloads
+                for value in [_metric_value(metrics, PROGRAMMATIC_METRIC_ALIASES, "comprehensiveness")]
+                if value is not None
+            ]
+        ),
+        "mean_sufficiency": _mean(
+            [
+                float(value)
+                for metrics in programmatic_payloads
+                for value in [_metric_value(metrics, PROGRAMMATIC_METRIC_ALIASES, "sufficiency")]
                 if value is not None
             ]
         ),
@@ -231,14 +272,23 @@ def _summary_rows_from_serialized(records: List[Dict[str, Any]]) -> List[Dict[st
             {
                 "Condition": "B" if prompt["condition"] == "condition_b" else "C",
                 "Audience": prompt["audience"].title(),
-                "Evidence Grounding Precision": _metric_value(
-                    pm, PROGRAMMATIC_METRIC_ALIASES, "evidence_grounding_precision"
+                "Evidence Precision": _metric_value(
+                    pm, PROGRAMMATIC_METRIC_ALIASES, "evidence_precision"
+                ),
+                "Evidence Recall": _metric_value(
+                    pm, PROGRAMMATIC_METRIC_ALIASES, "evidence_recall"
+                ),
+                "Evidence F1": _metric_value(
+                    pm, PROGRAMMATIC_METRIC_ALIASES, "evidence_f1"
                 ),
                 "Hallucination Rate": 1.0
                 if _metric_value(pm, PROGRAMMATIC_METRIC_ALIASES, "hallucination_present")
                 else 0.0,
-                "Key Evidence Coverage": _metric_value(
-                    pm, PROGRAMMATIC_METRIC_ALIASES, "key_evidence_coverage"
+                "Comprehensiveness": _metric_value(
+                    pm, PROGRAMMATIC_METRIC_ALIASES, "comprehensiveness"
+                ),
+                "Sufficiency": _metric_value(
+                    pm, PROGRAMMATIC_METRIC_ALIASES, "sufficiency"
                 ),
                 "Prediction-Explanation Agreement": _metric_value(
                     pm, PROGRAMMATIC_METRIC_ALIASES, "prediction_explanation_agreement"
@@ -285,9 +335,12 @@ def write_summary_tables(run_dir: Path, records: List[Dict[str, Any]]) -> None:
     df = pd.DataFrame(rows)
     agg_map = {
         "n": ("Condition", "size"),
-        "Evidence Grounding Precision": ("Evidence Grounding Precision", "mean"),
+        "Evidence Precision": ("Evidence Precision", "mean"),
+        "Evidence Recall": ("Evidence Recall", "mean"),
+        "Evidence F1": ("Evidence F1", "mean"),
         "Hallucination Rate": ("Hallucination Rate", "mean"),
-        "Key Evidence Coverage": ("Key Evidence Coverage", "mean"),
+        "Comprehensiveness": ("Comprehensiveness", "mean"),
+        "Sufficiency": ("Sufficiency", "mean"),
         "Prediction-Explanation Agreement": ("Prediction-Explanation Agreement", "mean"),
         "Uncertainty Acknowledgment Rate": ("Uncertainty Acknowledgment Rate", "mean"),
         "Causal Overclaim Rate": ("Causal Overclaim Rate", "mean"),
@@ -330,9 +383,12 @@ def write_summary_tables(run_dir: Path, records: List[Dict[str, Any]]) -> None:
     def display_df(dataframe: "pd.DataFrame") -> "pd.DataFrame":
         output = dataframe.copy()
         percentage_columns = [
-            "Evidence Grounding Precision",
+            "Evidence Precision",
+            "Evidence Recall",
+            "Evidence F1",
             "Hallucination Rate",
-            "Key Evidence Coverage",
+            "Comprehensiveness",
+            "Sufficiency",
             "Prediction-Explanation Agreement",
             "Uncertainty Acknowledgment Rate",
             "Causal Overclaim Rate",

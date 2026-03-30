@@ -72,12 +72,14 @@ class ProgrammaticMetricsTests(unittest.TestCase):
             audience="layman",
         )
 
-    def test_evidence_grounding_precision_and_hallucination(self) -> None:
+    def test_evidence_precision_recall_f1_and_hallucination(self) -> None:
         metrics = compute_programmatic_metrics(
             self._packet(),
             "The model leaned toward class 1 because A_0 and R_0 match the active rule.",
         )
-        self.assertEqual(metrics.evidence_grounding_precision, 1.0)
+        self.assertEqual(metrics.evidence_precision, 1.0)
+        self.assertEqual(metrics.evidence_recall, 1.0)
+        self.assertEqual(metrics.evidence_f1, 1.0)
         self.assertFalse(metrics.hallucination_present)
 
     def test_detects_unsupported_feature(self) -> None:
@@ -115,8 +117,27 @@ class ProgrammaticMetricsTests(unittest.TestCase):
             packet,
             "The model leaned toward class 1 because Age matched the active rule.",
         )
-        self.assertEqual(metrics.evidence_grounding_precision, 1.0)
+        self.assertEqual(metrics.evidence_precision, 1.0)
         self.assertFalse(metrics.hallucination_present)
+
+    def test_partial_evidence_recall_and_f1(self) -> None:
+        metrics = compute_programmatic_metrics(
+            self._packet(),
+            "The model leaned toward class 1 because A_0 matched the active rule.",
+        )
+        self.assertEqual(metrics.evidence_precision, 1.0)
+        self.assertEqual(metrics.evidence_recall, 0.5)
+        self.assertAlmostEqual(metrics.evidence_f1 or 0.0, 2.0 / 3.0, places=6)
+
+    def test_comprehensiveness_and_sufficiency_scaffolds_default_to_none(self) -> None:
+        metrics = compute_programmatic_metrics(
+            self._packet(),
+            "The model leaned toward class 1 because A_0 and R_0 match the active rule.",
+        )
+        self.assertIsNone(metrics.comprehensiveness)
+        self.assertIsNone(metrics.sufficiency)
+        self.assertIn("comprehensiveness_scaffold", metrics.raw_flags)
+        self.assertIn("sufficiency_scaffold", metrics.raw_flags)
 
     def test_readability_only_for_layman(self) -> None:
         layman_metrics = compute_programmatic_metrics(
