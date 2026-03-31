@@ -340,7 +340,8 @@ All reported generations in this study were produced through the OpenAI API with
 \texttt{gpt-4.1-mini}, rather than through the ChatGPT web interface. We refer to ChatGPT only as
 the user-facing product family in which related GPT models are made available, including access to
 GPT-4.1 mini in supported plans~\cite{openai2025chatgptmodelselector}. The experiments themselves
-were fully programmatic and reproducible at the API level.
+were fully programmatic at the API level, with prompts, parameters, and outputs logged for rerun and
+auditability.
 
 The choice of \texttt{gpt-4.1-mini} was deliberate. OpenAI describes the GPT-4.1 family as improving
 instruction following and long-context performance relative to earlier GPT-4-class API models, with
@@ -409,17 +410,19 @@ of how explanation burden grows across the benchmarks.
 
 The generation model was \texttt{gpt-4.1-mini} with temperature fixed at 0.0. Judge scoring used the
 same model family at temperature 0.0 under a separate JSON-only rubric. We used deterministic
-settings throughout to improve reproducibility and to reduce sampling variance. We did not use the
-ChatGPT interface itself for experimental generation; all model calls were issued through the API to
-keep prompts, parameters, and outputs explicitly logged.
+settings throughout to reduce sampling variance and to support rerunnable, fully logged API-based
+experiments. We did not use the ChatGPT interface itself for experimental generation; all model
+calls were issued through the API to keep prompts, parameters, and outputs explicitly logged.
 
 \begin{table}[H]
 \caption{Benchmark configuration. Each benchmark contributes 50 evaluated held-out instances, producing 300 generated explanations per dataset and 900 explanations overall. Mean matching rules are computed on the evaluated instances.}
 \label{tab:benchmarks}
 \centering
+\small
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{lrrrr}
 \toprule
-\textbf{Dataset} & \textbf{Train} & \textbf{Held-out Test} & \textbf{Evaluated} & \textbf{Mean Matching Rules} \\
+\textbf{Dataset} & \textbf{Train} & \shortstack{\textbf{Held-out}\\\textbf{Test}} & \textbf{Evaluated} & \shortstack{\textbf{Mean Matching}\\\textbf{Rules}} \\
 \midrule
 MUX6  & 450  & 50   & 50 & 3.08 \\
 MUX11 & 4{,}500 & 500  & 50 & 7.24 \\
@@ -429,13 +432,14 @@ MUX20 & 9{,}000 & 1{,}000 & 50 & 14.86 \\
 \end{table}
 
 \section{Evaluation Metrics}
-The evaluation framework is designed to test this central claim directly. Our evaluation follows the
-distinction between functionally grounded and human-grounded explanation
+The evaluation framework is designed to test this central claim directly. Our evaluation is informed
+by the distinction between functionally grounded and human-grounded explanation
 assessment~\cite{doshivelez2017rigorous}. The functionally grounded metrics are computed directly
 from the structured HEROS packet and the generated explanation text so that we can tell whether the
-LLM invented evidence, omitted evidence, or mismatched the final prediction. The human-grounded
-quantities are approximated with an LLM judge, which we treat as a scalable proxy rather than a
-substitute for participant studies~\cite{liu2023geval,huang2025judge}. We prioritize
+LLM invented evidence, omitted evidence, or mismatched the final prediction. Audience-facing
+qualities are then approximated with an LLM judge, which we treat as a scalable proxy rather than as
+a human-grounded evaluation in the strict sense or a substitute for participant
+studies~\cite{liu2023geval,huang2025judge}. We prioritize
 literature-backed constructs whenever possible and use task-specific diagnostics only where this
 explanation setting introduces constraints that are not captured by standard metrics.
 
@@ -448,16 +452,15 @@ appearing in the active HEROS rules for the target instance. Hallucination Rate 
 that introduce unsupported features or unsupported claims, following the broader LLM hallucination
 literature~\cite{bang2025hallulens}. Prediction--Explanation Agreement checks whether the
 explanation remains consistent with the model's predicted class, while Rule Coverage measures
-whether the explanation captures the key active rules used by the model.
+whether the explanation mentions at least one feature from each of the key active rules selected by
+the metric pipeline.
 
 Because the prompts explicitly forbid causal language and require acknowledgment of mixed evidence,
-we also report safety and calibration diagnostics that are specific to this task. Uncertainty
+we also report task-specific safety diagnostics. Uncertainty
 Acknowledgment Rate measures whether an explanation signals uncertainty when the active rules are
 mixed or conflicting. Conflict Acknowledgment Score measures whether the explanation correctly
 recognizes rule disagreement. Causal Overclaim Rate flags statements that imply causes or real-world
-mechanisms instead of model behavior. Confidence Wording Calibration checks whether the certainty
-language in the explanation is compatible with the prediction probability and evidence-strength
-bucket supplied by the packet.
+mechanisms instead of model behavior.
 
 Audience-oriented quality is approximated with two judge-model scores. Audience Understandability
 measures whether the explanation is understandable for the requested audience, while Audience
@@ -488,12 +491,11 @@ Evidence grounding & Evidence Precision & Fraction of mentioned evidence feature
 Evidence grounding & Evidence Recall & Fraction of packet evidence captured by the generated explanation. Lower recall indicates omission or compression of relevant rule evidence. \\
 Evidence grounding & Evidence F1 & Harmonic mean of Evidence Precision and Evidence Recall, used as a balanced summary of grounding and coverage. \\
 Faithfulness & Prediction--Explanation Agreement & Checks whether the explanation remains consistent with the model's predicted class. This metric is task-specific but important because the LLM is given the final prediction explicitly. \\
-Faithfulness & Rule Coverage & Measures whether the explanation reflects the key active rules rather than only isolated feature mentions. \\
+Faithfulness & Rule Coverage & Measures whether the explanation mentions at least one feature from each of the top active rules selected by the metric pipeline, rather than preserving an exact rule-level restatement. \\
 Hallucination & Hallucination Rate & Percentage of explanations containing unsupported features or unsupported claims, following the broader hallucination literature. \\
-Safety and calibration & Uncertainty Acknowledgment Rate & Measures whether the explanation acknowledges uncertainty when the active rules provide mixed or conflicting evidence. \\
-Safety and calibration & Conflict Acknowledgment Score & Measures whether rule disagreement is recognized correctly rather than ignored or fabricated. \\
-Safety and calibration & Causal Overclaim Rate & Percentage of explanations containing causal or real-world-mechanism language that exceeds the packet evidence. \\
-Safety and calibration & Confidence Wording Calibration & Checks whether certainty language is compatible with the packet's prediction probability and evidence-strength label. \\
+Safety & Uncertainty Acknowledgment Rate & Measures whether the explanation acknowledges uncertainty when the active rules provide mixed or conflicting evidence. \\
+Safety & Conflict Acknowledgment Score & Measures whether rule disagreement is recognized correctly rather than ignored or fabricated. \\
+Safety & Causal Overclaim Rate & Percentage of explanations containing causal or real-world-mechanism language that exceeds the packet evidence. \\
 Audience quality & Audience Understandability & Judge-model proxy for whether the explanation is understandable for the requested audience. \\
 Audience quality & Audience Technical Fit & Judge-model proxy for whether the level of technical detail matches the requested audience. \\
 Readability & Flesch Reading Ease & Standard readability diagnostic computed for all audiences. As a rough guide, values of 90--100 are very easy, 60--70 are standard, 30--50 are difficult, and below 30 are very difficult. In this study it is interpreted primarily as a quality target for layman explanations and as a descriptive complexity indicator for clinician and expert explanations. \\
@@ -549,7 +551,9 @@ patterns.
 \label{tab:dataset-results}
 \centering
 \small
+\setlength{\tabcolsep}{4pt}
 \renewcommand{\arraystretch}{1.08}
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{lrrrrrrrrrrrrr}
 \toprule
 \textbf{Dataset} & \textbf{Ev. Prec.} & \textbf{Ev. Recall} & \textbf{Ev. F1} & \textbf{Halluc.} & \textbf{Rule Cov.} & \textbf{Conflict Ack.} & \textbf{UAR} & \textbf{COR} & \textbf{Aud. Und.} & \textbf{Aud. Tech. Fit} & \textbf{FRE} & \textbf{FKGL} & \textbf{Words} \\
@@ -558,7 +562,8 @@ MUX6  & 100.0 & 99.9 & 100.0 & 4.0 & 100.0 & 73.3 & 94.0 & 13.3 & 0.833 & 0.827 
 MUX11 & 100.0 & 92.1 & 95.2  & 6.0 & 98.9  & 89.7 & 97.3 & 29.7 & 0.805 & 0.820 & 57.48 & 10.74 & 132.85 \\
 MUX20 & 100.0 & 70.9 & 81.1  & 10.0 & 90.8 & 98.7 & 100.0 & 33.3 & 0.797 & 0.817 & 52.37 & 11.79 & 140.34 \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table*}
 
 \subsection{Illustrative MUX6 example}
@@ -660,7 +665,9 @@ packet-grounded evidence metrics and the judge-model audience scores when compar
 \label{tab:pooled-trends}
 \centering
 \small
+\setlength{\tabcolsep}{4pt}
 \renewcommand{\arraystretch}{1.08}
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{llrrrrrrrrr}
 \toprule
 \textbf{Group} & \textbf{Setting} & \textbf{Ev. Recall} & \textbf{Ev. F1} & \textbf{Halluc.} & \textbf{COR} & \textbf{Aud. Und.} & \textbf{Aud. Tech. Fit} & \textbf{FRE} & \textbf{FKGL} & \textbf{Words} \\
@@ -672,7 +679,8 @@ Audience & Clinician & 86.9 & 91.8 & 1.0 & 56.0 & 0.819 & 0.880 & 52.38 & 12.26 
 Audience & Expert & 93.1 & 95.9 & 18.0 & 14.7 & 0.900 & 0.951 & 62.03 & 9.65 & 172.35 \\
 Audience & Layman & 83.0 & 88.6 & 1.0 & 5.7 & 0.718 & 0.635 & 57.99 & 9.97 & 86.62 \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table*}
 
 \section{Discussion}
@@ -761,7 +769,7 @@ fluency alone.
 %% consistent spelling of the heading.
 \begin{acks}
 The study was supported by Cedars Sinai Health Sciences University and NIH grants R01 AI173095, U01
-AG066833 and P30 AG0373105. Generative AI tools, including GPT-based systems, were used to assist
+AG066833, and P30 AG073105. Generative AI tools, including GPT-based systems, were used to assist
 with code scaffolding, analysis scripting, wording revisions, table preparation, and drafting
 portions of the manuscript text. All such material was reviewed, edited, and verified by the
 authors, who take full responsibility for the final content.
