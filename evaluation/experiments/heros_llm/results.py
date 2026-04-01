@@ -268,8 +268,10 @@ def _summary_rows_from_serialized(records: List[Dict[str, Any]]) -> List[Dict[st
         prompt = record["prompt"]
         pm = record["programmatic_metrics"]
         jm = record.get("judge_metrics", {})
+        metadata = record.get("experiment_metadata", {})
         rows.append(
             {
+                "HEROS Profile": metadata.get("heros_training_profile", "baseline"),
                 "Condition": "B" if prompt["condition"] == "condition_b" else "C",
                 "Audience": prompt["audience"].title(),
                 "Evidence Precision": _metric_value(

@@ -117,6 +117,7 @@ def _select_packets(
 
 def _build_experiment_metadata(
     config: ExperimentConfig,
+    trained_context: Any,
     dataset_name: str,
     sample_size: int,
     dataset_definition: Any,
@@ -126,6 +127,7 @@ def _build_experiment_metadata(
         git_sha=_git_sha(),
         dataset_name=dataset_name,
         split=config.split,
+        heros_training_profile=config.heros.training_profile,
         sample_size=sample_size,
         sample_seed=config.sampling.seed,
         sampling_strategy=config.sampling.strategy,
@@ -134,6 +136,16 @@ def _build_experiment_metadata(
             if config.heros.target_model_index is None
             else "fixed_index_{0}".format(config.heros.target_model_index)
         ),
+        target_model_index=trained_context.target_model_index,
+        heros_train_accuracy=trained_context.heros_train_accuracy,
+        heros_test_accuracy=trained_context.heros_test_accuracy,
+        heros_test_balanced_accuracy=trained_context.heros_test_balanced_accuracy,
+        heros_test_coverage=trained_context.heros_test_coverage,
+        heros_top_model_rule_count=trained_context.heros_top_model_rule_count,
+        heros_rule_population_size=trained_context.heros_rule_population_size,
+        heros_model_population_size=trained_context.heros_model_population_size,
+        ideal_rules_in_top_model=trained_context.ideal_rules_in_top_model,
+        ideal_rule_fraction_in_top_model=trained_context.ideal_rule_fraction_in_top_model,
         llm_model=config.llm.model,
         judge_model=config.judge.model if config.judge.enabled else "",
         temperature=config.llm.temperature,
@@ -189,7 +201,7 @@ def run_experiment(config: ExperimentConfig) -> str:
 
     run_id = "{0}_{1}".format(config.run_name, _timestamp_utc())
     metadata_template = _build_experiment_metadata(
-        config, dataset_definition.name, len(selected_packets), dataset_definition
+        config, trained_context, dataset_definition.name, len(selected_packets), dataset_definition
     )
     metadata_template.run_id = run_id
 

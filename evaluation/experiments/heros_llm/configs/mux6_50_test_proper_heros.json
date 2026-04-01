@@ -1,20 +1,24 @@
 {
-  "run_name": "mux6_v2_live_smoke",
+  "run_name": "mux6_50_test_proper_heros",
   "dataset_name": "MUX6",
   "split": "test",
+  "extra_excluded_columns": ["InstanceID"],
   "sampling": {
     "strategy": "stratified_prediction_rule_bucket",
-    "sample_size": 3,
+    "sample_size": 50,
     "seed": 42,
-    "use_full_test_set": false
+    "use_full_test_set": true
   },
   "heros": {
-    "iterations": 10000,
-    "pop_size": 500,
-    "model_iterations": 40,
+    "training_profile": "properly_trained",
+    "iterations": 100000,
+    "pop_size": 1000,
+    "model_iterations": 100,
     "model_pop_size": 100,
     "random_state": 42,
-    "verbose": false
+    "verbose": false,
+    "mode": "default",
+    "feedback": false
   },
   "prompt": {
     "prompt_version": "v2_minimal",
@@ -34,7 +38,7 @@
     "request_timeout_seconds": 60
   },
   "judge": {
-    "enabled": false,
+    "enabled": true,
     "provider": "openai",
     "model": "gpt-4.1-mini",
     "api_key_env": "OPENAI_API_KEY",

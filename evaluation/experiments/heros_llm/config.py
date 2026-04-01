@@ -36,6 +36,7 @@ class SamplingConfig(SerializableDataclass):
 
 @dataclass
 class HerosConfig(SerializableDataclass):
+    training_profile: str = "baseline"
     outcome_type: str = "class"
     iterations: int = 10000
     pop_size: int = 500
@@ -61,6 +62,8 @@ class HerosConfig(SerializableDataclass):
     stored_model_iterations: Optional[str] = None
     random_state: int = 42
     verbose: bool = False
+    mode: str = "default"
+    feedback: bool = False
     target_model_index: Optional[int] = None
 
 
@@ -121,6 +124,7 @@ class ExperimentConfig(SerializableDataclass):
     run_name: str = "mux6_50_test"
     dataset_name: str = "MUX6"
     split: str = "test"
+    extra_excluded_columns: List[str] = field(default_factory=list)
     sampling: SamplingConfig = field(default_factory=SamplingConfig)
     heros: HerosConfig = field(default_factory=HerosConfig)
     prompt: PromptConfig = field(default_factory=PromptConfig)
@@ -156,6 +160,7 @@ def load_experiment_config(config_path: str) -> ExperimentConfig:
         run_name=payload.get("run_name", ExperimentConfig.run_name),
         dataset_name=payload.get("dataset_name", ExperimentConfig.dataset_name),
         split=payload.get("split", ExperimentConfig.split),
+        extra_excluded_columns=payload.get("extra_excluded_columns", []),
         sampling=_build_dataclass(SamplingConfig, payload.get("sampling", {})),
         heros=_build_dataclass(HerosConfig, payload.get("heros", {})),
         prompt=_build_dataclass(PromptConfig, payload.get("prompt", {})),

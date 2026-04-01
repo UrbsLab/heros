@@ -2,6 +2,7 @@
   "run_name": "mux6_50_test",
   "dataset_name": "MUX6",
   "split": "test",
+  "extra_excluded_columns": ["InstanceID"],
   "sampling": {
     "strategy": "stratified_prediction_rule_bucket",
     "sample_size": 50,
@@ -9,6 +10,7 @@
     "use_full_test_set": true
   },
   "heros": {
+    "training_profile": "corrected_baseline",
     "iterations": 10000,
     "pop_size": 500,
     "model_iterations": 40,

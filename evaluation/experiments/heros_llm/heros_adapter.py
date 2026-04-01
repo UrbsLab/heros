@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
+import ast
 import sys
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from .config import ExperimentConfig, PromptConfig
 from .data_models import (
@@ -43,6 +44,15 @@ class TrainedHerosContext:
     test_split: SplitData
     target_model_index: int
     glossary: List[FeatureGlossaryEntry]
+    heros_train_accuracy: Optional[float]
+    heros_test_accuracy: Optional[float]
+    heros_test_balanced_accuracy: Optional[float]
+    heros_test_coverage: Optional[float]
+    heros_top_model_rule_count: Optional[int]
+    heros_rule_population_size: Optional[int]
+    heros_model_population_size: Optional[int]
+    ideal_rules_in_top_model: Optional[int]
+    ideal_rule_fraction_in_top_model: Optional[float]
 
 
 def _normalize_scalar(value: Any) -> Any:
@@ -75,17 +85,112 @@ def _load_split(dataset_definition: DatasetDefinition, split: str) -> SplitData:
     )
 
 
+def _load_split_with_config(
+    config: ExperimentConfig, dataset_definition: DatasetDefinition, split: str
+) -> SplitData:
+    import pandas as pd
+
+    path = dataset_definition.train_path if split == "train" else dataset_definition.test_path
+    dataframe = pd.read_csv(path, sep="\t")
+    columns_to_drop = [dataset_definition.outcome_label] + list(dataset_definition.excluded_columns)
+    for column in config.extra_excluded_columns:
+        if column not in columns_to_drop:
+            columns_to_drop.append(column)
+    features_df = dataframe.drop(columns=columns_to_drop, errors="ignore")
+    feature_names = list(features_df.columns)
+    instance_ids = (
+        dataframe[dataset_definition.instance_id_label].tolist()
+        if dataset_definition.instance_id_label in dataframe.columns
+        else list(range(len(dataframe)))
+    )
+    return SplitData(
+        X=features_df.values,
+        y=dataframe[dataset_definition.outcome_label].values,
+        feature_names=feature_names,
+        instance_ids=instance_ids,
+    )
+
+
+def _int_to_binary_list(num: int, width: int) -> List[int]:
+    return [int(bit) for bit in format(num, "0{0}b".format(width))]
+
+
+def _gen_mux_ideal_rules(num_bits: int) -> Set[Tuple[str, str, int]]:
+    address_bits = {6: 2, 11: 3, 20: 4, 37: 5, 70: 6, 135: 7}
+    if num_bits not in address_bits:
+        return set()
+    ideal_rules: Set[Tuple[str, str, int]] = set()
+    register_bits = num_bits - address_bits[num_bits]
+    for register_index in range(register_bits):
+        condition_indexes = list(range(address_bits[num_bits])) + [
+            register_index + address_bits[num_bits]
+        ]
+        zero_values = _int_to_binary_list(register_index, address_bits[num_bits]) + [0]
+        one_values = _int_to_binary_list(register_index, address_bits[num_bits]) + [1]
+        ideal_rules.add((str(condition_indexes), str(zero_values), 0))
+        ideal_rules.add((str(condition_indexes), str(one_values), 1))
+    return ideal_rules
+
+
+def _canonical_rule_signature(condition_indexes: Sequence[Any], condition_values: Sequence[Any], action: Any) -> Tuple[str, str, int]:
+    paired = sorted(
+        [
+            (int(index), int(value))
+            for index, value in zip(condition_indexes, condition_values)
+        ],
+        key=lambda item: item[0],
+    )
+    indexes = [item[0] for item in paired]
+    values = [item[1] for item in paired]
+    return str(indexes), str(values), int(action)
+
+
+def _mux_bits_from_dataset_name(dataset_name: str) -> Optional[int]:
+    if dataset_name.startswith("MUX"):
+        try:
+            return int(dataset_name.replace("MUX", ""))
+        except ValueError:
+            return None
+    return None
+
+
+def _count_ideal_rules_in_model(model_rules_df: Any, dataset_name: str) -> Tuple[Optional[int], Optional[float]]:
+    mux_bits = _mux_bits_from_dataset_name(dataset_name)
+    if mux_bits is None:
+        return None, None
+    ideal_rules = _gen_mux_ideal_rules(mux_bits)
+    if not ideal_rules:
+        return None, None
+    normalized_ideal_rules = {
+        _canonical_rule_signature(ast.literal_eval(indexes), ast.literal_eval(values), action)
+        for indexes, values, action in ideal_rules
+    }
+    found = 0
+    for _, row in model_rules_df.iterrows():
+        candidate = _canonical_rule_signature(
+            ast.literal_eval(str(row["Condition Indexes"])),
+            ast.literal_eval(str(row["Condition Values"])),
+            row["Action"],
+        )
+        if candidate in normalized_ideal_rules:
+            found += 1
+    return found, (float(found) / float(len(ideal_rules)) if ideal_rules else None)
+
+
 def train_heros_model(
     config: ExperimentConfig, dataset_definition: DatasetDefinition
 ) -> TrainedHerosContext:
     """Train HEROS on the dataset train split and select the target model."""
     sys.path.append(Path(__file__).resolve().parents[2] / "src")
     from skheros.heros import HEROS
+    from sklearn.metrics import accuracy_score, balanced_accuracy_score
 
-    train_split = _load_split(dataset_definition, "train")
-    test_split = _load_split(dataset_definition, "test")
+    train_split = _load_split_with_config(config, dataset_definition, "train")
+    test_split = _load_split_with_config(config, dataset_definition, "test")
     cat_feat_indexes = list(range(len(train_split.feature_names)))
     model = HEROS(
+        mode=config.heros.mode,
+        feedback=config.heros.feedback,
         outcome_type=config.heros.outcome_type,
         iterations=config.heros.iterations,
         pop_size=config.heros.pop_size,
@@ -125,6 +230,26 @@ def train_heros_model(
         target_model_index = model.auto_select_top_model(
             test_split.X, test_split.y, verbose=config.heros.verbose
         )
+    train_predictions = model.predict(
+        train_split.X,
+        whole_rule_pop=False,
+        target_model=target_model_index,
+    )
+    test_predictions = model.predict(
+        test_split.X,
+        whole_rule_pop=False,
+        target_model=target_model_index,
+    )
+    test_covered = model.predict_covered(
+        test_split.X,
+        whole_rule_pop=False,
+        target_model=target_model_index,
+    )
+    model_rules_df = model.get_model_rules(target_model_index)
+    ideal_rules_in_top_model, ideal_rule_fraction_in_top_model = _count_ideal_rules_in_model(
+        model_rules_df,
+        dataset_definition.name,
+    )
     return TrainedHerosContext(
         model=model,
         dataset_definition=dataset_definition,
@@ -132,6 +257,17 @@ def train_heros_model(
         test_split=test_split,
         target_model_index=target_model_index,
         glossary=build_mux_glossary(train_split.feature_names),
+        heros_train_accuracy=float(accuracy_score(train_split.y, train_predictions)),
+        heros_test_accuracy=float(accuracy_score(test_split.y, test_predictions)),
+        heros_test_balanced_accuracy=float(
+            balanced_accuracy_score(test_split.y, test_predictions)
+        ),
+        heros_test_coverage=float(sum(test_covered) / len(test_covered)) if len(test_covered) else None,
+        heros_top_model_rule_count=int(len(model_rules_df)),
+        heros_rule_population_size=int(len(model.get_pop())),
+        heros_model_population_size=int(len(model.get_model_pop())),
+        ideal_rules_in_top_model=ideal_rules_in_top_model,
+        ideal_rule_fraction_in_top_model=ideal_rule_fraction_in_top_model,
     )
 
 

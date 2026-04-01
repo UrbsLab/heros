@@ -180,10 +180,21 @@ class ExperimentMetadata(SerializableDataclass):
     git_sha: str
     dataset_name: str
     split: str
+    heros_training_profile: str
     sample_size: int
     sample_seed: int
     sampling_strategy: str
     target_model_selection: str
+    target_model_index: Optional[int]
+    heros_train_accuracy: Optional[float]
+    heros_test_accuracy: Optional[float]
+    heros_test_balanced_accuracy: Optional[float]
+    heros_test_coverage: Optional[float]
+    heros_top_model_rule_count: Optional[int]
+    heros_rule_population_size: Optional[int]
+    heros_model_population_size: Optional[int]
+    ideal_rules_in_top_model: Optional[int]
+    ideal_rule_fraction_in_top_model: Optional[float]
     llm_model: str
     judge_model: str
     temperature: float
