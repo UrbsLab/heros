@@ -115,7 +115,7 @@
 %%
 %% The "title" command has an optional parameter,
 %% allowing the author to define a "short title" to be used in page headers.
-\title{Audience-Conditioned Translation of Rule-Based Evidence with Large Language Models Across Multiplexer Benchmarks}
+\title{Audience-Customized Translation of Rule-Based Evidence with Large Language Models Across Multiplexer Benchmarks}
 
 
 %%
@@ -188,6 +188,20 @@
 %% The abstract is a short summary of the work to be presented in the
 %% article.
 \begin{abstract}
+% Rule-based models expose instance-level evidence, but raw rule outputs are often too technical for
+% their intended users. We study a constrained HEROS+LLM pipeline in which a language model translates
+% structured rule evidence instead of generating free-form explanations. Using HEROS on MUX6, MUX11,
+% and MUX20, we generate explanations for 50 held-out instances per dataset under two prompt
+% conditions and three audience settings, yielding 900 explanations. The pipeline converts active
+% rules into readable IF--THEN text, maps feature indices to names before prompting, and instructs the
+% generator to describe model behavior rather than domain truth. Across datasets, Evidence Precision
+% and Prediction--Explanation Agreement remain 1.000. As benchmark complexity increases, however,
+% Evidence Recall falls from 0.999 on MUX6 to 0.709 on MUX20, and Hallucination Rate rises from 4.0\%
+% to 10.0\%. A concise glossary improves judge-based audience scores but slightly increases
+% hallucination. Expert explanations preserve more evidence, whereas layman explanations minimize
+% hallucination and causal overclaim but lose coverage on harder benchmarks. These findings support a
+% narrow role for LLMs in interpretable pipelines: faithful translation is feasible, but it becomes harder as rule interactions grow denser.
+
 Rule-based machine learning models expose prediction-time evidence as matching IF--THEN rules, but
 raw rule outputs are often too technical for their intended users. We study a constrained pipeline
 in which a rule-based model supplies structured evidence and a large language model (LLM)
@@ -204,6 +218,8 @@ audience scores but slightly increases hallucination. Expert explanations preser
 whereas layman explanations reduce hallucination and causal overclaim on harder benchmarks. These
 preliminary findings support a narrow role for LLMs in interpretable pipelines: faithful
 translation is feasible, but preserving coverage becomes harder as rule interactions grow denser.
+\
+
 \end{abstract}
 
 %%
@@ -281,16 +297,16 @@ design question is not whether the model can reason freely over raw task inputs,
 reliably restate structured rule evidence under narrow behavioral constraints. That distinction
 informs the specific model choice described in the Methods section.
 
-Our empirical question is therefore straightforward. If evidence extraction remains in the hands of
-an interpretable rule-based model and the language model is used only for audience-conditioned
-translation, then the main risk should shift away from unsupported invention and toward selective
-omission or over-compression of valid evidence. We examine that pattern using HEROS and three
-multiplexer benchmarks of increasing complexity. For each held-out instance, the LLM receives only
-structured evidence derived from matching rules in the selected HEROS model, instance feature
-values, a model-context summary, and optional glossary entries. It is explicitly instructed to
-explain what the model is doing, not what is true in reality, and to avoid causal claims. We
-compare two experimental setups and three target audiences, then evaluate the resulting explanations
-with literature-grounded evidence metrics, safety-oriented diagnostics, readability measures, and
+Our empirical question is therefore straightforward. If evidence extraction
+remains in the hands of an interpretable rule-based model and the language model is used only for
+audience-conditioned translation, then the main risk should shift away from unsupported invention
+and toward selective omission or over-compression of valid evidence. We examine that pattern using
+HEROS and three multiplexer benchmarks of increasing complexity. For each held-out instance, the LLM
+receives only structured evidence derived from matching rules in the selected HEROS model, instance feature values, a
+model-context summary, and optional glossary entries. It is explicitly instructed to explain what
+the model is doing, not what is true in reality, and to avoid causal claims. We compare two prompt
+experimental setups and three target audiences, then evaluate the resulting explanations with
+literature-grounded evidence metrics, safety-oriented diagnostics, readability measures, and
 judge-model proxies for audience fit.
 
 This paper presents a preliminary cross-benchmark study on MUX6, MUX11, and MUX20 rather than a
@@ -341,9 +357,7 @@ shared HEROS settings used in the MUX6, MUX11, and MUX20 experiments, taken from
 experiment configuration and the corresponding HEROS model-selection code.
 
 \begin{table}[H]
-\caption{Shared HEROS training and model-selection settings used across MUX6, MUX11, and MUX20,
-derived from the experiment configuration and HEROS implementation. Secondary tracking and storage
-options remained at their code defaults and are omitted for brevity.}
+\caption{Major HEROS training and model-selection settings used across MUX6, MUX11, and MUX20.}
 \label{tab:heros-settings}
 \centering
 \small
@@ -371,7 +385,7 @@ New model fraction & 1.0 \\
 Merge probability & 0.1 \\
 Compaction & \texttt{sub} \\
 Random seed & 42 \\
-Target model selection & Non-dominated model with highest balanced test accuracy, then highest test coverage, then smallest rule count \\
+% Target model selection & Non-dominated model with highest balanced test accuracy, then highest test coverage, then smallest rule count \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -461,42 +475,42 @@ sufficiently strong compliance to the prompt constraints. We therefore selected
 scale, while recognizing that future work should compare stronger and weaker model families
 directly.
 
-\begin{table}[H]
-\caption{LLM explanation and evaluation run parameters used in the final study.}
-\label{tab:run-params}
-\centering
-\small
-\setlength{\tabcolsep}{3pt}
-\renewcommand{\arraystretch}{1.05}
-\begin{tabular}{p{0.43\columnwidth}p{0.47\columnwidth}}
-\toprule
-\textbf{Setting} & \textbf{Value} \\
-\midrule
-Prompt version & \texttt{v2\_minimal} \\
-Experiments & 1 and 2 \\
-Audiences & Layman, Clinician, Expert \\
-Sampling strategy & Stratified by prediction and matching-rule bucket, with the full MUX6 test fold used when available \\
-Generation model & \texttt{gpt-4.1-mini} \\
-Generation temperature & 0.0 \\
-Generation max tokens & 400 \\
-Judge model & \texttt{gpt-4.1-mini} \\
-Judge rubric & JSON-only audience-scoring prompt \\
-Judge temperature & 0.0 \\
-Judge max tokens & 300 \\
-Prompt metadata exposure & Clinician and Expert only \\
-\bottomrule
-\end{tabular}
-\end{table}
+% \begin{table}[H]
+% \caption{LLM explanation and evaluation run parameters used in the final study.}
+% \label{tab:run-params}
+% \centering
+% \small
+% \setlength{\tabcolsep}{3pt}
+% \renewcommand{\arraystretch}{1.05}
+% \begin{tabular}{p{0.43\columnwidth}p{0.47\columnwidth}}
+% \toprule
+% \textbf{Setting} & \textbf{Value} \\
+% \midrule
+% Prompt version & \texttt{v2\_minimal} \\
+% Experiments & 1 and 2 \\
+% Audiences & Layman, Clinician, Expert \\
+% Sampling strategy & Stratified by prediction and matching-rule bucket, with the full MUX6 test fold used when available \\
+% Generation model & \texttt{gpt-4.1-mini} \\
+% Generation temperature & 0.0 \\
+% Generation max tokens & 400 \\
+% Judge model & \texttt{gpt-4.1-mini} \\
+% Judge rubric & JSON-only audience-scoring prompt \\
+% Judge temperature & 0.0 \\
+% Judge max tokens & 300 \\
+% Prompt metadata exposure & Clinician and Expert only \\
+% \bottomrule
+% \end{tabular}
+% \end{table}
 
 \subsection{Pipeline design}
 The pipeline is built around a strict division of labor between HEROS and the language model. HEROS
-performs prediction and identifies the active supporting and contradictory rules for a given
+performs prediction and identifies the matching rules for a given
 instance. The LLM receives only a structured explanation packet derived from those outputs. It is
 never asked to infer feature importance from scratch, summarize the full rule population, or recover
 dataset semantics from internal feature indices.
 
 For each held-out instance, the system assembles a packet containing the predicted class, class
-probabilities, model coverage status, matching rules partitioned into supporting and contradictory subsets, relevant instance
+probabilities, model coverage status, matching rules partitioned into supporting and contradictory rules, relevant instance
 feature values, and a model-context summary describing the number of matching rules and whether the
 evidence is consistent or mixed. When available, the packet also includes rule metadata such as
 numerosity, accuracy, fitness, vote contribution, and training-support counts. Internal feature
@@ -560,7 +574,7 @@ MUX20 & 9{,}000 & 1{,}000 & 50 & 14.86 \\
 \end{tabular}
 \end{table}
 
-\subsection{Evaluation metrics}
+\subsection{Evaluation Metrics}
 The evaluation framework is designed to test the study design directly. We separate the metrics into
 three groups. The first group contains packet-computable metrics tied to prior evidence-attribution,
 rationale-evaluation, hallucination, and readability literature. The second group contains
@@ -588,7 +602,7 @@ under feature-removal and keep-only perturbations rather than estimating them fr
 \small
 \setlength{\tabcolsep}{3pt}
 \renewcommand{\arraystretch}{1.06}
-\begin{tabular}{p{2.0cm}p{2.5cm}p{6.7cm}p{2.0cm}p{2.6cm}}
+\begin{tabular}{p{2.0cm}p{2.8cm}p{5cm}p{2.5cm}p{3.1cm}}
 \toprule
 \textbf{Category} & \textbf{Metric} & \textbf{Calculation or operationalization} & \textbf{Range / direction} & \textbf{Basis} \\
 \midrule
@@ -708,12 +722,12 @@ evidence set.
 \midrule
 \multicolumn{4}{p{14.8cm}}{\textbf{Packet summary:} Relevant feature values are $\textbf{A}_0 = 1$, $\textbf{A}_1 = 1$, $\textbf{R}_1 = 0$, $\textbf{R}_2 = 1$, and $\textbf{R}_3 = 1$. Four matching rules are present; three support \textbf{class 1} and one conflicting rule supports \textbf{class 0}.} \\
 \midrule
-A & Layman & 98 & ``The model slightly leaned toward predicting \textbf{class 1} because most of the active rules supported this outcome. Specifically, the combination of \texttt{\textbf{A\_0}} being 1 with \texttt{\textbf{R\_2}} being 1, \texttt{\textbf{A\_1}} being 1 with \texttt{\textbf{R\_3}} being 1, and \texttt{\textbf{A\_0}} being 1 with \texttt{\textbf{R\_3}} being 1 all pointed to \textbf{class 1}. However, one rule based on \texttt{\textbf{A\_1}} being 1 and \texttt{\textbf{R\_1}} being 0 suggested \textbf{class 0}, creating some conflicting evidence. Overall, the model's reasoning is mainly influenced by the majority of rules supporting \textbf{class 1}. Keep in mind, this explanation reflects the model's decision process, not a definitive fact.'' \\
-A & Clinician & 117 & ``The prediction of \textbf{class 1} is mainly supported by three rules that match the instance's feature values: the combinations of \texttt{\textbf{A\_0}} = 1 with \texttt{\textbf{R\_2}} = 1, \texttt{\textbf{A\_1}} = 1 with \texttt{\textbf{R\_3}} = 1, and \texttt{\textbf{A\_0}} = 1 with \texttt{\textbf{R\_3}} = 1. Each of these rules has moderate training support and showed about \textbf{74--77\%} of matched training instances belonging to \textbf{class 1}. However, one rule matching \texttt{\textbf{A\_1}} = 1 with \texttt{\textbf{R\_1}} = 0 predicts \textbf{class 0}, introducing some conflicting evidence. Overall, most active rules favor \textbf{class 1}, leading to a predicted confidence of about \textbf{61\%}, indicating a slight lean toward this class. This explanation reflects the model's reasoning based on the active rules and feature values, not a definitive statement of truth.'' \\
-A & Expert & 134 & ``The prediction of \textbf{class 1} with a probability of \textbf{0.607} is primarily supported by three active rules that match the instance's feature values: \textbf{Rule 4387} (\texttt{\textbf{A\_0}} = 1 and \texttt{\textbf{R\_2}} = 1), \textbf{Rule 3467} (\texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_3}} = 1), and \textbf{Rule 2008} (\texttt{\textbf{A\_0}} = 1 and \texttt{\textbf{R\_3}} = 1). Each of these rules has moderate support from training data, with accuracies around \textbf{74--77\%} and collectively contributes stronger votes toward \textbf{class 1}. Conversely, \textbf{Rule 3925} (\texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_1}} = 0) conflicts by supporting \textbf{class 0} with similar moderate support and accuracy. Overall, most active rules favor \textbf{class 1}, but the presence of a conflicting rule creates mixed evidence, resulting in a slight lean toward \textbf{class 1}. This explanation reflects the model's reasoning based on rule matches and does not imply causal relationships or ground truth.'' \\
-B & Layman & 80 & ``The model slightly leaned toward predicting \textbf{class 1} because three of the rules that matched this instance support \textbf{class 1}. These rules are based on the combinations of features \texttt{\textbf{A\_0}} with \texttt{\textbf{R\_2}}, \texttt{\textbf{A\_1}} with \texttt{\textbf{R\_3}}, and \texttt{\textbf{A\_0}} with \texttt{\textbf{R\_3}}. However, one rule that matched suggests \textbf{class 0}, based on \texttt{\textbf{A\_1}} and \texttt{\textbf{R\_1}}. Overall, most of the evidence supports \textbf{class 1}, but there is some conflicting information. This explanation reflects the model's reasoning and is not a statement of fact.'' \\
-B & Clinician & 133 & ``The prediction of \textbf{class 1} is mainly supported by three rules that match the instance's feature values: \texttt{\textbf{A\_0}} = 1 combined with \texttt{\textbf{R\_2}} = 1, \texttt{\textbf{A\_1}} = 1 combined with \texttt{\textbf{R\_3}} = 1, and \texttt{\textbf{A\_0}} = 1 combined with \texttt{\textbf{R\_3}} = 1. Each of these rules has moderate training support and indicates a strong association with \textbf{class 1}, with about \textbf{74--77\%} of matched training instances belonging to this class. However, one rule conflicts by predicting \textbf{class 0} based on \texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_1}} = 0, also with moderate support. Overall, most active rules support the prediction of \textbf{class 1}, but there is some conflicting evidence, leading to a predicted class confidence of about \textbf{61\%}, indicating a slight lean toward \textbf{class 1}. This explanation reflects the model's reasoning and does not imply a causal relationship or ground truth.'' \\
-B & Expert & 129 & ``The prediction of \textbf{class 1} with a probability of \textbf{0.607} (\textbf{slight lean}) is primarily supported by three active rules that match the instance features: \textbf{Rule 4387} (\texttt{\textbf{A\_0}} = 1 and \texttt{\textbf{R\_2}} = 1), \textbf{Rule 3467} (\texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_3}} = 1), and \textbf{Rule 2008} (\texttt{\textbf{A\_0}} = 1 and \texttt{\textbf{R\_3}} = 1). Each of these rules has moderate support from the training data, with accuracies around \textbf{74--77\%} and collectively contributes stronger votes toward \textbf{class 1}. Conversely, \textbf{Rule 3925} (\texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_1}} = 0) conflicts by supporting \textbf{class 0} with similar moderate support and accuracy. The overall evidence is mixed but leans toward \textbf{class 1} due to the majority and strength of supporting rules. This explanation reflects the model's reasoning based on rule matches and does not imply causal relationships or ground truth.'' \\
+1 & Layman & 98 & ``The model slightly leaned toward predicting \textbf{class 1} because most of the active rules supported this outcome. Specifically, the combination of \texttt{\textbf{A\_0}} being 1 with \texttt{\textbf{R\_2}} being 1, \texttt{\textbf{A\_1}} being 1 with \texttt{\textbf{R\_3}} being 1, and \texttt{\textbf{A\_0}} being 1 with \texttt{\textbf{R\_3}} being 1 all pointed to \textbf{class 1}. However, one rule based on \texttt{\textbf{A\_1}} being 1 and \texttt{\textbf{R\_1}} being 0 suggested \textbf{class 0}, creating some conflicting evidence. Overall, the model's reasoning is mainly influenced by the majority of rules supporting \textbf{class 1}. Keep in mind, this explanation reflects the model's decision process, not a definitive fact.'' \\
+1 & Clinician & 117 & ``The prediction of \textbf{class 1} is mainly supported by three rules that match the instance's feature values: the combinations of \texttt{\textbf{A\_0}} = 1 with \texttt{\textbf{R\_2}} = 1, \texttt{\textbf{A\_1}} = 1 with \texttt{\textbf{R\_3}} = 1, and \texttt{\textbf{A\_0}} = 1 with \texttt{\textbf{R\_3}} = 1. Each of these rules has moderate training support and showed about \textbf{74--77\%} of matched training instances belonging to \textbf{class 1}. However, one rule matching \texttt{\textbf{A\_1}} = 1 with \texttt{\textbf{R\_1}} = 0 predicts \textbf{class 0}, introducing some conflicting evidence. Overall, most active rules favor \textbf{class 1}, leading to a predicted confidence of about \textbf{61\%}, indicating a slight lean toward this class. This explanation reflects the model's reasoning based on the active rules and feature values, not a definitive statement of truth.'' \\
+1 & Expert & 134 & ``The prediction of \textbf{class 1} with a probability of \textbf{0.607} is primarily supported by three active rules that match the instance's feature values: \textbf{Rule 4387} (\texttt{\textbf{A\_0}} = 1 and \texttt{\textbf{R\_2}} = 1), \textbf{Rule 3467} (\texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_3}} = 1), and \textbf{Rule 2008} (\texttt{\textbf{A\_0}} = 1 and \texttt{\textbf{R\_3}} = 1). Each of these rules has moderate support from training data, with accuracies around \textbf{74--77\%} and collectively contributes stronger votes toward \textbf{class 1}. Conversely, \textbf{Rule 3925} (\texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_1}} = 0) conflicts by supporting \textbf{class 0} with similar moderate support and accuracy. Overall, most active rules favor \textbf{class 1}, but the presence of a conflicting rule creates mixed evidence, resulting in a slight lean toward \textbf{class 1}. This explanation reflects the model's reasoning based on rule matches and does not imply causal relationships or ground truth.'' \\
+2 & Layman & 80 & ``The model slightly leaned toward predicting \textbf{class 1} because three of the rules that matched this instance support \textbf{class 1}. These rules are based on the combinations of features \texttt{\textbf{A\_0}} with \texttt{\textbf{R\_2}}, \texttt{\textbf{A\_1}} with \texttt{\textbf{R\_3}}, and \texttt{\textbf{A\_0}} with \texttt{\textbf{R\_3}}. However, one rule that matched suggests \textbf{class 0}, based on \texttt{\textbf{A\_1}} and \texttt{\textbf{R\_1}}. Overall, most of the evidence supports \textbf{class 1}, but there is some conflicting information. This explanation reflects the model's reasoning and is not a statement of fact.'' \\
+2 & Clinician & 133 & ``The prediction of \textbf{class 1} is mainly supported by three rules that match the instance's feature values: \texttt{\textbf{A\_0}} = 1 combined with \texttt{\textbf{R\_2}} = 1, \texttt{\textbf{A\_1}} = 1 combined with \texttt{\textbf{R\_3}} = 1, and \texttt{\textbf{A\_0}} = 1 combined with \texttt{\textbf{R\_3}} = 1. Each of these rules has moderate training support and indicates a strong association with \textbf{class 1}, with about \textbf{74--77\%} of matched training instances belonging to this class. However, one rule conflicts by predicting \textbf{class 0} based on \texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_1}} = 0, also with moderate support. Overall, most active rules support the prediction of \textbf{class 1}, but there is some conflicting evidence, leading to a predicted class confidence of about \textbf{61\%}, indicating a slight lean toward \textbf{class 1}. This explanation reflects the model's reasoning and does not imply a causal relationship or ground truth.'' \\
+2 & Expert & 129 & ``The prediction of \textbf{class 1} with a probability of \textbf{0.607} (\textbf{slight lean}) is primarily supported by three active rules that match the instance features: \textbf{Rule 4387} (\texttt{\textbf{A\_0}} = 1 and \texttt{\textbf{R\_2}} = 1), \textbf{Rule 3467} (\texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_3}} = 1), and \textbf{Rule 2008} (\texttt{\textbf{A\_0}} = 1 and \texttt{\textbf{R\_3}} = 1). Each of these rules has moderate support from the training data, with accuracies around \textbf{74--77\%} and collectively contributes stronger votes toward \textbf{class 1}. Conversely, \textbf{Rule 3925} (\texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_1}} = 0) conflicts by supporting \textbf{class 0} with similar moderate support and accuracy. The overall evidence is mixed but leans toward \textbf{class 1} due to the majority and strength of supporting rules. This explanation reflects the model's reasoning based on rule matches and does not imply causal relationships or ground truth.'' \\
 \bottomrule
 \end{tabular}
 \end{table*}
