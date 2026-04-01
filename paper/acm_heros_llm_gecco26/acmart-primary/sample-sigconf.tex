@@ -321,42 +321,40 @@ pipelines should be evaluated less as generic text generators and more as lossy 
 already-structured model evidence.
 
 \section{Methods}
-\noindent
-The methods operationalize that framing as a modular pipeline with three linked design choices.
-First, HEROS supplies the explanation evidence so that the generator never has to infer explanation
-content from raw inputs alone. Second, the prompting scheme restricts the LLM to
-audience-conditioned translation rather than open-ended reasoning. Third, the evaluation is designed
-to distinguish between unsupported invention and incomplete evidence preservation. The following
-subsections describe these three elements in turn.
+The method follows three linked design choices: HEROS supplies the explanation evidence so that the
+generator never has to infer explanation content from raw inputs alone, prompting restricts the LLM
+to audience-conditioned translation rather than open-ended reasoning, and evaluation distinguishes
+unsupported invention from incomplete evidence preservation.
 
 \subsection{HEROS and rule-based machine learning context}
-HEROS should be understood in the context of learning classifier systems and related rule-based
-evolutionary methods. Learning classifier systems represent a family of population-based rule
-learners that evolve cooperating IF--THEN rules rather than fitting a single global parametric
-form~\cite{urbanowicz2009lcs,urbanowicz2017intro}. Within this tradition, Urbanowicz and colleagues
-developed ExSTraCS as a supervised Michigan-style system aimed at noisy, heterogeneous, and
-high-dimensional biomedical problems, together with accompanying analysis and visualization
-strategies for rule-population
-interpretation~\cite{urbanowicz2012analysis,urbanowicz2014exstracs,urbanowicz2015exstracs}. That
-line of work also demonstrated practical use in biomedical association studies, including
-bladder-cancer risk and outcome modeling, where interacting and heterogeneous patterns are central
-challenges~\cite{urbanowicz2013bladder}. Subsequent work introduced Pareto-inspired rule-fitness
-formulations to better balance competing objectives such as accuracy, generality, and robustness
-under noise~\cite{urbanowicz2016pareto}, and more recently extended the same rule-based paradigm to
-time-to-event prediction in Survival-LCS~\cite{woodward2024survival}.
+Interpretable rule-based machine learning spans several related traditions. Classical rule-induction
+systems such as RIPPER learn compact ordered IF--THEN rules directly from labeled
+data~\cite{cohen1995ripper}, while evolutionary rule learners such as BioHEL search for readable
+rule sets with genetic optimization~\cite{bacardit2006biohel}. Within learning classifier systems,
+XCS and UCS helped establish the accuracy-based view of rule learning in which predictions are made
+from matched rules and fitness emphasizes accurate, general classifiers rather than only raw reward
+or coverage~\cite{wilson2000xcs,bernado2003ucs}. More recent supervised Michigan-style systems such
+as ExSTraCS adapted this lineage to noisy, heterogeneous biomedical settings while preserving an
+explicit rule representation~\cite{urbanowicz2015exstracs,urbanowicz2017intro}. HEROS should be
+understood against that broader rule-based background rather than as an isolated system.
 
-HEROS builds on this lineage while changing the optimization target in a way that is directly
-relevant for explanation. Rather than only improving individual rules or treating the evolved rule
-population itself as the explanation object, HEROS separates Pareto optimization at the rule and
-rule-set levels so that compact predictive models and their matched instance-level rules can both be
-surfaced explicitly~\cite{lipschutzvilla2025heros}. That design makes HEROS especially suitable for
-the present study because the LLM can be given already-structured evidence about which rules fired,
-which class they support, and how strongly they are supported by training data, without being asked
-to infer explanation content from raw features alone. Table~\ref{tab:heros-settings} summarizes the
-shared HEROS settings used in the MUX6, MUX11, and MUX20 experiments, taken from the resolved
-experiment configuration and the corresponding HEROS model-selection code.
+HEROS is most directly distinguished by its two-phase training design~\cite{lipschutzvilla2025heros}.
+In Phase 1, HEROS evolves an interpretable rule population and evaluates individual rules with a
+Pareto-inspired objective that favors accurate rules that cover informative subsets of the training
+instances. In Phase 2, HEROS treats candidate predictive models as subsets of those learned rules
+and evolves rule sets under a separate multi-objective search that prioritizes predictive
+performance while penalizing unnecessarily large models. The resulting output is therefore not just
+a flat population of rules, but a population of candidate rule sets together with the underlying
+rules from which they are assembled. At prediction time, one selected rule set is applied to a new
+instance, the rules in that model whose conditions match the instance form the match set, and those
+matching rules generate the prediction array used for class prediction. This separation between
+rule learning and rule-set learning is what makes HEROS useful for the present study: it exposes a
+compact predictive model at the model level and instance-specific matched-rule evidence at the
+prediction level. Table~\ref{tab:heros-settings} summarizes the shared HEROS settings used in the
+MUX6, MUX11, and MUX20 experiments, taken from the resolved experiment configuration and the
+corresponding HEROS implementation.
 
-\begin{table}[H]
+\begin{table}[tbp]
 \caption{Major HEROS training and model-selection settings used across MUX6, MUX11, and MUX20.}
 \label{tab:heros-settings}
 \centering
