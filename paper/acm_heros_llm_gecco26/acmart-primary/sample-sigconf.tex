@@ -389,14 +389,21 @@ Random seed & 42 \\
 \end{table}
 
 \subsection{From a HEROS model to a prediction}
+The explanation pipeline begins only after HEROS has been trained. For each benchmark, HEROS is fit
+on the benchmark's training split, producing a learned rule population and a learned population of
+candidate rule sets. The explanation system then selects one trained rule set to act as the
+predictive model and uses only that model when explaining held-out instances. This ordering matters
+because the LLM is not asked to explain an idealized multiplexer program or the entire evolved rule
+population. It is asked to translate the evidence produced by one selected learned HEROS model.
+
 In HEROS, a predictive model is itself a rule set rather than a single parametric object. Phase 1
 evolves individual rules, and Phase 2 evolves candidate models by selecting subsets of those rules
 and evaluating them as whole rule sets~\cite{lipschutzvilla2025heros}. At prediction time, HEROS
 selects one model and treats that model's rule set as the prediction mechanism. In implementation
 terms, the selected model exposes a \texttt{target\_rule\_set}, and prediction begins by scanning
 that rule set to construct the match set $M$, namely the subset of rules whose IF conditions match
-the current instance. The prediction then comes from a class-wise prediction array built from those
-matching rules.
+the current instance. HEROS then aggregates those matching rules into a class-wise prediction
+array.
 
 For classification, each matching rule $r \in M$ contributes its empirical class distribution
 $p_r(c)$ together with its numerosity $n_r$. HEROS computes the unnormalized class vote
@@ -547,7 +554,13 @@ summarizes the benchmark setup together with the mean number of matching rules o
 selected evaluation instances, while Tables~\ref{tab:heros-settings} and~\ref{tab:run-params}
 summarize the major HEROS settings and the explanation run parameters used throughout. The increase
 in mean matching rules from MUX6 to MUX20 provides a simple operational view of how explanation
-burden grows across the benchmarks.
+burden grows across the benchmarks. This quantity should not be interpreted as a property of the
+MUX benchmarks alone. It also reflects the character of the learned HEROS model. An ideal fully
+specific MUX6 rule set would match one rule per instance, whereas the selected learned MUX6 model
+matched 3.08 rules on average. Throughout the paper, we therefore evaluate the LLM against the
+evidence packet produced by the learned HEROS model rather than against the ideal benchmark logic.
+That choice is intentional because the downstream explanation task is to restate what the trained
+model actually did at prediction time.
 
 The generation model was \texttt{gpt-4.1-mini} with temperature fixed at 0.0. Judge scoring used the
 same model family at temperature 0.0 under a separate JSON-only rubric. We used deterministic
@@ -644,7 +657,11 @@ between perfect precision and falling recall indicates that the main failure mod
 invention. Rather, as the packet becomes denser, the generator increasingly compresses or omits
 valid evidence that is present in the matching rules. This is the key empirical pattern that unifies
 the rest of the paper: the LLM behaves more like a selective summarizer of rule evidence than like
-an unconstrained rationalizer.
+an unconstrained rationalizer. Importantly, this burden is partly a property of the learned HEROS
+models, not just of the benchmark family in the abstract. The explanation system is being tested on
+the evidence produced by selected trained models, so increasingly dense match sets reflect both
+benchmark difficulty and the degree to which the learned rule sets remain overlapping rather than
+ideal and minimal.
 
 The audience-oriented, readability, and verbosity measures change more gradually than the
 packet-grounded evidence metrics. \emph{Audience Understandability} decreases only modestly from
@@ -858,7 +875,13 @@ the current audience-conditioning method itself.
 Because clinician outputs sometimes score as more difficult than expert outputs under Flesch-based
 measures, the prompts do not yet induce a stable monotonic complexity ordering across audiences.
 That pattern likely reflects both the weakness of generic readability formulas for technical text
-and the weakness of our prompting method as a reading-level controller. The glossary design is also
+and the weakness of our prompting method as a reading-level controller. Model quality is an
+additional limitation. The explanation system is evaluated against the evidence packet produced by a
+learned HEROS model, not against the ideal multiplexer rule set. For MUX6, for example, the saved
+selected model achieved 0.86 train accuracy, 0.86 held-out test accuracy, and a 13-rule top model,
+while still producing an average of 3.08 matching rules per held-out instance. Some of the
+observed explanation burden therefore comes from translating non-minimal learned rule sets rather
+than from the LLM alone. The glossary design is also
 subjective. In \emph{Experiment 2}, we intentionally used minimal feature-oriented glosses rather than
 explaining the underlying multiplexer mechanism, because a more specific glossary could leak task
 structure into the prompt. That choice makes the glossary intervention more conservative, but it also
@@ -869,7 +892,8 @@ alone~\cite{deyoung2020eraser}. Future work should extend the pipeline to biomed
 kind previously studied with ExSTraCS and related rule-based
 systems~\cite{urbanowicz2013bladder,woodward2024survival}, strengthen clinician-oriented non-causal
 prompting, add perturbation-based faithfulness checks, explicitly control reading level during
-generation, and complement judge scoring with human evaluation using established explanation
+generation, compare explanation behavior across HEROS training budgets and model-selection
+checkpoints, and complement judge scoring with human evaluation using established explanation
 measures~\cite{hoffman2023measures,holzinger2020scs}.
 
 \section{Code and Data Availability}
