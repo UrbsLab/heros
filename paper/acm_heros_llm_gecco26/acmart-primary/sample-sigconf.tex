@@ -188,20 +188,22 @@
 %% The abstract is a short summary of the work to be presented in the
 %% article.
 \begin{abstract}
-Rule-based models expose instance-level evidence, but raw rule outputs are often too technical for
-their intended users. We study a constrained HEROS+LLM pipeline in which a language model translates
-structured rule evidence instead of generating free-form explanations. Using HEROS on MUX6, MUX11,
-and MUX20, we generate explanations for 50 held-out instances per dataset under two prompt
-conditions and three audience settings, yielding 900 explanations. The pipeline converts active
-rules into readable IF--THEN text, maps feature indices to names before prompting, and instructs the
-generator to describe model behavior rather than domain truth. Across datasets, Evidence Precision
-and Prediction--Explanation Agreement remain 1.000. As benchmark complexity increases, however,
-Evidence Recall falls from 0.999 on MUX6 to 0.709 on MUX20, and Hallucination Rate rises from 4.0\%
-to 10.0\%. A concise glossary improves judge-based audience scores but slightly increases
-hallucination. Expert explanations preserve more evidence, whereas layman explanations minimize
-hallucination and causal overclaim but lose coverage on harder benchmarks. These findings support a
-narrow role for LLMs in interpretable pipelines: faithful translation is feasible, but preserving
-coverage becomes harder as rule interactions grow denser.
+Rule-based machine learning models expose prediction-time evidence as matching IF--THEN rules, but
+raw rule outputs are often too technical for their intended users. We study a constrained pipeline
+in which a rule-based model supplies structured evidence and a large language model (LLM)
+translates that evidence for different audiences rather than generating explanations from scratch.
+We instantiate the pipeline with HEROS on MUX6, MUX11, and MUX20, generating explanations for 50
+held-out instances per dataset under two experimental setups and three audiences, for 900
+explanations total. The pipeline converts matching rules into readable IF--THEN text, maps feature
+indices to names before prompting, and instructs the generator to describe model behavior rather
+than domain truth. Across datasets, \emph{Evidence Precision} and
+\emph{Prediction--Explanation Agreement} remain near perfect. As benchmark complexity increases,
+however, \emph{Evidence Recall} falls from 0.999 on MUX6 to 0.709 on MUX20, and
+\emph{Hallucination Rate} rises from 4.0\% to 10.0\%. A concise glossary improves judge-based
+audience scores but slightly increases hallucination. Expert explanations preserve more evidence,
+whereas layman explanations reduce hallucination and causal overclaim on harder benchmarks. These
+preliminary findings support a narrow role for LLMs in interpretable pipelines: faithful
+translation is feasible, but preserving coverage becomes harder as rule interactions grow denser.
 \end{abstract}
 
 %%
@@ -251,7 +253,7 @@ applicability over many years~\cite{urbanowicz2009lcs,urbanowicz2017intro,urbano
 Nonetheless, rule outputs that are intelligible to machine learning researchers are not
 automatically appropriate for clinicians, patients, or other non-expert users.
 
-Large language models seem well suited to this communication problem, but recent work on
+Large language models (LLMs) seem well suited to this communication problem, but recent work on
 natural-language explanations shows that fluent text can be only weakly coupled to the reasoning
 process that produced a
 prediction~\cite{atanasova2023faithfulness,madsen2024self,parcalabescu2024measuring,lyu2024survey}.
@@ -279,24 +281,25 @@ design question is not whether the model can reason freely over raw task inputs,
 reliably restate structured rule evidence under narrow behavioral constraints. That distinction
 informs the specific model choice described in the Methods section.
 
-The paper follows a simple empirical through-line about failure modes. If evidence extraction
-remains in the hands of an interpretable rule-based model and the language model is used only for
-audience-conditioned translation, then the main risk should shift away from unsupported invention
-and toward selective omission or over-compression of valid evidence. We examine that pattern using
-HEROS and three multiplexer benchmarks of increasing complexity. For each held-out instance, the LLM
-receives only structured evidence derived from active HEROS rules, instance feature values, a
-model-context summary, and optional glossary entries. It is explicitly instructed to explain what
-the model is doing, not what is true in reality, and to avoid causal claims. We compare two prompt
-conditions and three target audiences, then evaluate the resulting explanations with
-literature-grounded evidence metrics, safety-oriented diagnostics, readability measures, and
+Our empirical question is therefore straightforward. If evidence extraction remains in the hands of
+an interpretable rule-based model and the language model is used only for audience-conditioned
+translation, then the main risk should shift away from unsupported invention and toward selective
+omission or over-compression of valid evidence. We examine that pattern using HEROS and three
+multiplexer benchmarks of increasing complexity. For each held-out instance, the LLM receives only
+structured evidence derived from matching rules in the selected HEROS model, instance feature
+values, a model-context summary, and optional glossary entries. It is explicitly instructed to
+explain what the model is doing, not what is true in reality, and to avoid causal claims. We
+compare two experimental setups and three target audiences, then evaluate the resulting explanations
+with literature-grounded evidence metrics, safety-oriented diagnostics, readability measures, and
 judge-model proxies for audience fit.
 
-This paper extends our initial MUX6 prototype into a cross-benchmark study on MUX6, MUX11, and
-MUX20. The broader benchmark sweep matters because it reveals not only whether grounded translation
-is possible, but also how performance changes as rule interactions become denser. The main result is
-not simply that the system works well, but that it fails in a specific way: across all three
-datasets, Evidence Precision and Prediction--Explanation Agreement remain perfect, whereas Evidence
-Recall and Rule Coverage decline as benchmark complexity increases. We treat that asymmetry as the
+This paper presents a preliminary cross-benchmark study on MUX6, MUX11, and MUX20 rather than a
+definitive end-state evaluation. The broader benchmark sweep matters because it reveals not only
+whether grounded translation is possible, but also how performance changes as rule interactions
+become denser. The main result is not simply that the system works well, but that it fails in a
+specific way: across all three datasets, \emph{Evidence Precision} and
+\emph{Prediction--Explanation Agreement} remain perfect, whereas \emph{Evidence Recall} and
+\emph{Rule Coverage} decline as benchmark complexity increases. We treat that asymmetry as the
 central scientific contribution of the paper because it suggests that constrained LLM explanation
 pipelines should be evaluated less as generic text generators and more as lossy translators of
 already-structured model evidence.
@@ -333,7 +336,108 @@ rule-set levels so that compact predictive models and their matched instance-lev
 surfaced explicitly~\cite{lipschutzvilla2025heros}. That design makes HEROS especially suitable for
 the present study because the LLM can be given already-structured evidence about which rules fired,
 which class they support, and how strongly they are supported by training data, without being asked
-to infer explanation content from raw features alone.
+to infer explanation content from raw features alone. Table~\ref{tab:heros-settings} summarizes the
+shared HEROS settings used in the MUX6, MUX11, and MUX20 experiments, taken from the resolved
+experiment configuration and the corresponding HEROS model-selection code.
+
+\begin{table}[H]
+\caption{Shared HEROS training and model-selection settings used across MUX6, MUX11, and MUX20,
+derived from the experiment configuration and HEROS implementation. Secondary tracking and storage
+options remained at their code defaults and are omitted for brevity.}
+\label{tab:heros-settings}
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.05}
+\begin{tabular}{p{0.43\columnwidth}p{0.47\columnwidth}}
+\toprule
+\textbf{Setting} & \textbf{Value} \\
+\midrule
+Outcome type & \texttt{class} \\
+Rule-learning iterations & 10{,}000 \\
+Rule population size & 500 \\
+Crossover probability & 0.8 \\
+Mutation probability & 0.04 \\
+Rule fitness exponent ($\nu$) & 1.0 \\
+Learning rate ($\beta$) & 0.2 \\
+Tournament fraction ($\theta_{sel}$) & 0.5 \\
+Fitness function & \texttt{pareto} \\
+Subsumption & \texttt{both} \\
+Rule specificity limit & 0 (auto) \\
+Model-level iterations & 40 \\
+Model population size & 100 \\
+Model population initialization & \texttt{target\_acc} \\
+New model fraction & 1.0 \\
+Merge probability & 0.1 \\
+Compaction & \texttt{sub} \\
+Random seed & 42 \\
+Target model selection & Non-dominated model with highest balanced test accuracy, then highest test coverage, then smallest rule count \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{From a HEROS model to a prediction}
+In HEROS, a predictive model is itself a rule set rather than a single parametric object. Phase 1
+evolves individual rules, and Phase 2 evolves candidate models by selecting subsets of those rules
+and evaluating them as whole rule sets~\cite{lipschutzvilla2025heros}. At prediction time, HEROS
+selects one model and treats that model's rule set as the prediction mechanism. In implementation
+terms, the selected model exposes a \texttt{target\_rule\_set}, and prediction begins by scanning
+that rule set to construct the match set $M$, namely the subset of rules whose IF conditions match
+the current instance. The prediction then comes from a class-wise prediction array built from those
+matching rules.
+
+For classification, each matching rule $r \in M$ contributes its empirical class distribution
+$p_r(c)$ together with its numerosity $n_r$. HEROS computes the unnormalized class vote
+\[
+V(c) = \sum_{r \in M} n_r p_r(c),
+\]
+then normalizes by the total numerosity in the match set,
+\[
+P(c) = \frac{V(c)}{\sum_{r \in M} n_r}.
+\]
+The predicted class is the class with the largest $P(c)$. If there is a tie, HEROS breaks it using
+the training majority among the tied classes, and if that is also tied it falls back to random
+selection. If no rules match, the instance is uncovered and HEROS uses its default uncovered-case
+behavior. Table~\ref{tab:mux6-ideal-model} gives a concrete MUX6 illustration of what such a model
+looks like and how the match set and prediction array are formed.
+
+\begin{table*}[t]
+\caption{Conceptual MUX6 example showing what a rule-based model looks like and how prediction is formed from a match set. For this idealized MUX6 model, the two address bits select among $R_0$, $R_1$, $R_2$, and $R_3$ in the order 00, 01, 10, 11. Each ideal rule has numerosity 1 and a deterministic class distribution, so the example prediction array is especially simple. Learned HEROS models are usually more general and may yield larger match sets and softer class probabilities.}
+\label{tab:mux6-ideal-model}
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.06}
+\begin{tabular}{cll}
+\toprule
+\textbf{Rule} & \textbf{IF} & \textbf{THEN} \\
+\midrule
+$r_1$ & $A_0=0 \wedge A_1=0 \wedge R_0=0$ & predict class 0 \\
+$r_2$ & $A_0=0 \wedge A_1=0 \wedge R_0=1$ & predict class 1 \\
+$r_3$ & $A_0=0 \wedge A_1=1 \wedge R_1=0$ & predict class 0 \\
+$r_4$ & $A_0=0 \wedge A_1=1 \wedge R_1=1$ & predict class 1 \\
+$r_5$ & $A_0=1 \wedge A_1=0 \wedge R_2=0$ & predict class 0 \\
+$r_6$ & $A_0=1 \wedge A_1=0 \wedge R_2=1$ & predict class 1 \\
+$r_7$ & $A_0=1 \wedge A_1=1 \wedge R_3=0$ & predict class 0 \\
+$r_8$ & $A_0=1 \wedge A_1=1 \wedge R_3=1$ & predict class 1 \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.6em}
+
+\begin{tabular}{p{3.4cm}p{7.1cm}p{3.7cm}}
+\toprule
+\textbf{Example instance} & \textbf{Match set and prediction array} & \textbf{Output} \\
+\midrule
+$A_0=1$, $A_1=0$, $R_0=1$, $R_1=0$, $R_2=1$, $R_3=1$ &
+Only $r_6$ matches, so $M=\{r_6\}$. With numerosity $n_{r_6}=1$ and deterministic class
+distribution $p_{r_6}(0)=0$, $p_{r_6}(1)=1$, the vote totals are $V(0)=1\times 0=0$ and
+$V(1)=1\times 1=1$. The total numerosity is $\sum_{r \in M} n_r = 1$, so the normalized
+prediction array is $P(0)=0/1=0.0$ and $P(1)=1/1=1.0$. &
+Covered by the model: yes. Predicted class: 1. Prediction probabilities: $\{0: 0.0,\ 1: 1.0\}$. \\
+\bottomrule
+\end{tabular}
+\end{table*}
 
 \subsection{LLM and ChatGPT model selection}
 All reported generations in this study were produced through the OpenAI API with
@@ -349,13 +453,40 @@ GPT-4.1 mini positioned as a lower-latency, lower-cost member of that
 family~\cite{openai2025gpt41,openai2025gpt41mini}. Those characteristics fit the present task well.
 Our prompts are structured, bounded, and evidence-conditioned; they ask the model to translate
 supplied rules and feature values rather than solve open-ended reasoning problems. The study design
-also requires many repeated calls across datasets, conditions, audiences, and judge passes. Under
+also requires many repeated calls across datasets, experimental setups, audiences, and judge passes. Under
 that workload, a smaller instruction-following model is preferable to a frontier-sized model because
 it keeps latency and cost manageable while still supporting deterministic generation with
 sufficiently strong compliance to the prompt constraints. We therefore selected
 \texttt{gpt-4.1-mini} as a practical balance between controllability, throughput, and experimental
 scale, while recognizing that future work should compare stronger and weaker model families
 directly.
+
+\begin{table}[H]
+\caption{LLM explanation and evaluation run parameters used in the final study.}
+\label{tab:run-params}
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.05}
+\begin{tabular}{p{0.43\columnwidth}p{0.47\columnwidth}}
+\toprule
+\textbf{Setting} & \textbf{Value} \\
+\midrule
+Prompt version & \texttt{v2\_minimal} \\
+Experiments & 1 and 2 \\
+Audiences & Layman, Clinician, Expert \\
+Sampling strategy & Stratified by prediction and matching-rule bucket, with the full MUX6 test fold used when available \\
+Generation model & \texttt{gpt-4.1-mini} \\
+Generation temperature & 0.0 \\
+Generation max tokens & 400 \\
+Judge model & \texttt{gpt-4.1-mini} \\
+Judge rubric & JSON-only audience-scoring prompt \\
+Judge temperature & 0.0 \\
+Judge max tokens & 300 \\
+Prompt metadata exposure & Clinician and Expert only \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Pipeline design}
 The pipeline is built around a strict division of labor between HEROS and the language model. HEROS
@@ -365,24 +496,21 @@ never asked to infer feature importance from scratch, summarize the full rule po
 dataset semantics from internal feature indices.
 
 For each held-out instance, the system assembles a packet containing the predicted class, class
-probabilities, model coverage status, active supporting and contradictory rules, relevant instance
+probabilities, model coverage status, matching rules partitioned into supporting and contradictory subsets, relevant instance
 feature values, and a model-context summary describing the number of matching rules and whether the
 evidence is consistent or mixed. When available, the packet also includes rule metadata such as
 numerosity, accuracy, fitness, vote contribution, and training-support counts. Internal feature
-indices are converted to feature names before prompt construction. Each active rule is then rendered
+indices are converted to feature names before prompt construction. Each matching rule is then rendered
 as readable IF--THEN text so that the generator receives a textual but still structured view of the
 model evidence.
 
-The prompt design follows the same constrained translation philosophy. We initially considered a
-third ablation, Condition A, in which the LLM would receive active rules but no separate
-instance-value block. We ultimately chose not to run that condition because the active rules are
-already rendered as readable IF--THEN statements containing explicit feature--value conditions for
-the matched instance. Removing the separate instance-value listing would therefore not cleanly
-remove feature-value information; it would mainly test whether a redundant presentation layer helps
-the model, rather than whether the model can translate more or less evidence. For that reason, we
-focused the experimental comparison on two more substantive conditions. Condition B provides
-prediction output, active rules, and relevant instance values. Condition C adds concise one-sentence
-glossary entries for features that appear in the active rules. The audience setting determines how
+The prompt design follows the same constrained translation philosophy. We compare two experimental
+setups. \emph{Experiment 1} provides prediction output, matching rules, and relevant instance
+values. \emph{Experiment 2} adds concise one-sentence glossary entries for features that appear in
+the matching rules. These glossary entries were intentionally minimal and feature-oriented rather
+than mechanism-oriented. For synthetic multiplexer benchmarks, a detailed glossary that explains the
+true MUX mechanism could leak benchmark structure into the prompt. We therefore restricted the
+glossary to simple feature descriptions rather than definitions of how the multiplexer operates. The audience setting determines how
 much technical detail is exposed. Layman explanations use plain language with qualitative confidence
 wording only. Clinician explanations use concise feature--value reasoning with moderate technical
 detail and rounded support information. Expert explanations include exact probability language, rule
@@ -400,13 +528,14 @@ test fold. For MUX11 and MUX20, we evaluate on stratified 50-instance subsets dr
 held-out test folds in order to keep the LLM evaluation budget fixed across datasets while
 preserving variation in predicted class and rule-matching profile.
 
-This design yields 50 evaluated instances per dataset, two prompt conditions, and three audience
-targets, for a total of 300 explanations per dataset and 900 explanations overall. Condition A was
-scoped during design but not executed for the reasons described above, so all reported results
-correspond to Conditions B and C only. Table~\ref{tab:benchmarks} summarizes the benchmark setup
-together with the mean number of active matching rules observed in the selected evaluation
-instances. The increase in mean matching rules from MUX6 to MUX20 provides a simple operational view
-of how explanation burden grows across the benchmarks.
+This design yields 50 evaluated instances per dataset, two experimental setups, and three audience
+targets, for a total of 300 explanations per dataset and 900 explanations overall. All reported
+results therefore compare only \emph{Experiment 1} and \emph{Experiment 2}. Table~\ref{tab:benchmarks}
+summarizes the benchmark setup together with the mean number of matching rules observed in the
+selected evaluation instances, while Tables~\ref{tab:heros-settings} and~\ref{tab:run-params}
+summarize the major HEROS settings and the explanation run parameters used throughout. The increase
+in mean matching rules from MUX6 to MUX20 provides a simple operational view of how explanation
+burden grows across the benchmarks.
 
 The generation model was \texttt{gpt-4.1-mini} with temperature fixed at 0.0. Judge scoring used the
 same model family at temperature 0.0 under a separate JSON-only rubric. We used deterministic
@@ -431,76 +560,52 @@ MUX20 & 9{,}000 & 1{,}000 & 50 & 14.86 \\
 \end{tabular}
 \end{table}
 
-\section{Evaluation Metrics}
-The evaluation framework is designed to test this central claim directly. Our evaluation is informed
-by the distinction between functionally grounded and human-grounded explanation
-assessment~\cite{doshivelez2017rigorous}. The functionally grounded metrics are computed directly
-from the structured HEROS packet and the generated explanation text so that we can tell whether the
-LLM invented evidence, omitted evidence, or mismatched the final prediction. Audience-facing
-qualities are then approximated with an LLM judge, which we treat as a scalable proxy rather than as
-a human-grounded evaluation in the strict sense or a substitute for participant
-studies~\cite{liu2023geval,huang2025judge}. We prioritize
-literature-backed constructs whenever possible and use task-specific diagnostics only where this
-explanation setting introduces constraints that are not captured by standard metrics.
+\subsection{Evaluation metrics}
+The evaluation framework is designed to test the study design directly. We separate the metrics into
+three groups. The first group contains packet-computable metrics tied to prior evidence-attribution,
+rationale-evaluation, hallucination, and readability literature. The second group contains
+task-specific diagnostics introduced in this paper because our setting has two unusual constraints:
+the explanation must stay tied to a selected rule-based model's matching rules, and it must describe
+model behavior without drifting into causal or real-world claims. The third group contains
+audience-facing judge scores produced by an LLM. Table~\ref{tab:metrics} gives the exact
+operationalization, value range, preferred direction, and literature basis or justification for each
+metric. We intentionally place those details in the table so the prose can remain concise.
 
-The core evidence metrics follow the evidence attribution and rationale-evaluation
-literature~\cite{deyoung2020eraser,xing2025evidence}. For an explanation with mentioned evidence set
-$M$ and packet-derived evidence set $E$, Evidence Precision is $\lvert M \cap E \rvert / \lvert M
-\rvert$, Evidence Recall is $\lvert M \cap E \rvert / \lvert E \rvert$, and Evidence F1 is the
-harmonic mean of the two. In this paper, the packet-derived evidence set is defined by the features
-appearing in the active HEROS rules for the target instance. Hallucination Rate marks explanations
-that introduce unsupported features or unsupported claims, following the broader LLM hallucination
-literature~\cite{bang2025hallulens}. Prediction--Explanation Agreement checks whether the
-explanation remains consistent with the model's predicted class, while Rule Coverage measures
-whether the explanation mentions at least one feature from each of the key active rules selected by
-the metric pipeline.
-
-Because the prompts explicitly forbid causal language and require acknowledgment of mixed evidence,
-we also report task-specific safety diagnostics. Uncertainty
-Acknowledgment Rate measures whether an explanation signals uncertainty when the active rules are
-mixed or conflicting. Conflict Acknowledgment Score measures whether the explanation correctly
-recognizes rule disagreement. Causal Overclaim Rate flags statements that imply causes or real-world
-mechanisms instead of model behavior.
-
-Audience-oriented quality is approximated with two judge-model scores. Audience Understandability
-measures whether the explanation is understandable for the requested audience, while Audience
-Technical Fit measures whether the level of detail and terminology match that audience. We also
-compute Word Count as a simple descriptive verbosity measure, together with Flesch Reading Ease and
-Flesch--Kincaid Grade Level as descriptive readability
-indicators~\cite{flesch1948readability,kincaid1975derivation}. As a rough heuristic, Flesch Reading
-Ease values around 90--100 are usually interpreted as very easy, 60--70 as standard, 30--50 as
-difficult, and below 30 as very difficult. Flesch--Kincaid Grade Level is commonly interpreted as an
-approximate U.S. school grade, so values near 6 indicate middle-school readability, values around
-9--10 indicate high-school readability, and values above 12 suggest college-level text. In our
-interpretation, these values are most directly meaningful for layman outputs and are primarily
-descriptive for clinician and expert outputs, because formula-based readability can diverge from
-audience appropriateness in technical writing. We do not report comprehensiveness or sufficiency,
-although both are well established in rationale evaluation~\cite{deyoung2020eraser}, because their
-proper computation here requires rerunning HEROS under feature-removal and keep-only perturbations
-rather than estimating them from the text alone.
+These judge scores are included only as weak, scalable proxies for audience fit and should be
+interpreted cautiously rather than as human-grounded evidence in the sense of
+Doshi-Velez and Kim~\cite{doshivelez2017rigorous}. In particular, we do recognize that using an LLM
+to evaluate LLM-generated text is a methodological limitation, especially because the generator and
+judge come from the same model family~\cite{liu2023geval,huang2025judge}. For that reason, we treat
+the packet-computable metrics as primary and the judge-model outputs as secondary. We also do not
+report comprehensiveness or sufficiency, although both are well established in rationale
+evaluation~\cite{deyoung2020eraser}, because their proper computation here requires rerunning HEROS
+under feature-removal and keep-only perturbations rather than estimating them from the text alone.
 
 \begin{table*}[t]
-\caption{Metrics used in the study. The first block is literature-grounded and packet-computable. The second block contains task-specific diagnostics motivated by the non-causal and audience-conditioned constraints of the pipeline. Judge metrics are supportive proxies rather than direct human-study outcomes.}
+\caption{Metrics used in the study. Rows explicitly marked as task-specific are operationalizations introduced in this paper. Judge metrics are rubric-based LLM outputs and should be interpreted as weak supportive proxies rather than direct human-study outcomes.}
 \label{tab:metrics}
 \centering
-\begin{tabular}{p{2.8cm}p{2.7cm}p{10.1cm}}
+\small
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.06}
+\begin{tabular}{p{2.0cm}p{2.5cm}p{6.7cm}p{2.0cm}p{2.6cm}}
 \toprule
-\textbf{Category} & \textbf{Metric} & \textbf{Operationalization and role in this study} \\
+\textbf{Category} & \textbf{Metric} & \textbf{Calculation or operationalization} & \textbf{Range / direction} & \textbf{Basis} \\
 \midrule
-Evidence grounding & Evidence Precision & Fraction of mentioned evidence features that are actually present in the active-rule packet. High precision indicates that the LLM stays within supported evidence when it chooses to mention features. \\
-Evidence grounding & Evidence Recall & Fraction of packet evidence captured by the generated explanation. Lower recall indicates omission or compression of relevant rule evidence. \\
-Evidence grounding & Evidence F1 & Harmonic mean of Evidence Precision and Evidence Recall, used as a balanced summary of grounding and coverage. \\
-Faithfulness & Prediction--Explanation Agreement & Checks whether the explanation remains consistent with the model's predicted class. This metric is task-specific but important because the LLM is given the final prediction explicitly. \\
-Faithfulness & Rule Coverage & Measures whether the explanation mentions at least one feature from each of the top active rules selected by the metric pipeline, rather than preserving an exact rule-level restatement. \\
-Hallucination & Hallucination Rate & Percentage of explanations containing unsupported features or unsupported claims, following the broader hallucination literature. \\
-Safety & Uncertainty Acknowledgment Rate & Measures whether the explanation acknowledges uncertainty when the active rules provide mixed or conflicting evidence. \\
-Safety & Conflict Acknowledgment Score & Measures whether rule disagreement is recognized correctly rather than ignored or fabricated. \\
-Safety & Causal Overclaim Rate & Percentage of explanations containing causal or real-world-mechanism language that exceeds the packet evidence. \\
-Audience quality & Audience Understandability & Judge-model proxy for whether the explanation is understandable for the requested audience. \\
-Audience quality & Audience Technical Fit & Judge-model proxy for whether the level of technical detail matches the requested audience. \\
-Readability & Flesch Reading Ease & Standard readability diagnostic computed for all audiences. As a rough guide, values of 90--100 are very easy, 60--70 are standard, 30--50 are difficult, and below 30 are very difficult. In this study it is interpreted primarily as a quality target for layman explanations and as a descriptive complexity indicator for clinician and expert explanations. \\
-Readability & Flesch--Kincaid Grade Level & Standard readability diagnostic computed for all audiences. Values correspond approximately to U.S. grade level, with values near 6 indicating middle-school readability, values around 9--10 indicating high-school readability, and values above 12 suggesting college-level text. In this study it is interpreted primarily as a quality target for layman explanations and as a descriptive complexity indicator for clinician and expert explanations. \\
-Output length & Word Count & Descriptive measure of explanation verbosity, used to quantify how much each condition or audience setting expands or compresses the packet evidence in surface text. \\
+Evidence grounding & Evidence Precision & $\lvert M \cap E \rvert / \lvert M \rvert$, where $M$ is the set of mentioned evidence features and $E$ is the set of packet evidence features derived from the instance's matching rules. & $[0,1]$; higher is better. & Evidence attribution and rationale evaluation~\cite{deyoung2020eraser,xing2025evidence}. \\
+Evidence grounding & Evidence Recall & $\lvert M \cap E \rvert / \lvert E \rvert$. Captures how much packet evidence is preserved in the explanation. & $[0,1]$; higher is better. & Evidence attribution and rationale evaluation~\cite{deyoung2020eraser,xing2025evidence}. \\
+Evidence grounding & Evidence F1 & Harmonic mean of \emph{Evidence Precision} and \emph{Evidence Recall}. & $[0,1]$; higher is better. & Standard summary of precision and recall~\cite{deyoung2020eraser}. \\
+Faithfulness & \emph{Prediction--Explanation Agreement} & Mean of $A_i$, where $A_i=1$ if the explanation either mentions the predicted class or mentions no class label explicitly, and $A_i=0$ otherwise. & $[0,1]$; higher is better. & Task-specific metric introduced in this paper. \\
+Faithfulness & \emph{Rule Coverage} & For top-$k$ supporting matching rules $K_i$, computes $\frac{1}{|K_i|}\sum_{r \in K_i}\mathbf{1}[F(r)\cap M_i \neq \emptyset]$. Feature-overlap proxy only; not exact rule reconstruction. & $[0,1]$; higher is better. & Task-specific coverage proxy introduced in this paper. \\
+Hallucination & Hallucination Rate & Mean of $H_i$, where $H_i=1$ if an explanation contains unsupported features or unsupported reality claims. & $[0,1]$; lower is better. & Hallucination construct~\cite{bang2025hallulens}; implementation adapted to this pipeline. \\
+Safety & \emph{Uncertainty Acknowledgment Rate} & On packets labeled mixed, mostly supporting, or uncovered, mean indicator for predefined uncertainty cues such as ``mixed,'' ``uncertain,'' or ``may.'' & $[0,1]$; higher is better when uncertainty is warranted. & Task-specific metric introduced in this paper. \\
+Safety & \emph{Conflict Acknowledgment Score} & Binary consistency check that equals 1 if and only if conflict language appears exactly when the packet contains conflicting matching rules. & $[0,1]$; higher is better. & Task-specific metric introduced in this paper. \\
+Safety & \emph{Causal Overclaim Rate} & Mean of a binary flag for causal phrases or reality-claim phrases that go beyond packet evidence. & $[0,1]$; lower is better. & Task-specific safety metric introduced in this paper. \\
+Audience quality & \emph{Audience Understandability} & Rubric-based LLM-judge score for whether the explanation is understandable for the requested audience. & $[0,1]$; higher is better, but interpret cautiously. & Judge-based proxy motivated by XAI and LLM evaluation work~\cite{kim2024human,liu2023geval,huang2025judge}. \\
+Audience quality & \emph{Audience Technical Fit} & Rubric-based LLM-judge score for whether the technical detail matches the requested audience. & $[0,1]$; higher is better, but interpret cautiously. & Judge-based proxy motivated by XAI and LLM evaluation work~\cite{kim2024human,liu2023geval,huang2025judge}. \\
+Readability & Flesch Reading Ease & Standard readability formula computed for all audiences. & Higher means easier text; roughly 90--100 very easy, 60--70 standard, 30--50 difficult. & Readability formula~\cite{flesch1948readability}. \\
+Readability & Flesch--Kincaid Grade Level & Standard readability formula computed for all audiences. & Lower means simpler text; roughly 6 middle-school, 9--10 high-school, above 12 college-level. & Readability formula~\cite{kincaid1975derivation}. \\
+Output length & Word Count & Tokenized word count per explanation. & $\geq 0$; descriptive only. & Descriptive analysis choice in this paper. \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -509,45 +614,50 @@ Output length & Word Count & Descriptive measure of explanation verbosity, used 
 \subsection{Cross-benchmark performance}
 Table~\ref{tab:dataset-results} reports the overall cross-benchmark results and provides the
 clearest test of the paper's central claim. The strongest positive finding is that the pipeline
-preserved exactness at the level of explicitly mentioned evidence. Evidence Precision remained 1.000
-on MUX6, MUX11, and MUX20, and Prediction--Explanation Agreement also remained 1.000 throughout. In
+preserved exactness at the level of explicitly mentioned evidence. \emph{Evidence Precision}
+remained 1.000 on MUX6, MUX11, and MUX20, and \emph{Prediction--Explanation Agreement} also
+remained 1.000 throughout. In
 practical terms, when the LLM named features or summarized the final class prediction, it stayed
-anchored to the active-rule packet rather than drifting into unsupported alternative reasoning. This
+anchored to the matching-rule packet rather than drifting into unsupported alternative reasoning. This
 stability is important because it shows that a constrained translation setup can keep a language
-model tied to an interpretable classifier even as the number of active rules grows.
+model tied to an interpretable classifier even as the number of matching rules grows.
 
 The dominant degradation was instead a loss of coverage. Mean matching rules increased from 3.08 on
-MUX6 to 7.24 on MUX11 and 14.86 on MUX20, and the evidence metrics declined in parallel. Evidence
-Recall fell from 0.999 on MUX6 to 0.921 on MUX11 and 0.709 on MUX20, while Evidence F1 fell from
-1.000 to 0.952 and then to 0.811. Rule Coverage followed the same pattern, decreasing from 1.000 to
-0.989 and then to 0.908. Hallucination Rate rose from 4.0\% to 6.0\% and then to 10.0\%, but the gap
+MUX6 to 7.24 on MUX11 and 14.86 on MUX20, and the evidence metrics declined in parallel.
+\emph{Evidence Recall} fell from 0.999 on MUX6 to 0.921 on MUX11 and 0.709 on MUX20, while
+\emph{Evidence F1} fell from 1.000 to 0.952 and then to 0.811. \emph{Rule Coverage} followed the
+same pattern, decreasing from 1.000 to 0.989 and then to 0.908. \emph{Hallucination Rate} rose from
+4.0\% to 6.0\% and then to 10.0\%, but the gap
 between perfect precision and falling recall indicates that the main failure mode is not free-form
 invention. Rather, as the packet becomes denser, the generator increasingly compresses or omits
-valid evidence that is present in the active rules. This is the key empirical pattern that unifies
+valid evidence that is present in the matching rules. This is the key empirical pattern that unifies
 the rest of the paper: the LLM behaves more like a selective summarizer of rule evidence than like
 an unconstrained rationalizer.
 
 The audience-oriented, readability, and verbosity measures change more gradually than the
-packet-grounded evidence metrics. Audience Understandability decreases only modestly from 0.833 on
-MUX6 to 0.805 on MUX11 and 0.797 on MUX20, while Audience Technical Fit remains close to 0.82 across
-all three datasets. Readability shows a clearer decline, with Flesch Reading Ease dropping from
-62.55 to 57.48 and then to 52.37, and Flesch--Kincaid Grade Level rising from 9.35 to 10.74 and then
-to 11.79. Mean Word Count also increases steadily, from 116.86 words on MUX6 to 132.85 on MUX11 and
-140.34 on MUX20. Taken together, these trends suggest that fluent surface quality degrades more
-slowly than evidence preservation. An explanation can still appear readable and audience-appropriate
-even while covering a substantially smaller fraction of the underlying rule evidence, and harder
-datasets also induce longer summaries.
+packet-grounded evidence metrics. \emph{Audience Understandability} decreases only modestly from
+0.833 on MUX6 to 0.805 on MUX11 and 0.797 on MUX20, while \emph{Audience Technical Fit} remains
+close to 0.82 across all three datasets. Because these two scores are produced by an LLM judge
+rather than by human raters, we interpret them only as suggestive proxies. Readability shows a
+clearer decline, with \emph{Flesch Reading Ease} dropping from 62.55 to 57.48 and then to 52.37,
+and \emph{Flesch--Kincaid Grade Level} rising from 9.35 to 10.74 and then to 11.79. Mean
+\emph{Word Count} also increases steadily, from 116.86
+words on MUX6 to 132.85 on MUX11 and 140.34 on MUX20. Taken together, these trends suggest that
+fluent surface quality degrades more slowly than evidence preservation. An explanation can still
+appear readable and audience-appropriate even while covering a substantially smaller fraction of the
+underlying rule evidence, and harder datasets also induce longer summaries.
 
-Conflict-sensitive metrics move in the opposite direction. Conflict Acknowledgment Score increases
-from 0.733 on MUX6 to 0.897 on MUX11 and 0.987 on MUX20, while Uncertainty Acknowledgment Rate rises
-from 0.940 to 0.973 and then to 1.000. Once conflicting rules become common, the prompts
+Conflict-sensitive metrics move in the opposite direction. \emph{Conflict Acknowledgment Score}
+increases from 0.733 on MUX6 to 0.897 on MUX11 and 0.987 on MUX20, while
+\emph{Uncertainty Acknowledgment Rate} rises from 0.940 to 0.973 and then to 1.000. Once
+conflicting rules become common, the prompts
 successfully teach the generator to say that the evidence is mixed. The resulting picture is
 therefore asymmetric: the system becomes less exhaustive about evidence as benchmark complexity
 increases, but more willing to state explicitly that the prediction rests on competing rule
 patterns.
 
 \begin{table*}[t]
-\caption{Overall results by dataset. Judge scores are on a 0--1 scale. Percentage-style metrics are shown as percentages. Flesch Reading Ease, Flesch--Kincaid Grade Level, and Word Count are averaged over all explanations within each dataset.}
+\caption{Overall results by dataset. Judge scores are on a 0--1 scale and should be interpreted as weak proxy measures rather than as human-study outcomes. Percentage-style metrics are shown as percentages. Abbreviations: Ev. Prec. = \emph{Evidence Precision}; Ev. Recall = \emph{Evidence Recall}; Ev. F1 = \emph{Evidence F1}; Halluc. = \emph{Hallucination Rate}; Rule Cov. = \emph{Rule Coverage}; Conflict Ack. = \emph{Conflict Acknowledgment Score}; UAR = \emph{Uncertainty Acknowledgment Rate}; COR = \emph{Causal Overclaim Rate}; Aud. Und. = \emph{Audience Understandability}; Aud. Tech. Fit = \emph{Audience Technical Fit}; FRE = \emph{Flesch Reading Ease}; FKGL = \emph{Flesch--Kincaid Grade Level}. \emph{Word Count} is averaged over all explanations within each dataset.}
 \label{tab:dataset-results}
 \centering
 \small
@@ -569,15 +679,15 @@ MUX20 & 100.0 & 70.9 & 81.1  & 10.0 & 90.8 & 98.7 & 100.0 & 33.3 & 0.797 & 0.817
 \subsection{Illustrative MUX6 example}
 The aggregate results are easier to interpret when grounded in a concrete case.
 Table~\ref{tab:mux6-example} shows one held-out MUX6 instance from the final run. The model predicts
-class 1 with probability 0.607 because three active rules support that outcome, while one matched
+class 1 with probability 0.607 because three matching rules support that outcome, while one matched
 rule supports class 0. This instance is useful because it captures a richer MUX-style pattern than
 the earlier low-conflict example: it involves both address-style and register-style features,
 multiple supporting rules, and an explicit contradiction. At the same time, it remains a clean
-example for the paper because every output shown in the table has Evidence Precision and Evidence
-Recall equal to 1.000, with no hallucination or causal-overclaim flags.
+example for the paper because every output shown in the table has \emph{Evidence Precision} and
+\emph{Evidence Recall} equal to 1.000, with no hallucination or causal-overclaim flags.
 
 The example illustrates the intended division of labor between packet content, condition context,
-and audience conditioning. Condition B and Condition C both preserve the same four matched rule
+and audience conditioning. \emph{Experiment 1} and \emph{Experiment 2} both preserve the same four matched rule
 patterns: three support class 1 through the combinations $(A_0, R_2)$, $(A_1, R_3)$, and $(A_0,
 R_3)$, while one contradictory rule links $(A_1, R_1)$ to class 0. The layman outputs restate these
 patterns in plain language and keep the conflict explicit. The clinician outputs add rounded
@@ -587,57 +697,61 @@ across the six outputs is therefore granularity and contextual packaging rather 
 evidence set.
 
 \begin{table*}[t]
-\caption{Illustrative MUX6 held-out example (InstanceID 178). The packet predicts \textbf{class 1} with probability \textbf{0.607}. Three active rules support that prediction, namely $\mathbf{A}_0 = 1 \wedge \mathbf{R}_2 = 1$, $\mathbf{A}_1 = 1 \wedge \mathbf{R}_3 = 1$, and $\mathbf{A}_0 = 1 \wedge \mathbf{R}_3 = 1$, while one conflicting rule $\mathbf{A}_1 = 1 \wedge \mathbf{R}_1 = 0$ supports class 0. The rows below report all six generated outputs from the final run. Boldface is added for emphasis to highlight the matched evidence and confidence statements.}
+\caption{Illustrative MUX6 held-out example (InstanceID 178). The packet predicts \textbf{class 1} with probability \textbf{0.607}. Three matching rules support that prediction, namely $\mathbf{A}_0 = 1 \wedge \mathbf{R}_2 = 1$, $\mathbf{A}_1 = 1 \wedge \mathbf{R}_3 = 1$, and $\mathbf{A}_0 = 1 \wedge \mathbf{R}_3 = 1$, while one conflicting rule $\mathbf{A}_1 = 1 \wedge \mathbf{R}_1 = 0$ supports class 0. The rows below report all six generated outputs from the final run. Boldface is added for emphasis to highlight the matched evidence and confidence statements.}
 \label{tab:mux6-example}
 \centering
 \footnotesize
 \renewcommand{\arraystretch}{1.1}
 \begin{tabular}{p{1.6cm}p{1.4cm}r p{11.0cm}}
 \toprule
-\textbf{Condition} & \textbf{Audience} & \textbf{Words} & \textbf{Output} \\
+\textbf{Experiment} & \textbf{Audience} & \textbf{Words} & \textbf{Output} \\
 \midrule
-\multicolumn{4}{p{14.8cm}}{\textbf{Packet summary:} Relevant feature values are $\textbf{A}_0 = 1$, $\textbf{A}_1 = 1$, $\textbf{R}_1 = 0$, $\textbf{R}_2 = 1$, and $\textbf{R}_3 = 1$. Four active rules match; three support \textbf{class 1} and one conflicting rule supports \textbf{class 0}.} \\
+\multicolumn{4}{p{14.8cm}}{\textbf{Packet summary:} Relevant feature values are $\textbf{A}_0 = 1$, $\textbf{A}_1 = 1$, $\textbf{R}_1 = 0$, $\textbf{R}_2 = 1$, and $\textbf{R}_3 = 1$. Four matching rules are present; three support \textbf{class 1} and one conflicting rule supports \textbf{class 0}.} \\
 \midrule
-B & Layman & 98 & ``The model slightly leaned toward predicting \textbf{class 1} because most of the active rules supported this outcome. Specifically, the combination of \texttt{\textbf{A\_0}} being 1 with \texttt{\textbf{R\_2}} being 1, \texttt{\textbf{A\_1}} being 1 with \texttt{\textbf{R\_3}} being 1, and \texttt{\textbf{A\_0}} being 1 with \texttt{\textbf{R\_3}} being 1 all pointed to \textbf{class 1}. However, one rule based on \texttt{\textbf{A\_1}} being 1 and \texttt{\textbf{R\_1}} being 0 suggested \textbf{class 0}, creating some conflicting evidence. Overall, the model's reasoning is mainly influenced by the majority of rules supporting \textbf{class 1}. Keep in mind, this explanation reflects the model's decision process, not a definitive fact.'' \\
-B & Clinician & 117 & ``The prediction of \textbf{class 1} is mainly supported by three rules that match the instance's feature values: the combinations of \texttt{\textbf{A\_0}} = 1 with \texttt{\textbf{R\_2}} = 1, \texttt{\textbf{A\_1}} = 1 with \texttt{\textbf{R\_3}} = 1, and \texttt{\textbf{A\_0}} = 1 with \texttt{\textbf{R\_3}} = 1. Each of these rules has moderate training support and showed about \textbf{74--77\%} of matched training instances belonging to \textbf{class 1}. However, one rule matching \texttt{\textbf{A\_1}} = 1 with \texttt{\textbf{R\_1}} = 0 predicts \textbf{class 0}, introducing some conflicting evidence. Overall, most active rules favor \textbf{class 1}, leading to a predicted confidence of about \textbf{61\%}, indicating a slight lean toward this class. This explanation reflects the model's reasoning based on the active rules and feature values, not a definitive statement of truth.'' \\
-B & Expert & 134 & ``The prediction of \textbf{class 1} with a probability of \textbf{0.607} is primarily supported by three active rules that match the instance's feature values: \textbf{Rule 4387} (\texttt{\textbf{A\_0}} = 1 and \texttt{\textbf{R\_2}} = 1), \textbf{Rule 3467} (\texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_3}} = 1), and \textbf{Rule 2008} (\texttt{\textbf{A\_0}} = 1 and \texttt{\textbf{R\_3}} = 1). Each of these rules has moderate support from training data, with accuracies around \textbf{74--77\%} and collectively contributes stronger votes toward \textbf{class 1}. Conversely, \textbf{Rule 3925} (\texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_1}} = 0) conflicts by supporting \textbf{class 0} with similar moderate support and accuracy. Overall, most active rules favor \textbf{class 1}, but the presence of a conflicting rule creates mixed evidence, resulting in a slight lean toward \textbf{class 1}. This explanation reflects the model's reasoning based on rule matches and does not imply causal relationships or ground truth.'' \\
-C & Layman & 80 & ``The model slightly leaned toward predicting \textbf{class 1} because three of the rules that matched this instance support \textbf{class 1}. These rules are based on the combinations of features \texttt{\textbf{A\_0}} with \texttt{\textbf{R\_2}}, \texttt{\textbf{A\_1}} with \texttt{\textbf{R\_3}}, and \texttt{\textbf{A\_0}} with \texttt{\textbf{R\_3}}. However, one rule that matched suggests \textbf{class 0}, based on \texttt{\textbf{A\_1}} and \texttt{\textbf{R\_1}}. Overall, most of the evidence supports \textbf{class 1}, but there is some conflicting information. This explanation reflects the model's reasoning and is not a statement of fact.'' \\
-C & Clinician & 133 & ``The prediction of \textbf{class 1} is mainly supported by three rules that match the instance's feature values: \texttt{\textbf{A\_0}} = 1 combined with \texttt{\textbf{R\_2}} = 1, \texttt{\textbf{A\_1}} = 1 combined with \texttt{\textbf{R\_3}} = 1, and \texttt{\textbf{A\_0}} = 1 combined with \texttt{\textbf{R\_3}} = 1. Each of these rules has moderate training support and indicates a strong association with \textbf{class 1}, with about \textbf{74--77\%} of matched training instances belonging to this class. However, one rule conflicts by predicting \textbf{class 0} based on \texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_1}} = 0, also with moderate support. Overall, most active rules support the prediction of \textbf{class 1}, but there is some conflicting evidence, leading to a predicted class confidence of about \textbf{61\%}, indicating a slight lean toward \textbf{class 1}. This explanation reflects the model's reasoning and does not imply a causal relationship or ground truth.'' \\
-C & Expert & 129 & ``The prediction of \textbf{class 1} with a probability of \textbf{0.607} (\textbf{slight lean}) is primarily supported by three active rules that match the instance features: \textbf{Rule 4387} (\texttt{\textbf{A\_0}} = 1 and \texttt{\textbf{R\_2}} = 1), \textbf{Rule 3467} (\texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_3}} = 1), and \textbf{Rule 2008} (\texttt{\textbf{A\_0}} = 1 and \texttt{\textbf{R\_3}} = 1). Each of these rules has moderate support from the training data, with accuracies around \textbf{74--77\%} and collectively contributes stronger votes toward \textbf{class 1}. Conversely, \textbf{Rule 3925} (\texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_1}} = 0) conflicts by supporting \textbf{class 0} with similar moderate support and accuracy. The overall evidence is mixed but leans toward \textbf{class 1} due to the majority and strength of supporting rules. This explanation reflects the model's reasoning based on rule matches and does not imply causal relationships or ground truth.'' \\
+A & Layman & 98 & ``The model slightly leaned toward predicting \textbf{class 1} because most of the active rules supported this outcome. Specifically, the combination of \texttt{\textbf{A\_0}} being 1 with \texttt{\textbf{R\_2}} being 1, \texttt{\textbf{A\_1}} being 1 with \texttt{\textbf{R\_3}} being 1, and \texttt{\textbf{A\_0}} being 1 with \texttt{\textbf{R\_3}} being 1 all pointed to \textbf{class 1}. However, one rule based on \texttt{\textbf{A\_1}} being 1 and \texttt{\textbf{R\_1}} being 0 suggested \textbf{class 0}, creating some conflicting evidence. Overall, the model's reasoning is mainly influenced by the majority of rules supporting \textbf{class 1}. Keep in mind, this explanation reflects the model's decision process, not a definitive fact.'' \\
+A & Clinician & 117 & ``The prediction of \textbf{class 1} is mainly supported by three rules that match the instance's feature values: the combinations of \texttt{\textbf{A\_0}} = 1 with \texttt{\textbf{R\_2}} = 1, \texttt{\textbf{A\_1}} = 1 with \texttt{\textbf{R\_3}} = 1, and \texttt{\textbf{A\_0}} = 1 with \texttt{\textbf{R\_3}} = 1. Each of these rules has moderate training support and showed about \textbf{74--77\%} of matched training instances belonging to \textbf{class 1}. However, one rule matching \texttt{\textbf{A\_1}} = 1 with \texttt{\textbf{R\_1}} = 0 predicts \textbf{class 0}, introducing some conflicting evidence. Overall, most active rules favor \textbf{class 1}, leading to a predicted confidence of about \textbf{61\%}, indicating a slight lean toward this class. This explanation reflects the model's reasoning based on the active rules and feature values, not a definitive statement of truth.'' \\
+A & Expert & 134 & ``The prediction of \textbf{class 1} with a probability of \textbf{0.607} is primarily supported by three active rules that match the instance's feature values: \textbf{Rule 4387} (\texttt{\textbf{A\_0}} = 1 and \texttt{\textbf{R\_2}} = 1), \textbf{Rule 3467} (\texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_3}} = 1), and \textbf{Rule 2008} (\texttt{\textbf{A\_0}} = 1 and \texttt{\textbf{R\_3}} = 1). Each of these rules has moderate support from training data, with accuracies around \textbf{74--77\%} and collectively contributes stronger votes toward \textbf{class 1}. Conversely, \textbf{Rule 3925} (\texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_1}} = 0) conflicts by supporting \textbf{class 0} with similar moderate support and accuracy. Overall, most active rules favor \textbf{class 1}, but the presence of a conflicting rule creates mixed evidence, resulting in a slight lean toward \textbf{class 1}. This explanation reflects the model's reasoning based on rule matches and does not imply causal relationships or ground truth.'' \\
+B & Layman & 80 & ``The model slightly leaned toward predicting \textbf{class 1} because three of the rules that matched this instance support \textbf{class 1}. These rules are based on the combinations of features \texttt{\textbf{A\_0}} with \texttt{\textbf{R\_2}}, \texttt{\textbf{A\_1}} with \texttt{\textbf{R\_3}}, and \texttt{\textbf{A\_0}} with \texttt{\textbf{R\_3}}. However, one rule that matched suggests \textbf{class 0}, based on \texttt{\textbf{A\_1}} and \texttt{\textbf{R\_1}}. Overall, most of the evidence supports \textbf{class 1}, but there is some conflicting information. This explanation reflects the model's reasoning and is not a statement of fact.'' \\
+B & Clinician & 133 & ``The prediction of \textbf{class 1} is mainly supported by three rules that match the instance's feature values: \texttt{\textbf{A\_0}} = 1 combined with \texttt{\textbf{R\_2}} = 1, \texttt{\textbf{A\_1}} = 1 combined with \texttt{\textbf{R\_3}} = 1, and \texttt{\textbf{A\_0}} = 1 combined with \texttt{\textbf{R\_3}} = 1. Each of these rules has moderate training support and indicates a strong association with \textbf{class 1}, with about \textbf{74--77\%} of matched training instances belonging to this class. However, one rule conflicts by predicting \textbf{class 0} based on \texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_1}} = 0, also with moderate support. Overall, most active rules support the prediction of \textbf{class 1}, but there is some conflicting evidence, leading to a predicted class confidence of about \textbf{61\%}, indicating a slight lean toward \textbf{class 1}. This explanation reflects the model's reasoning and does not imply a causal relationship or ground truth.'' \\
+B & Expert & 129 & ``The prediction of \textbf{class 1} with a probability of \textbf{0.607} (\textbf{slight lean}) is primarily supported by three active rules that match the instance features: \textbf{Rule 4387} (\texttt{\textbf{A\_0}} = 1 and \texttt{\textbf{R\_2}} = 1), \textbf{Rule 3467} (\texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_3}} = 1), and \textbf{Rule 2008} (\texttt{\textbf{A\_0}} = 1 and \texttt{\textbf{R\_3}} = 1). Each of these rules has moderate support from the training data, with accuracies around \textbf{74--77\%} and collectively contributes stronger votes toward \textbf{class 1}. Conversely, \textbf{Rule 3925} (\texttt{\textbf{A\_1}} = 1 and \texttt{\textbf{R\_1}} = 0) conflicts by supporting \textbf{class 0} with similar moderate support and accuracy. The overall evidence is mixed but leans toward \textbf{class 1} due to the majority and strength of supporting rules. This explanation reflects the model's reasoning based on rule matches and does not imply causal relationships or ground truth.'' \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
 \subsection{Effect of glossary context}
-The condition comparison reveals a consistent but moderate trade-off. Pooled across MUX6, MUX11, and
-MUX20, Condition C improves Audience Understandability from 0.802 to 0.821 and Audience Technical
-Fit from 0.814 to 0.828. At the same time, Hallucination Rate rises from 5.8\% to 7.6\%. Evidence
-Recall and Evidence F1 are almost unchanged across the two conditions, and Causal Overclaim Rate is
-slightly lower in Condition C than in Condition B. Mean Word Count also rises from 127.75 to 132.28.
-This pattern suggests that the glossary does not materially change which evidence the generator
-chooses to preserve, but it does change how that evidence is verbalized.
+Table~\ref{tab:pooled-trends} summarizes the pooled experiment comparison. The experiment comparison
+reveals a consistent but moderate trade-off. Pooled across MUX6, MUX11, and
+MUX20, \emph{Experiment 2} improves the judge-based audience scores, with \emph{Audience
+Understandability} rising from 0.802 to 0.821 and \emph{Audience Technical Fit} from 0.814 to
+0.828. At the same time, \emph{Hallucination Rate} rises from 5.8\% to 7.6\%.
+\emph{Evidence Recall} and \emph{Evidence F1} are almost unchanged across the two
+setups, and \emph{Causal Overclaim Rate} is slightly lower in \emph{Experiment 2} than in
+\emph{Experiment 1}. Mean \emph{Word Count} also rises from 127.75 to 132.28. This pattern suggests that the glossary does not
+materially change which evidence the generator chooses to preserve, but it does change how that
+evidence is verbalized.
 
 The readability diagnostics point in the same direction, although the effect sizes are small. Mean
-Flesch Reading Ease declines from 57.86 in Condition B to 57.08 in Condition C, while mean
-Flesch--Kincaid Grade Level rises from 10.59 to 10.67. In other words, the extra feature definitions
-do not make the outputs obviously simpler at the level of sentence and word length, even though they
+ \emph{Flesch Reading Ease} declines from 57.86 in \emph{Experiment 1} to 57.08 in \emph{Experiment 2},
+while mean \emph{Flesch--Kincaid Grade Level} rises from 10.59 to 10.67. In other words, the extra
+feature definitions do not make the outputs obviously simpler at the level of sentence and word length, even though they
 improve the judge-model audience scores. The most plausible interpretation is that concise glossary
 context helps the model phrase the same rule evidence in a way that sounds more audience-aware,
 while also giving it slightly more freedom to elaborate beyond the minimal packet and to produce
 slightly longer outputs.
 
 \subsection{Audience trade-offs}
-The pooled audience comparison shows that the three audience settings produce distinct explanation
-regimes rather than a simple quality ordering. Expert explanations achieve the strongest Audience
-Understandability and Audience Technical Fit, reaching 0.900 and 0.951 respectively, and they also
-preserve the most evidence, with Evidence Recall of 0.931 and Evidence F1 of 0.959. The cost of that
+Table~\ref{tab:pooled-trends} also reports the pooled audience comparison. The three audience
+settings produce distinct explanation regimes rather than a simple quality ordering. Expert
+explanations achieve the strongest \emph{Audience Understandability} and \emph{Audience Technical
+Fit}, reaching 0.900 and 0.951 respectively, and they also preserve the most evidence, with
+\emph{Evidence Recall} of 0.931 and \emph{Evidence F1} of 0.959. The cost of that
 additional detail is clear. Expert outputs are the longest on average at 172.35 words and have the
-highest Hallucination Rate at 18.0\%. Layman explanations behave almost inversely. Their
-Hallucination Rate is only 1.0\%, their Causal Overclaim Rate is 5.7\%, and they are shortest at
-86.62 words, but their Evidence Recall falls to 0.830 and their Audience Technical Fit drops to
+highest \emph{Hallucination Rate} at 18.0\%. Layman explanations behave almost inversely. Their
+\emph{Hallucination Rate} is only 1.0\%, their \emph{Causal Overclaim Rate} is 5.7\%, and they are shortest at
+86.62 words, but their \emph{Evidence Recall} falls to 0.830 and their \emph{Audience Technical Fit} drops to
 0.635. Clinician explanations sit between these extremes on evidence retention and judge scores,
 with a mean length of 131.08 words, but they also expose one of the sharpest weaknesses in the
-current prompt design: their Causal Overclaim Rate reaches 56.0\% despite a Hallucination Rate of
+current prompt design: their \emph{Causal Overclaim Rate} reaches 56.0\% despite a \emph{Hallucination Rate} of
 only 1.0\%.
 
 This audience pattern implies that the main trade-off is not simply between faithfulness and
@@ -650,18 +764,18 @@ kind of error is most likely: omission for layman, elaboration for expert, and o
 interpretation for clinician.
 
 The readability results add an important caveat. Across the pooled audience rows, Clinician, Expert,
-and Layman explanations have mean Flesch Reading Ease values of 52.38, 62.03, and 57.99, with
-corresponding Flesch--Kincaid Grade Levels of 12.26, 9.65, and 9.97. This ordering is not what one
+and Layman explanations have mean \emph{Flesch Reading Ease} values of 52.38, 62.03, and 57.99, with
+corresponding \emph{Flesch--Kincaid Grade Level} values of 12.26, 9.65, and 9.97. This ordering is not what one
 would expect if the prompts induced a clean layman--clinician--expert complexity gradient. We
 therefore interpret the mismatch in two ways. First, Flesch-based formulas are limited for technical
 explanation text because compact symbolic language can appear ``easy'' even when it is cognitively
 demanding. Second, our audience-conditioning method is itself imperfect: it changes explanation
 style, but it does not yet enforce a monotonic hierarchy of linguistic complexity. For that reason,
 we treat readability values as descriptive rather than confirmatory and rely more heavily on
-packet-grounded evidence metrics and the judge-model audience scores when comparing audiences.
+packet-grounded evidence metrics than on the judge-model audience scores when comparing audiences.
 
 \begin{table*}[t]
-\caption{Pooled condition and audience trends across the three benchmarks. Each condition row aggregates 450 explanations and each audience row aggregates 300 explanations. Judge scores are on a 0--1 scale. Percentage-style metrics are shown as percentages. Readability values and Word Count are averaged over all explanations in the corresponding category.}
+\caption{Pooled experiment and audience trends across the three benchmarks. Each experiment row aggregates 450 explanations and each audience row aggregates 300 explanations. Judge scores are on a 0--1 scale and should be interpreted as weak proxy measures rather than as human-study outcomes. Percentage-style metrics are shown as percentages. Abbreviations: Ev. Recall = \emph{Evidence Recall}; Ev. F1 = \emph{Evidence F1}; Halluc. = \emph{Hallucination Rate}; COR = \emph{Causal Overclaim Rate}; Aud. Und. = \emph{Audience Understandability}; Aud. Tech. Fit = \emph{Audience Technical Fit}; FRE = \emph{Flesch Reading Ease}; FKGL = \emph{Flesch--Kincaid Grade Level}. \emph{Word Count} is averaged over all explanations in the corresponding category.}
 \label{tab:pooled-trends}
 \centering
 \small
@@ -672,8 +786,8 @@ packet-grounded evidence metrics and the judge-model audience scores when compar
 \toprule
 \textbf{Group} & \textbf{Setting} & \textbf{Ev. Recall} & \textbf{Ev. F1} & \textbf{Halluc.} & \textbf{COR} & \textbf{Aud. Und.} & \textbf{Aud. Tech. Fit} & \textbf{FRE} & \textbf{FKGL} & \textbf{Words} \\
 \midrule
-Condition & B & 87.6 & 92.1 & 5.8 & 27.6 & 0.802 & 0.814 & 57.86 & 10.59 & 127.75 \\
-Condition & C & 87.7 & 92.1 & 7.6 & 23.3 & 0.821 & 0.828 & 57.08 & 10.67 & 132.28 \\
+Experiment & 1 & 87.6 & 92.1 & 5.8 & 27.6 & 0.802 & 0.814 & 57.86 & 10.59 & 127.75 \\
+Experiment & 2 & 87.7 & 92.1 & 7.6 & 23.3 & 0.821 & 0.828 & 57.08 & 10.67 & 132.28 \\
 \midrule
 Audience & Clinician & 86.9 & 91.8 & 1.0 & 56.0 & 0.819 & 0.880 & 52.38 & 12.26 & 131.08 \\
 Audience & Expert & 93.1 & 95.9 & 18.0 & 14.7 & 0.900 & 0.951 & 62.03 & 9.65 & 172.35 \\
@@ -686,13 +800,13 @@ Audience & Layman & 83.0 & 88.6 & 1.0 & 5.7 & 0.718 & 0.635 & 57.99 & 9.97 & 86.
 \section{Discussion}
 The cross-benchmark results sharpen the central claim of the paper. A large language model can act
 as a faithful translator of rule-based evidence when that evidence is supplied explicitly and the
-prompts are tightly constrained. The strongest support for that claim is the perfect Evidence
-Precision and perfect Prediction--Explanation Agreement observed on all three datasets. These values
+prompts are tightly constrained. The strongest support for that claim is the perfect
+\emph{Evidence Precision} and perfect \emph{Prediction--Explanation Agreement} observed on all three datasets. These values
 indicate that the system almost never fabricates new evidence features or contradicts the underlying
 HEROS prediction.
 
 At the same time, the broader benchmark sweep shows that grounded translation does not guarantee
-exhaustive translation. As the number of active rules rises, the generator increasingly omits valid
+exhaustive translation. As the number of matching rules rises, the generator increasingly omits valid
 evidence rather than inventing invalid evidence. This distinction matters because it changes the
 failure analysis. On MUX20, the key weakness is not that the explanation names the wrong features;
 it is that the explanation covers only part of an increasingly large and conflicting evidence set.
@@ -702,12 +816,16 @@ suppression. In other words, once the explanation problem is reformulated as con
 translation, the central engineering challenge becomes preserving enough of the structured evidence
 to remain useful at different audience levels.
 
-The condition comparison suggests that compact glossary support is useful but not free. Across all
+The experiment comparison suggests that compact glossary support is useful but not free. Across all
 three datasets, glossary context improved both audience-oriented judge metrics and slightly reduced
-causal overclaim, yet it also increased hallucination. A plausible interpretation is that the
+\emph{Causal Overclaim Rate}, yet it also increased \emph{Hallucination Rate}. A plausible interpretation is that the
 glossary gives the model more latitude to paraphrase, which improves presentation but also expands
-the surface for unsupported elaboration. The fact that Evidence Recall hardly changed across
-conditions suggests that the glossary affects phrasing more than evidence selection.
+the surface for unsupported elaboration. The fact that \emph{Evidence Recall} hardly changed across
+setups suggests that the glossary affects phrasing more than evidence selection. The glossary itself
+is also a subjective design choice. A more detailed glossary might improve understandability further,
+but on synthetic tasks such as MUX it could also leak benchmark semantics. We therefore view the
+minimal feature-only glossary in \emph{Experiment 2} as a conservative design rather than as an
+optimal one.
 
 The audience comparison is equally informative. Expert explanations preserve the most evidence and
 achieve the strongest technical-fit scores, but they are also the easiest to over-extend. Layman
@@ -721,12 +839,18 @@ This study has several limitations. The datasets are synthetic multiplexer bench
 biomedical cohorts, so the current results should be interpreted as a controlled proof of concept.
 MUX11 and MUX20 were evaluated on stratified 50-instance subsets of their held-out folds rather than
 the full held-out folds in order to keep the LLM budget fixed across datasets. Judge metrics remain
-proxy measures rather than participant-based outcomes~\cite{liu2023geval,huang2025judge}. The
-readability results also expose a limitation of the current audience-conditioning method itself.
+proxy measures rather than participant-based outcomes and should be interpreted with particular
+caution because an LLM from the same model family was used to score LLM-generated
+explanations~\cite{liu2023geval,huang2025judge}. The readability results also expose a limitation of
+the current audience-conditioning method itself.
 Because clinician outputs sometimes score as more difficult than expert outputs under Flesch-based
 measures, the prompts do not yet induce a stable monotonic complexity ordering across audiences.
 That pattern likely reflects both the weakness of generic readability formulas for technical text
-and the weakness of our prompting method as a reading-level controller. Finally, we do not report
+and the weakness of our prompting method as a reading-level controller. The glossary design is also
+subjective. In \emph{Experiment 2}, we intentionally used minimal feature-oriented glosses rather than
+explaining the underlying multiplexer mechanism, because a more specific glossary could leak task
+structure into the prompt. That choice makes the glossary intervention more conservative, but it also
+means the study does not answer how detailed a glossary should be for this setting. Finally, we do not report
 perturbation-based metrics such as comprehensiveness and sufficiency because they require rerunning
 HEROS under controlled feature perturbations rather than inspecting the generated text
 alone~\cite{deyoung2020eraser}. Future work should extend the pipeline to biomedical datasets of the
@@ -751,9 +875,9 @@ in the Methods section.
 \section{Conclusion}
 We presented a script-first HEROS+LLM explanation pipeline that treats the LLM as a translator of
 structured rule-based evidence rather than a generator of free-form reasons. Across MUX6, MUX11, and
-MUX20, the system maintained perfect Evidence Precision and perfect Prediction--Explanation
-Agreement while revealing a clear scaling trade-off: as rule interactions became denser, evidence
-coverage declined and unsupported elaboration increased. Compact glossary context improved
+MUX20, the system maintained perfect \emph{Evidence Precision} and perfect
+\emph{Prediction--Explanation Agreement} while revealing a clear scaling trade-off: as rule interactions became denser, evidence
+coverage declined and unsupported elaboration increased. Minimal glossary context improved
 audience-oriented scores, and audience targeting produced distinct regimes with different safety and
 coverage profiles. Taken together, these findings support a coherent view of constrained LLM
 explanation: when the evidence remains explicit and rule grounded, the dominant risk is not
