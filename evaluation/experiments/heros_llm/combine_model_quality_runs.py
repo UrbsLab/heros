@@ -10,6 +10,17 @@ from typing import Any, Dict, Iterable, List
 import pandas as pd
 
 
+PROFILE_LABELS = {
+    "corrected_baseline": "Baseline",
+    "properly_trained": "Properly Trained",
+}
+
+CONDITION_LABELS = {
+    "condition_b": "Experiment 1",
+    "condition_c": "Experiment 2",
+}
+
+
 def _load_jsonl(path: Path) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as handle:
@@ -32,8 +43,11 @@ def _records_to_rows(records: Iterable[Dict[str, Any]], run_name: str) -> List[D
             {
                 "run_name": run_name,
                 "dataset": metadata["dataset_name"],
-                "heros_profile": metadata.get("heros_training_profile", "baseline"),
-                "condition": "B" if prompt["condition"] == "condition_b" else "C",
+                "heros_profile": PROFILE_LABELS.get(
+                    metadata.get("heros_training_profile", "baseline"),
+                    metadata.get("heros_training_profile", "baseline"),
+                ),
+                "condition": CONDITION_LABELS.get(prompt["condition"], prompt["condition"]),
                 "audience": prompt["audience"].title(),
                 "instance_id": packet["instance_id"],
                 "mean_matching_rules": packet["model_context"]["num_matching_rules"],
@@ -166,10 +180,12 @@ def combine_runs(run_dirs: List[Path], output_dir: Path) -> None:
         all_rows.extend(_records_to_rows(_load_jsonl(records_path), run_dir.name))
 
     df = pd.DataFrame(all_rows)
+    profile_overall = _aggregate(df, ["heros_profile"])
     dataset_profile = _aggregate(df, ["dataset", "heros_profile"])
     dataset_profile_condition = _aggregate(df, ["dataset", "heros_profile", "condition"])
     profile_audience = _aggregate(df, ["heros_profile", "audience"])
 
+    profile_overall.to_csv(output_dir / "profile_overall_summary.csv", index=False)
     dataset_profile.to_csv(output_dir / "dataset_profile_summary.csv", index=False)
     dataset_profile_condition.to_csv(output_dir / "dataset_profile_condition_summary.csv", index=False)
     profile_audience.to_csv(output_dir / "profile_audience_summary.csv", index=False)
@@ -178,13 +194,16 @@ def combine_runs(run_dirs: List[Path], output_dir: Path) -> None:
         [
             "# HEROS Model-Quality Comparison",
             "",
-            "## Table 1. Dataset x HEROS Training Profile",
+            "## Table 1. Overall Comparison by HEROS Training Profile",
+            _to_markdown(_format_summary(profile_overall)),
+            "",
+            "## Table 2. Dataset x HEROS Training Profile",
             _to_markdown(_format_summary(dataset_profile)),
             "",
-            "## Table 2. Dataset x HEROS Training Profile x Experiment",
+            "## Table 3. Dataset x HEROS Training Profile x Experiment",
             _to_markdown(_format_summary(dataset_profile_condition)),
             "",
-            "## Table 3. HEROS Training Profile x Audience",
+            "## Table 4. HEROS Training Profile x Audience",
             _to_markdown(_format_summary(profile_audience)),
         ]
     )
