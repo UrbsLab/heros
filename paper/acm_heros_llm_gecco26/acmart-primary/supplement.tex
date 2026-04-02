@@ -17,7 +17,7 @@
 \maketitle
 
 \section{Supplementary Tables}
-This supplement provides configuration detail that supports reproduction of the main paper. The main manuscript retains the full argument, the metric definitions, the primary result tables, and the qualitative example discussed in the Results section. The material collected here is limited to setup information referenced in Methods and does not add new empirical claims.
+This supplement provides supporting detail for the main paper. The main manuscript retains the full argument, the metric definitions, the primary result tables, and the qualitative example discussed in the Results section. The material collected here is limited to reproduction-oriented setup information and one worked ideal-MUX6 reference table used to clarify the HEROS prediction mechanics described in Methods. It does not add new empirical claims.
 
 \begin{table}[H]
 \caption{\textbf{Supplementary Table S1.} Benchmark configuration with mean matching rules (MMR) from the final runs. Each benchmark contributes 50 evaluated held-out instances under two HEROS training profiles, producing 600 generated explanations per dataset and 1{,}800 explanations overall.}
@@ -91,6 +91,33 @@ Prompt metadata exposure & Clinician and Expert only \\
 Glossary exposure & Experiment 2 only; minimal feature-only glossary \\
 \bottomrule
 \end{tabular}
+\end{table}
+
+\begin{table}[H]
+\caption{\textbf{Supplementary Table S4.} Ideal MUX6 rule set and worked prediction example. The ideal MUX6 solution contains eight fully specific rules: for each address-bit pair $(A_0,A_1)$, the selected register bit determines the class. The worked example matches the idealized discussion in the main paper's HEROS prediction subsection.}
+\label{tab:ideal-mux6-supp}
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}C{0.11\linewidth}L{0.30\linewidth}L{0.31\linewidth}C{0.10\linewidth}@{}}
+\toprule
+\textbf{Rule} & \textbf{Address Bits} & \textbf{Selected Register Bit} & \textbf{Class} \\
+\midrule
+$r_1$ & $A_0=0$, $A_1=0$ & $R_0=0$ & 0 \\
+$r_2$ & $A_0=0$, $A_1=0$ & $R_0=1$ & 1 \\
+$r_3$ & $A_0=0$, $A_1=1$ & $R_1=0$ & 0 \\
+$r_4$ & $A_0=0$, $A_1=1$ & $R_1=1$ & 1 \\
+$r_5$ & $A_0=1$, $A_1=0$ & $R_2=0$ & 0 \\
+$r_6$ & $A_0=1$, $A_1=0$ & $R_2=1$ & 1 \\
+$r_7$ & $A_0=1$, $A_1=1$ & $R_3=0$ & 0 \\
+$r_8$ & $A_0=1$, $A_1=1$ & $R_3=1$ & 1 \\
+\bottomrule
+\end{tabular}
+\par\smallskip
+\begin{minipage}{0.92\linewidth}
+\textbf{Worked instance.} Consider the instance $A_0=1$, $A_1=0$, $R_0=1$, $R_1=0$, $R_2=1$, $R_3=1$. Under the ideal rule set, only $r_6$ matches, so the match set is $M=\{r_6\}$. If numerosity is 1 for every ideal rule, then the class vote totals are $V(0)=0$ and $V(1)=1$. After normalization, $P(0)=0.0$ and $P(1)=1.0$, so the predicted class is 1. This illustrates the minimal single-rule case against which denser learned HEROS match sets can be contrasted.
+\end{minipage}
 \end{table}
 
 \end{document}
