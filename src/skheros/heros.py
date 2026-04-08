@@ -541,6 +541,7 @@ class HEROS(BaseEstimator, TransformerMixin):
                     #Next Iteration
                     self.model_iteration += 1
                     #Sort the model population first by accuracy and then by number of rules in model.
+                    self.model_population.sort_model_pop()
                     self.model_population.identify_models_on_front() #For evaluating all models on the front.
                     models = set(filter(lambda m: m.model_on_front == 1,self.model_population.pop_set))
                     if models == models_prev:
@@ -571,6 +572,7 @@ class HEROS(BaseEstimator, TransformerMixin):
 
 
                 self.model_population.sort_model_pop()
+                self.model_population.identify_models_on_front() #For evaluating all models on the front.
                 self.model_population.get_target_model(0) #the 'model' object with the best accuracy, then coverage, then lowest rule count (assumes prior sorting)
                 self.timer.phase2_time_stop()
                 self.timer.update_global_time()
