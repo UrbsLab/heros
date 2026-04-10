@@ -20,6 +20,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from scipy.stats import wilcoxon, mannwhitneyu
+from statsmodels.stats.multitest import multipletests
 
 
 
@@ -173,9 +174,9 @@ def load_raw_metric_values(
     return s
 
 
-def wilcoxon_sig_or_fallback(base: pd.Series, other: pd.Series, alpha: float) -> tuple[bool, float | None, str]:
+def wilcoxon_p_or_fallback(base: pd.Series, other: pd.Series) -> tuple[float | None, str]:
     """
-    (is_sig, p_value, test_name)
+    Returns (p_value, test_name)
     - Wilcoxon (paired) if lengths match
     - else Mann-Whitney U (unpaired) fallback
     """
@@ -183,28 +184,146 @@ def wilcoxon_sig_or_fallback(base: pd.Series, other: pd.Series, alpha: float) ->
     other = pd.to_numeric(other, errors="coerce").dropna()
 
     if base.empty or other.empty:
-        return (False, None, "none")
+        return (None, "none")
 
     if len(base) == len(other):
         try:
             _stat, p = wilcoxon(base.to_numpy(), other.to_numpy())
-            return (p <= alpha, float(p), "wilcoxon")
+            return (float(p), "wilcoxon")
         except Exception:
             pass
 
     try:
         _stat, p = mannwhitneyu(base.to_numpy(), other.to_numpy(), alternative="two-sided")
-        return (p <= alpha, float(p), "mannwhitneyu")
+        return (float(p), "mannwhitneyu")
     except Exception:
-        return (False, None, "none")
+        return (None, "none")
+    
+def collect_significance_tests(
+    output_root: Path,
+    allowed_groups: set[str],
+    *,
+    baseline_map: dict[str, str],
+) -> pd.DataFrame:
+    rows = []
 
+    if not output_root.exists():
+        raise FileNotFoundError(f"Output root does not exist: {output_root}")
 
-def append_sig_marker(formatted_mean_sd: str, base_mean: float | None, this_mean: float | None, is_sig: bool, p) -> str:
+    group_dirs = []
+    for g in sorted(allowed_groups):
+        gp = output_root / f"HEROS_{g}"
+        if gp.exists() and gp.is_dir():
+            group_dirs.append(gp)
+
+    for group_dir in group_dirs:
+        group_name = group_dir.name.replace("HEROS_", "", 1)
+
+        for dataset_dir in sorted([p for p in group_dir.iterdir() if p.is_dir()], key=lambda p: p.name):
+            dataset = dataset_dir.name
+            fam = dataset_family(dataset)
+            baseline_group = baseline_map.get(fam, None)
+
+            if baseline_group is None:
+                continue
+
+            for condition in TARGET_ROWS:
+                # skip the actual baseline row itself
+                if group_name == baseline_group and condition == BASELINE_CONDITION:
+                    continue
+
+                for nice_name, (base_col, _decimals) in METRICS.items():
+                    base_vec = load_raw_metric_values(
+                        output_root, baseline_group, dataset, BASELINE_CONDITION, base_col
+                    )
+                    this_vec = load_raw_metric_values(
+                        output_root, group_name, dataset, condition, base_col
+                    )
+
+                    if base_vec.empty or this_vec.empty:
+                        continue
+
+                    p_val, test_name = wilcoxon_p_or_fallback(base_vec, this_vec)
+                    if p_val is None:
+                        continue
+
+                    base_mean = float(base_vec.mean()) if not base_vec.empty else None
+                    this_mean = float(this_vec.mean()) if not this_vec.empty else None
+
+                    rows.append({
+                        "Dataset": dataset,
+                        "DatasetFamily": fam,
+                        "GroupName": group_name,
+                        "Condition": condition,
+                        "MetricLabel": nice_name,   # e.g. "Testing Accuracy"
+                        "MetricCol": base_col,      # e.g. "test_balanced_accuracy"
+                        "BaselineGroup": baseline_group,
+                        "p_value": p_val,
+                        "test_name": test_name,
+                        "base_mean": base_mean,
+                        "this_mean": this_mean,
+                    })
+
+    return pd.DataFrame(rows)
+
+def apply_fdr_bh_by_metric(tests_df: pd.DataFrame, alpha: float) -> pd.DataFrame:
+    tests_df = tests_df.copy()
+    tests_df["p_value_fdr_bh"] = np.nan
+    tests_df["significant"] = False
+
+    if tests_df.empty:
+        return tests_df
+
+    for metric in tests_df["MetricLabel"].unique():
+        metric_mask = tests_df["MetricLabel"] == metric
+        metric_pvals = tests_df.loc[metric_mask, "p_value"].to_numpy()
+
+        rej, p_adj, _, _ = multipletests(metric_pvals, alpha=alpha, method="fdr_bh")
+        tests_df.loc[metric_mask, "p_value_fdr_bh"] = p_adj
+        tests_df.loc[metric_mask, "significant"] = rej
+
+    return tests_df
+
+def build_sig_lookup(tests_df: pd.DataFrame) -> dict[tuple[str, str, str, str], dict]:
+    lookup = {}
+
+    for _, row in tests_df.iterrows():
+        key = (
+            row["Dataset"],
+            row["GroupName"],
+            row["Condition"],
+            row["MetricLabel"],
+        )
+        lookup[key] = {
+            "p_value": row["p_value"],
+            "p_value_fdr_bh": row["p_value_fdr_bh"],
+            "significant": bool(row["significant"]),
+            "base_mean": row["base_mean"],
+            "this_mean": row["this_mean"],
+            "test_name": row["test_name"],
+        }
+
+    return lookup
+
+def append_sig_marker(
+    formatted_mean_sd: str,
+    base_mean: float | None,
+    this_mean: float | None,
+    is_sig: bool,
+    p_value_adj: float | None,
+) -> str:
+    if p_value_adj is None:
+        return formatted_mean_sd
+
+    p_str = f"{p_value_adj:.4g}"
+
     if not is_sig:
-        return formatted_mean_sd + " (" + str(p) + ")"
+        return f"{formatted_mean_sd} ({p_str})"
+
     if base_mean is None or this_mean is None:
-        return formatted_mean_sd + "* (" + str(p) + ")"
-    return formatted_mean_sd + ("*+ (" + str(p) + ")" if this_mean > base_mean else "*- (" + str(p) + ")")
+        return f"{formatted_mean_sd}* ({p_str})"
+
+    return f"{formatted_mean_sd}{'*+' if this_mean > base_mean else '*-'} ({p_str})"
 
 
 def parse_baseline_map(s: str) -> dict[str, str]:
@@ -240,6 +359,7 @@ def extract_one_condition(
     group_name: str,                 # WITHOUT "HEROS_"
     baseline_map: dict[str, str],
     alpha: float,
+    sig_lookup: dict | None = None,
 ) -> dict:
     out = {"Condition": condition}
     out["Ideal Solution Count"] = ""
@@ -271,9 +391,6 @@ def extract_one_condition(
         baseline_group is not None and
         not (group_name == baseline_group and condition == BASELINE_CONDITION)
     )
-    # cache baseline vectors per metric for this (dataset, condition)
-    baseline_vectors: dict[str, pd.Series] = {}
-    baseline_means: dict[str, float | None] = {}
 
     for nice_name, (base_col, decimals) in METRICS.items():
         mean_col = f"{base_col}_mean"
@@ -288,21 +405,20 @@ def extract_one_condition(
 
         cell = fmt_mean_sd(mean_val, sd_val, decimals=decimals)
 
-        p = None
+        if do_sig and sig_lookup is not None:
+            key = (dataset, group_name, condition, nice_name)
+            sig_info = sig_lookup.get(key)
 
-        if do_sig:
-            if base_col not in baseline_vectors:
-                base_vec = load_raw_metric_values(output_root, baseline_group, dataset, BASELINE_CONDITION, base_col)                
-                baseline_vectors[base_col] = base_vec
-                baseline_means[base_col] = float(base_vec.mean()) if not base_vec.empty else None
-            this_vec = load_raw_metric_values(output_root, group_name, dataset, condition, base_col)
-            this_mean_raw = float(this_vec.mean()) if not this_vec.empty else None
+            if sig_info is not None:
+                cell = append_sig_marker(
+                    cell,
+                    sig_info.get("base_mean"),
+                    sig_info.get("this_mean"),
+                    bool(sig_info.get("significant")),
+                    sig_info.get("p_value_fdr_bh"),
+                )
 
-            is_sig, _p, _test = wilcoxon_sig_or_fallback(baseline_vectors[base_col], this_vec, alpha)
-            cell = append_sig_marker(cell, baseline_means[base_col], this_mean_raw, is_sig, _p)
-            p = _p
-
-        out[nice_name] = p
+        out[nice_name] = cell
 
     return out
 
@@ -357,7 +473,7 @@ def ideal_solution_count_cell(
 # Table builder
 # ----------------------------
 
-def build_table(output_root: Path, allowed_groups: set[str], *, baseline_map: dict[str, str], alpha: float) -> pd.DataFrame:
+def build_table(output_root: Path, allowed_groups: set[str], *, baseline_map: dict[str, str], alpha: float, sig_lookup: dict | None = None) -> pd.DataFrame:
     rows = []
 
     if not output_root.exists():
@@ -396,6 +512,7 @@ def build_table(output_root: Path, allowed_groups: set[str], *, baseline_map: di
                     group_name=group_name,
                     baseline_map=baseline_map,
                     alpha=alpha,
+                    sig_lookup=sig_lookup,
                 ))
                 rows.append(record)
 
@@ -464,9 +581,9 @@ def format_dataset_label(ds: str) -> str:
 def pretty_config_label(cfg: str) -> str:
     if cfg.endswith("default"):
         return "HEROS"
-    if cfg.endswith("default_tree_init"):
+    if cfg.endswith("default_tree_bstrap"):
         return "HEROS-Tree"
-    if cfg.endswith("equal_tree_init"):
+    if cfg.endswith("equal_tree_bstrap"):
         return "HEROS-Tree-Alt"
     return cfg
 
@@ -588,14 +705,14 @@ def make_grouped_boxplot_by_dataset(
         legend_handles.append(Patch(facecolor=color_by_condition[cond], edgecolor="black", label=lab))
 
     if last_block_top_anchor_x is None:
-        ax.legend(handles=legend_handles, loc="upper right", fontsize=14, frameon=True)
+        ax.legend(handles=legend_handles, loc="upper left", fontsize=14, frameon=True)
     else:
         ax.legend(
             handles=legend_handles,
-            loc="upper right",
-            bbox_to_anchor=(last_block_top_anchor_x, 1.0),
-            bbox_transform=ax.transData,
-            fontsize=14,
+            loc="upper left",
+            #bbox_to_anchor=(last_block_top_anchor_x, 1.0),
+            #bbox_transform=ax.transData,
+            fontsize=13,
             frameon=True,
             borderaxespad=0.2,
             labelspacing=0.35,
@@ -622,12 +739,11 @@ def main():
                    help="Comma-separated group names to include (WITHOUT 'HEROS_' prefix).")
     p.add_argument("--outcsv", dest="outcsv", default="HEROS_Combined_Table.csv",
                    help="Output CSV file name (written inside --o).")
-
     p.add_argument("--baseline-map", dest="baseline_map",
                    default="multiplexer:mux_cv_default,gametes:gametes_cv_default",
                    help="Per-family baselines for significance. Format: 'multiplexer:<group>,gametes:<group>'.")
     p.add_argument("--alpha", dest="alpha", type=float, default=0.05,
-                   help="Significance threshold p-value (default 0.05).")
+                   help="Significance threshold p-value / FDR target (default 0.05).")
 
     args = p.parse_args()
 
@@ -639,7 +755,22 @@ def main():
 
     print(f"Using baseline map: {baseline_map} (alpha={alpha})")
 
-    combined = build_table(output_root, allowed_groups, baseline_map=baseline_map, alpha=alpha)
+    tests_df = collect_significance_tests(
+        output_root,
+        allowed_groups,
+        baseline_map=baseline_map,
+    )
+    tests_df = apply_fdr_bh_by_metric(tests_df, alpha=alpha)
+    sig_lookup = build_sig_lookup(tests_df)
+
+    combined = build_table(
+        output_root,
+        allowed_groups,
+        baseline_map=baseline_map,
+        alpha=alpha,
+        sig_lookup=sig_lookup,
+    )
+
     if combined.empty:
         print(f"[WARN] No valid mean/sd summary CSVs found under: {output_root} for groups: {sorted(allowed_groups)}")
         return
@@ -647,6 +778,10 @@ def main():
     out_path = output_root / args.outcsv
     combined.to_csv(out_path, index=False)
     print(f"✅ Combined table saved to: {out_path}")
+
+    tests_out_path = output_root / args.outcsv.replace(".csv", "_significance_tests_long.csv")
+    tests_df.to_csv(tests_out_path, index=False)
+    print(f"✅ Significance test details saved to: {tests_out_path}")
 
     # ---- ALWAYS generate boxplots ----
     base_plot_dir = output_root / "heros_boxplots"
