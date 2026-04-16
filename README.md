@@ -17,9 +17,11 @@
 <!-- headings -->
 <a id="item-one"></a>
 ## Introduction
-**HEROS (Heuristic Evolutionary Rule Optimization System)** is an evolutionary rule-based machine learning (ERBML) algorithm framework for supervised learning. It is designed to agnostically modeling simple/complex and/or clean/noisy problems (without hyperparameter optimization) and yield maximally human interpretable models. HEROS adopts a two-phase approach separating rule optimization, and rule-set (i.e. model) optimization, each with distinct multi-objective Pareto-front-based optimization. Rules are optimized based on maximizing rule-accuracy and instance coverage using a Pareto-inspired rule fitness function. Differently, models are optimized based on maximizing balanced accuracy and minimizing rule-set size using an NSGA-II-inspired evolutionary algorithm. This package is scikit-learn compatible. 
+**HEROS (Heuristic Evolutionary Rule Optimization System)** is an evolutionary rule-based machine learning (ERBML) algorithm framework for supervised learning. It is designed to agnostically modeling simple/complex and/or clean/noisy problems (without hyperparameter optimization) and yield maximally human interpretable models. HEROS adopts a two-phase approach separating rule optimization, and rule-set (i.e. model) optimization, each with distinct multi-objective Pareto-front-based optimization. Rules are optimized based on maximizing rule-accuracy and instance coverage using a Pareto-inspired rule fitness function. Differently, models are optimized based on maximizing balanced accuracy and minimizing rule-set size using an NSGA-II-inspired evolutionary algorithm. This package is scikit-learn compatible. A simple visual summary of HEROS rule-based modeling is given below:
 
-To date, HEROS functionality has been validated on binary classification problems. This project is under active development with a number of improvements/expansions planned or in progress. For example, we are expanding HEROS to support multiclass, regression, and survival outcomes in future releases.
+![alttext](https://github.com/UrbsLab/heros/blob/main/images/Laymans_Schematic.png?raw=true)
+
+To date, HEROS functionality has been validated on binary classification problems, and has also passed bug checks on multiclass outcomes and data with a mix of categorical and quantitative features. This project is under active development with a number of improvements/expansions planned or in progress. For example, we will be expanding HEROS to support regression, and survival outcomes in future releases.
 
 A schematic detailing how the HEROS algorithm works is given below:
 
@@ -29,10 +31,20 @@ A schematic detailing how the HEROS algorithm works is given below:
 ***
 <a id="item-two"></a>
 ## Installation
-HEROS can currently only be installed by cloning this repository. Make sure that you have also installed all prerequisite packages included in requirements.txt prior to running (Note: this list may need updating - so if you get errors, check first that you have necessary packages installed). 
+HEROS can be installed with pip or by cloning this repository. 
 
+### Pip
+HEROS can most easily be installed using the following pip command:
+```
+pip install skheros
+```
+In order to run the [HEROS_Demo_Notebook](https://github.com/UrbsLab/heros/blob/main/HEROS_Demo_Notebook.ipynb), download it and make sure to set the following notebook parameter to False in order to import HEROS from the above pip installation.
+```
+load_from_cloned_repo = False
+```
 
 ### Clone Respository
+To install/run HEROS from this cloned repository, run the following commands from the desired folder:
 ```
 git clone --single-branch https://github.com/UrbsLab/heros
 cd heros
@@ -59,10 +71,11 @@ Lastly, the fit() method can optionally be passed 'pop_df', a dataframe object, 
 ***
 <a id="item-four"></a>
 ## Using HEROS
+HEROS can be used similar to other scikit-learn supervised machine learning modeling algorithms with some added funcationalities to enhance run options, and post analyses (e.g. visualization generation).
 
 ### Demonstration Notebook
 A Jupyter Notebooks has been included to demonstrate how HEROS (and it's functions) can be applied to train, evaluate, and apply models with a wide variety of saved outputs, visualizations and model prediction explanations. We strongly recommend exploring this demonstration notebook to get familiar with HEROS and its capabilities. 
-* [DEMO Notebook](https://github.com/UrbsLab/heros/blob/main/HEROS_Demo_Notebook.ipynb)
+* [HEROS_Demo_Notebook](https://github.com/UrbsLab/heros/blob/main/HEROS_Demo_Notebook.ipynb)
 
 This notebook is currently set up to run by cloning this repository and running the included notebook. 
 
@@ -80,6 +93,7 @@ X = X.values
 y = train_df[outcome_label].values 
 
 # HEROS Initialization and Training
+from skheros.heros import HEROS # import from pip installation
 heros = HEROS(iterations=10000, pop_size=500, nu=1, model_iterations=100, model_pop_size=100)
 heros = heros_trained.fit(X, y, cat_feat_indexes=cat_feat_indexes)
 ```
@@ -250,7 +264,7 @@ Most recently, in 2024, we released [Survival-LCS](https://github.com/UrbsLab/su
 ## Citing HEROS
 If you use HEROS in a scientific publication, cite the following paper:
 
-Gabe Lipschutz-Villa, Harsh Bandhey, Ruonan Yin, Malek Kamoun, Ryan J. Urbanowicz. [Rule-based Machine Learning: Separating Rule and Rule-Set Pareto-Optimization for Interpretable Noise-Agnostic Modeling] 2025. (In Press)
+Gabe Lipschutz-Villa, Harsh Bandhey, Ruonan Yin, Malek Kamoun, Ryan Urbanowicz. 2025. [Rule-based Machine Learning: Separating Rule and Rule-Set Pareto-Optimization for Interpretable Noise-Agnostic Modeling](https://dl.acm.org/doi/10.1145/3712256.3726461) GECCO '25: Proceedings of the Genetic and Evolutionary Computation Conference. 407-415. 
 
 BibTeX entry:
 ```bibtex
@@ -277,7 +291,7 @@ Commercial entities or for commercial use of the Software: please contact CSTech
 ***
 <a id="item-eleven"></a>
 ## Acknowledgements
-The study was supported by Cedars Sinai Medical Center and NIH grants R01 AI173095, U01 AG066833 and P30 AG0373105. We thank Drs. John Holmes and Jason Moore for their mentorship and and research insights regarding rule-based machine learning for biomedicine, and Robert Zhang, who implemented scikit-ExSTraCS and prototyped an early batch-learning version of ExSTraCS.
+The study was supported by Cedars Sinai Medical Center and NIH grants R01 AI173095, U01 AG066833 and P30 AG0373105. We thank Drs. John Holmes and Jason Moore for their mentorship and and research insights regarding rule-based machine learning for biomedicine, and Robert Zhang, who implemented scikit-ExSTraCS and prototyped an early batch-learning version of ExSTraCS. Additional thanks to Jay Moran for his technical expertise and assistance. 
 
 ### Code Contributors
 * Ryan Urbanowicz - Developed algorithm concepts, implemented algorithm, led debugging and evaluation

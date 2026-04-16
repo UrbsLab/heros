@@ -4,7 +4,7 @@ import ast
 from skheros.methods.rule import RULE
 import seaborn as sns
 import matplotlib.pyplot as plt
-from scipy.cluster.hierarchy import linkage#, dendrogram, leaves_list
+from scipy.cluster.hierarchy import linkage #, dendrogram, leaves_list
 import networkx as nx
 from collections import defaultdict
 from itertools import combinations
