@@ -22,6 +22,7 @@ class COMPACT:
             if rule.useful_accuracy <= 0:
                 #Remove bad rule from population
                 heros.rule_population.pop_set.pop(index)
+                heros.micro_pop_count -= rule.numerosity
             else:
                 index += 1
         if heros.verbose:

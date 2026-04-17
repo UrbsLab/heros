@@ -32,7 +32,7 @@ class RULE_POP:
         self.pop_set_hold = None
         #Experimental
         self.explored_rules = {}
-        self.archive_discovered_rules = True #True value is experimental
+        self.archive_discovered_rules = False #True value is experimental
 
 
     def add_new_explored_rules(self,rule, heros):
@@ -344,22 +344,6 @@ class RULE_POP:
             new_rules.append(offspring)
         return new_rules
 
-    """
-    def add_covered_rule_to_pop(self,new_rule,outcome_state,heros,random): #old now
-        #Adds a new rule to the population via covering: either as a new rule entry in the population or increasing the numerosity of a rule that already exists. 
-        heros.timer.covering_time_stop() #covering time tracking
-        heros.timer.rule_eval_time_start() #rule evaluation time tracking
-        if heros.outcome_type == 'class':
-            front_updated = new_rule.complete_rule_evaluation_class(heros,random,outcome_state) #only called if brand new rule being added to population
-        elif heros.outcome_type == 'quant':
-            front_updated = new_rule.complete_rule_evaluation_quant(heros) #only called if brand new rule being added to population
-        else:
-            pass
-        if heros.fitness_function == 'pareto' and front_updated: #new 3/29/25
-            self.global_fitness_update(heros)
-        heros.timer.rule_eval_time_stop() #rule evaluation time tracking
-        heros.timer.covering_time_start() #covering time tracking
-    """
 
     def evaluate_covered_rule(self,new_rule,outcome_state,heros,random):
         heros.timer.covering_time_stop() #covering time tracking
@@ -568,61 +552,9 @@ class RULE_POP:
 
 
     def tree_init_population(self, X, y, heros, random, np, verbose = False, bstrap = False):
-        """ Akshita Method: Extract rules from multiple random forests, deduplicate, convert to HEROS rules, and analyze. 
-        Note that curently this method is not reproducible when setting random seed.  This needs to be fixed!
-        """
+        """ Trains a set of decision trees using random forest classifier and then extracts rules from tree branches, deduplicates the candidate rule population, converts rules to HEROS format and lastly evaluates all unique rules and updates remaining rule parameters. Initial exploration of methodology by Harsh Bandhey, and early contributions to method development by following UPenn students: Akshita Islam, Khoi Dinh, and Gabe Gabe Lipschutz-Villa. """
 
-        print('Entering tree_init_population...')
-        if verbose: 
-            # STEP 1: Exploratory analysis of the dataset
-            print("Exploratory analysis of input data:")
-            print(f"  X shape: {X.shape}")
-            print(f"  y shape: {y.shape}")
-            print(f"  Feature names: {list(X.columns) if hasattr(X, 'columns') else 'N/A'}")
-            print(f"  Number of classes: {len(np.unique(y))}")
-            print(f"  Class distribution: {dict(Counter(y if not hasattr(y, 'values') else y.values))}")
-            print(f"  Sample features (first row): {X.iloc[0].values if hasattr(X, 'iloc') else X[0]}")
-            print(f"  Sample label (first row): {y.iloc[0] if hasattr(y, 'iloc') else y[0]}")
-
-            # Visual Table: Exploratory Analysis
-            fig, ax = plt.subplots(figsize=(8, 3))
-            ax.axis('off')
-            tbl = Table(ax, bbox=[0, 0, 1, 1])
-            rows = [
-                ["X shape", str(X.shape)],
-                ["y shape", str(y.shape)],
-                ["# Features", str(X.shape[1])],
-                ["# Classes", str(len(np.unique(y)))],
-                ["Class Distribution", str(dict(Counter(y if not hasattr(y, 'values') else y.values)))],
-                ["Sample Features", str(X.iloc[0].values if hasattr(X, 'iloc') else X[0])],
-                ["Sample Label", str(y.iloc[0] if hasattr(y, 'iloc') else y[0])]
-            ]
-            nrows = len(rows)
-            ncols = 2
-            width, height = 1.0 / ncols, 1.0 / nrows
-            for i, row in enumerate(rows):
-                for j, cell in enumerate(row):
-                    tbl.add_cell(i, j, width, height, text=cell, loc='center', facecolor='white')
-            for i in range(nrows):
-                tbl.add_cell(i, -1, width, height, text="", loc='center', facecolor='white')
-            ax.add_table(tbl)
-            plt.title("Exploratory Data Analysis Summary")
-            plt.savefig("output/exploratory_analysis_table.png", bbox_inches="tight")
-            plt.show()
-
-        # STEP 2: Train multiple Random Forests with diverse hyperparameters for rule extraction
-        print("\nTraining multiple Random Forests with diverse hyperparameters for rule extraction...")
-        # rf_settings = [
-        #     {"n_estimators": 10, "max_depth": 3, "random_state": heros.random_state},
-        #     {"n_estimators": 10, "max_depth": 5, "random_state": heros.random_state},
-        #     {"n_estimators": 10, "max_depth": 7, "random_state": heros.random_state},
-        #     {"n_estimators": 10, "max_depth": None, "random_state": heros.random_state},
-        #     {"n_estimators": 20, "max_depth": 4, "random_state": heros.random_state},
-        #     {"n_estimators": 20, "max_depth": 8, "random_state": heros.random_state},
-        #     {"n_estimators": 15, "max_depth": 6, "random_state": heros.random_state},
-        #     {"n_estimators": 15, "max_depth": None, "random_state": heros.random_state},
-        # ]
-
+        # STEP 1: Hard Coded Random Forest Hyperparameters for Tree Training and Rule Extraction --------------------------------
         RF_INIT_SHARED = {
             "n_estimators": 10,
             "bootstrap": bstrap,
@@ -641,10 +573,11 @@ class RULE_POP:
             }
             for depth in max_depth_values
         ]
-
-        # STEP 2.5: One Hot Encode the categorical features for decision tree training
-        # Decision trees need quantitative features, so we one-hot encode categorical features temporarily
-        original_X = X.copy() if hasattr(X, 'copy') else X
+        # -----------------------------------------------------------------------------------------------------------------
+        print('Beginning Decision Tree Rule Inititialization...')
+        #--------------------------------------------------------------------------------------------------------------------
+        # STEP 2: One Hot Encode the categorical features for decision tree training (since random forest classifier expects quantitative features) 
+        #original_X = X.copy() if hasattr(X, 'copy') else X
         onehot_mapping = {}  # Maps one-hot encoded feature index -> (original_feat_idx, categorical_value)
         reverse_onehot_mapping = {}  # Maps (original_feat_idx, categorical_value) -> one-hot encoded feature index
         quant_feat_mapping = {}  # Maps encoded quantitative feature index -> original feature index
@@ -665,11 +598,11 @@ class RULE_POP:
             # Separate categorical and quantitative features
             cat_feat_indexes = sorted(heros.cat_feature_indexes)
             quant_feat_indexes = sorted([i for i in range(X_array.shape[1]) if i not in cat_feat_indexes])
-            
+
             # Extract categorical and quantitative columns
             cat_data = X_array[:, cat_feat_indexes]
             quant_data = X_array[:, quant_feat_indexes] if quant_feat_indexes else None
-            
+    
             # One-hot encode categorical features
             onehot_encoder = OneHotEncoder(sparse_output=False, drop=None, handle_unknown='ignore')
             cat_onehot = onehot_encoder.fit_transform(cat_data)
@@ -681,7 +614,7 @@ class RULE_POP:
                     quant_feat_mapping[encoded_idx] = orig_idx
             
             # Build one-hot mapping
-            current_onehot_idx = 0
+            #current_onehot_idx = 0
             num_quant = len(quant_feat_indexes) if quant_feat_indexes else 0
             
             for cat_col_idx, orig_cat_idx in enumerate(cat_feat_indexes):
@@ -692,8 +625,7 @@ class RULE_POP:
                     # Fallback: use unique values from data
                     encoder_categories = np.unique(cat_data[:, cat_col_idx])
                 
-                # Find the start index for this categorical feature's one-hot columns
-                # Count how many one-hot columns come before this feature
+                # Find the start index for this categorical feature's one-hot columns and count how many one-hot columns come before this feature
                 onehot_start_idx = 0
                 for prev_cat_idx in cat_feat_indexes:
                     if prev_cat_idx == orig_cat_idx:
@@ -739,10 +671,9 @@ class RULE_POP:
             print(f"  Quantitative feature mapping: {len(quant_feat_mapping)} features")
         else:
             print("\nNo categorical features to encode.")
-            onehot_mapping = {}
-            reverse_onehot_mapping = {}
-            quant_feat_mapping = {}
-    
+
+        #--------------------------------------------------------------------------------------------------------------------
+        # STEP 3: Train multiple random forest classifiers with varying hyperparameters to create a diverse set of decision trees for rule extraction 
         rf_models = []
         tree_depths_by_rf = []
         for idx, params in enumerate(rf_settings):
@@ -751,28 +682,10 @@ class RULE_POP:
             )
             rf.fit(X, y)
             rf_models.append(rf)
-            print(
-                f"  Trained RF {idx+1}: "
-                + ", ".join(f"{k}={params.get(k)}" for k in ["n_estimators","max_depth","random_state"])
-            )
             tree_depths = [estimator.tree_.max_depth for estimator in rf.estimators_]
             tree_depths_by_rf.append(tree_depths)
-            print(f"    Tree depths: {tree_depths}")
 
-        if verbose:
-            # Visualize: Tree Depths vs. Number of Rules
-            plt.figure(figsize=(8, 4))
-            for i, depths in enumerate(tree_depths_by_rf):
-                plt.scatter([i+1]*len(depths), depths, label=f"RF {i+1}" if i < 5 else None, alpha=0.7)
-            plt.xlabel("Random Forest Index")
-            plt.ylabel("Tree Depth")
-            plt.title("Tree Depths Across Random Forests")
-            plt.xticks(range(1, len(rf_models)+1))
-            plt.grid(True, axis='y')
-            plt.savefig("output/tree_depths_across_forests.png", bbox_inches="tight")
-            plt.show()
-
-        # Save the first RF for fidelity proof and visualization
+        # Save the first RF for fidelity proof and visualization - FOR DEBUGGING ONLY, CAN BE REMOVED LATER
         self.rf_model = rf_models[0]
 
         def print_rf_training_summary(rf_models):
@@ -784,12 +697,12 @@ class RULE_POP:
         if verbose: 
             print_rf_training_summary(rf_models)
 
-        # STEP 3: Extract rules from all trees in all forests
-        print("\nExtracting rules from all decision trees in all forests...")
+        # STEP 4: Extract rules from all trees in all forests
+        print("\nExtracting rules from all decision tree branches in all forests...")
         all_rules = []
         branch_paths = []
 
-        def recurse_tree(tree, node_id, path, rules, branch_paths=None, onehot_mapping=None):
+        def recurse_tree(tree, node_id, path, rules, branch_paths=None, onehot_mapping=None): #consider updating to only store condition (no action) 
             if tree.children_left[node_id] == _tree.TREE_LEAF:
                 condition_indexes = []
                 condition_values = []
@@ -813,74 +726,41 @@ class RULE_POP:
             for estimator in rf.estimators_:
                 recurse_tree(estimator.tree_, 0, [], all_rules, branch_paths, onehot_mapping)
 
-        print(f"Total raw rules extracted: {len(all_rules)}")
-
         if verbose: 
-            # Visualize: Example of Tree Branch to Rule
-            if branch_paths:
-                branch = branch_paths[0]
-                cond_indexes, cond_values, action, path = branch
-                fig, ax = plt.subplots(figsize=(8, 2 + 0.3*len(path)))
-                ax.axis('off')
-                tbl = Table(ax, bbox=[0, 0, 1, 1])
-                tbl.add_cell(0, 0, 0.5, 0.2, text="Tree Branch", loc='center', facecolor='#e0f7fa')
-                tbl.add_cell(0, 1, 0.5, 0.2, text="HEROS Rule", loc='center', facecolor='#ffe0b2')
-                for i, step in enumerate(path):
-                    feat_idx, threshold, direction = step
-                    feat_name = X.columns[feat_idx] if hasattr(X, 'columns') else f"f{feat_idx}"
-                    branch_txt = f"If {feat_name} {'<=' if direction == 'leq' else '>'} {threshold:.4f}"
-                    tbl.add_cell(i+1, 0, 0.5, 0.2, text=branch_txt, loc='left', facecolor='white')
-                heros_indexes = []
-                heros_values = []
-                minmax_dict = {}
-                for idx, (direction, threshold) in zip(cond_indexes, cond_values):
-                    if idx not in minmax_dict:
-                        minmax_dict[idx] = [float('-inf'), float('inf')]
-                    if direction == 'leq':
-                        minmax_dict[idx][1] = min(minmax_dict[idx][1], threshold)
-                    elif direction == 'gt':
-                        minmax_dict[idx][0] = max(minmax_dict[idx][0], np.nextafter(threshold, threshold+1))
-                for idx in sorted(minmax_dict.keys()):
-                    min_val, max_val = minmax_dict[idx]
-                    heros_indexes.append(idx)
-                    heros_values.append([min_val, max_val])
-                    feat_name = X.columns[idx] if hasattr(X, 'columns') else f"f{idx}"
-                    rule_txt = f"{feat_name}: [{min_val:.2f}, {max_val:.2f}]"
-                    tbl.add_cell(idx+1, 1, 0.5, 0.2, text=rule_txt, loc='left', facecolor='white')
-                tbl.add_cell(len(path)+1, 0, 0.5, 0.2, text=f"Predict: {action}", loc='left', facecolor='#e0f7fa')
-                tbl.add_cell(len(path)+1, 1, 0.5, 0.2, text=f"Action: {action}", loc='left', facecolor='#ffe0b2')
-                ax.add_table(tbl)
-                plt.title("Visual: Tree Branch to HEROS Rule")
-                plt.savefig("output/tree_branch_to_rule_visual.png", bbox_inches="tight")
-                plt.show()
+            # Visual: Tree Depth vs. Number of Rules Produced
+            rf_depths = [max([est.tree_.max_depth for est in rf.estimators_]) for rf in rf_models]
+            rules_per_rf = []
+            for rf in rf_models:
+                rf_rules = []
+                for estimator in rf.estimators_:
+                    local_rules = []
+                    recurse_tree(estimator.tree_, 0, [], local_rules)
+                    rf_rules.extend(local_rules)
+                rules_per_rf.append(len(rf_rules))
+            plt.figure(figsize=(7, 4))
+            plt.scatter(rf_depths, rules_per_rf, c='#81c784', s=80)
+            plt.xlabel("Max Tree Depth in RF")
+            plt.ylabel("Number of Rules Extracted")
+            plt.title("Tree Depth vs. Number of Rules Extracted")
+            plt.grid(True)
+            plt.savefig("output/tree_depth_vs_num_rules.png", bbox_inches="tight")
+            plt.show()
 
-        # STEP 4: Deduplicate rules (by condition and action)
+        # STEP 5: Deduplicate rules (based on rule's condition and action)
         print("Deduplicating rules...")
         rule_tuples = [tuple((tuple(r[0]), tuple(r[1]), r[2])) for r in all_rules]
         unique_rules_tuples = list(set(rule_tuples))
         unique_rules = [[list(r[0]), list(r[1]), r[2]] for r in unique_rules_tuples]
-        print(f"Unique rules after deduplication: {len(unique_rules)}")
 
         if verbose: 
-            # Visual: Original vs Compacted Rules
-            plt.figure(figsize=(6, 4))
-            plt.bar(['Original', 'Compacted'], [len(all_rules), len(unique_rules)], color=['#90caf9', '#ffb74d'])
-            plt.ylabel("Number of Rules")
-            plt.title("Rule Compaction: Original vs. Unique Rules")
-            plt.savefig("output/rule_compaction_bar.png", bbox_inches="tight")
-            plt.show()
-
-        def print_rule_extraction_summary(all_rules, unique_rules):
-            print("\nSummary: Extracted {} raw rules from all trees.".format(len(all_rules)))
+            print("\nSummary: Extracted {} branch-rules from all trees.".format(len(all_rules)))
             print("After deduplication, {} unique rules remain.".format(len(unique_rules)))
-
-        if verbose: 
-            print_rule_extraction_summary(all_rules, unique_rules)
 
         # STEP 5: Convert rules to HEROS format, check for redundancy, and add to population
         print("\nConverting extracted rules to HEROS format and checking for redundancy...")
 
-        def convert_path_to_minmax(condition_indexes, condition_values, onehot_mapping, quant_feat_mapping, heros):
+        # --------------------------------------------------------------------------------------------------------
+        def convert_path_to_minmax(condition_indexes, condition_values, onehot_mapping, quant_feat_mapping):
             """Convert a list of (direction, threshold) for each feature into HEROS format.
             Handles both quantitative features (min/max ranges) and categorical features (equality checks).
             Maps one-hot encoded features back to original categorical features."""
@@ -893,8 +773,7 @@ class RULE_POP:
                     # This is a one-hot encoded categorical feature
                     orig_feat_idx, cat_value = onehot_mapping[idx]
                     
-                    # For one-hot encoding: features are binary (0 or 1)
-                    # Threshold is typically 0.5
+                    # For one-hot encoding: features are binary (0 or 1) - Threshold is typically 0.5
                     # If direction is 'gt' and threshold <= 0.5, it means the one-hot feature is 1 (category IS present)
                     # If direction is 'leq' and threshold < 0.5, it means the one-hot feature is 0 (category NOT present)
                     if direction == 'gt' and threshold <= 0.5:
@@ -923,7 +802,7 @@ class RULE_POP:
             # Build final condition lists
             clean_indexes = []
             clean_values = []
-            
+
             # Add quantitative features
             for idx in sorted(minmax_dict.keys()):
                 min_val, max_val = minmax_dict[idx]
@@ -931,32 +810,26 @@ class RULE_POP:
                     clean_indexes.append(idx)
                     clean_values.append([min_val, max_val])
             
-            # Add categorical features
-            # For categorical features, we need to check if all one-hot conditions for a feature point to the same value
+            # Add categorical features - we need to check if all one-hot conditions for a feature point to the same value
             for orig_feat_idx in sorted(categorical_dict.keys()):
                 cat_values = categorical_dict[orig_feat_idx]
                 # If only one value is in the set, that's the categorical condition
                 if len(cat_values) == 1:
                     clean_indexes.append(orig_feat_idx)
                     clean_values.append(list(cat_values)[0])  # Single categorical value, not a range
-                # If multiple values, we might need to handle this differently
-                # For now, we'll take the first one (though this might not be correct)
+                # If multiple values, we might need to handle this differently - For now, we'll take the first one (though this might not be correct)
                 elif len(cat_values) > 1:
-                    # Multiple categories for same feature - this shouldn't happen in a valid tree path
-                    # But if it does, we'll use the first one
+                    # Multiple categories for same feature - this shouldn't happen in a valid tree path - But if it does, we'll use the first one
                     clean_indexes.append(orig_feat_idx)
                     clean_values.append(list(cat_values)[0])
-            
             return clean_indexes, clean_values
+        # --------------------------------------------------------------------------------------------------------
 
         for rule_data in unique_rules:
             raw_condition_indexes, raw_condition_values, action = rule_data
-            condition_indexes, condition_values = convert_path_to_minmax(raw_condition_indexes, raw_condition_values, onehot_mapping, quant_feat_mapping, heros)
+            condition_indexes, condition_values = convert_path_to_minmax(raw_condition_indexes, raw_condition_values, onehot_mapping, quant_feat_mapping)
             if len(condition_indexes) == 0:
                 continue
-            #print(f"Condition Indexes: {condition_indexes}")
-            #print(f"Condition Values: {condition_values}")
-            #print(f"Action: {action}")
 
             # Create a new RULE object
             rule_obj = RULE(heros)
@@ -964,13 +837,12 @@ class RULE_POP:
             rule_obj.condition_values = list(condition_values)
             rule_obj.action = action
             rule_obj.numerosity = 1
-            try:
-                if hasattr(rule_obj, 'complete_rule_evaluation_class'):
+            try: #FUTURE EXPANSION TO QUANTITATIVE OUTCOMES NEEDED
+                if hasattr(rule_obj, 'complete_rule_evaluation_class'): #Evaluates rules and assignes best outcome.
                     rule_obj.complete_rule_evaluation_class(heros, random, None)
                 else:
                     continue
                 if not hasattr(rule_obj, 'match_cover') or rule_obj.match_cover == 0:
-
                     continue
             except Exception as e:
                 print(f"An unexpected error occurred: {e}")
@@ -988,87 +860,13 @@ class RULE_POP:
                 self.ID_counter += 1
                 self.micro_pop_count += 1
 
-        print(f"Total numerosity in population: {self.micro_pop_count}")
-        print(f"Number of rules in correct HEROS format: {len(self.pop_set)}")
-
-        if verbose: 
-            # Visual: Tree Depth vs. Number of Rules Produced
-            rf_depths = [max([est.tree_.max_depth for est in rf.estimators_]) for rf in rf_models]
-            rules_per_rf = []
-            for rf in rf_models:
-                rf_rules = []
-                for estimator in rf.estimators_:
-                    local_rules = []
-                    recurse_tree(estimator.tree_, 0, [], local_rules)
-                    rf_rules.extend(local_rules)
-                rules_per_rf.append(len(rf_rules))
-            plt.figure(figsize=(7, 4))
-            plt.scatter(rf_depths, rules_per_rf, c='#81c784', s=80)
-            plt.xlabel("Max Tree Depth in RF")
-            plt.ylabel("Number of Rules Extracted")
-            plt.title("Tree Depth vs. Number of Rules Extracted")
-            plt.grid(True)
-            plt.savefig("output/tree_depth_vs_num_rules.png", bbox_inches="tight")
-            plt.show()
-
         def print_rule_conversion_summary(pop_set, micro_pop_count):
             print("\nSummary: Converted rules to HEROS format and added to population.")
-            print(f"Population numerosity: {micro_pop_count}")
-            print(f"Unique HEROS rules: {len(pop_set)}")
-        
+            print(f"Total Population Numerosity: {micro_pop_count}")
+            print(f"Unique HEROS Rules: {len(pop_set)}")
+        """
         if verbose: 
             print_rule_conversion_summary(self.pop_set, self.micro_pop_count)
-
-        # STEP 6: Calculate training accuracy of the rule population
-        def calculate_training_accuracy(X, y, heros):
-            correct = 0
-            total = len(X)
-            for i in range(total):
-                instance_state = X.iloc[i].values if hasattr(X, 'iloc') else X[i]
-                outcome_state = y.iloc[i] if hasattr(y, 'iloc') else y[i]
-                matches = []
-                for rule in self.pop_set:
-                    if rule.match(instance_state, heros):
-                        matches.append(rule)
-                if matches:
-                    actions = [r.action for r in matches]
-                    pred = Counter(actions).most_common(1)[0][0]
-                else:
-                    pred = -1
-                if pred == outcome_state:
-                    correct += 1
-            accuracy = float(correct) / float(total)
-            print(f"Training accuracy of rule population: {accuracy:.4f}")
-            return accuracy
-
-        print("\nCalculating training accuracy of the rule population...")
-        rulepop_acc = calculate_training_accuracy(X, y, heros)
-
-        def print_accuracy_summary(rulepop_acc):
-            print("\nSummary: Calculated training accuracy of rule population: {:.4f}".format(rulepop_acc))
-        print_accuracy_summary(rulepop_acc)
-
-        if verbose: 
-            # STEP 7: Proof of fidelity: Compare rule population accuracy to random forest accuracy
-            print("\nCalculating random forest training accuracy for proof of fidelity...")
-            rf_preds = self.rf_model.predict(X)
-            y_true = y.values if hasattr(y, 'values') else y
-            rf_acc = np.mean(rf_preds == y_true)
-            print(f"Random Forest training accuracy: {rf_acc:.4f}")
-            print(f"Rule population training accuracy: {rulepop_acc:.4f}")
-            print(f"Difference (RF - RulePop): {rf_acc - rulepop_acc:.4f}")
-            if abs(rf_acc - rulepop_acc) < 0.05:
-                print("Proof of fidelity: Rule population closely matches random forest predictions (within 5%).")
-            else:
-                print("Warning: Rule population accuracy differs from random forest by more than 5%.")
-
-            def print_fidelity_summary(rf_acc, rulepop_acc):
-                print("\nSummary: RF accuracy = {:.4f}, RulePop accuracy = {:.4f}, diff = {:.4f}".format(rf_acc, rulepop_acc, rf_acc - rulepop_acc))
-                if abs(rf_acc - rulepop_acc) < 0.05:
-                    print("Fidelity check PASSED (within 5%).")
-                else:
-                    print("Fidelity check WARNING (difference > 5%).")
-            print_fidelity_summary(rf_acc, rulepop_acc)
 
             # STEP 8: Visualize the first decision tree in the random forest
             print("\nVisualizing the first decision tree in the random forest...")
@@ -1147,37 +945,16 @@ class RULE_POP:
             def print_branch_visualization_summary():
                 print("\nSummary: Printed a single branch from a tree and its conversion to a HEROS rule.")
             print_branch_visualization_summary()
+        """
+        # Archive tree-intialized rule population for external examination
+        self.archive_rule_pop(0)
 
-            # STEP 10: Print all rule attributes for debugging
-            print("\nPrinting all rule attributes for debugging:")
-            for rule in self.pop_set:
-                print("--------------------------------------------------")
-                print(f"ID: {getattr(rule, 'ID', None)}")
-                print(f"Condition Indexes: {getattr(rule, 'condition_indexes', None)}")
-                print(f"Condition Values: {getattr(rule, 'condition_values', None)}")
-                print(f"Action: {getattr(rule, 'action', None)}")
-                print(f"Numerosity: {getattr(rule, 'numerosity', None)}")
-                print(f"Fitness: {getattr(rule, 'fitness', None)}")
-                print(f"Useful Accuracy: {getattr(rule, 'useful_accuracy', None)}")
-                print(f"Useful Coverage: {getattr(rule, 'useful_coverage', None)}")
-                print(f"Accuracy: {getattr(rule, 'accuracy', None)}")
-                print(f"Match Cover: {getattr(rule, 'match_cover', None)}")
-                print(f"Correct Cover: {getattr(rule, 'correct_cover', None)}")
-                print(f"Mean Absolute Error: {getattr(rule, 'mean_absolute_error', None)}")
-                print(f"Prediction: {getattr(rule, 'prediction', None)}")
-                print(f"Outcome Range Probability: {getattr(rule, 'outcome_range_prob', None)}")
-                print(f"Birth Iteration: {getattr(rule, 'birth_iteration', None)}")
-                print(f"Specified Count: {len(getattr(rule, 'condition_indexes', []))}")
-                print(f"Average Match Set Size: {getattr(rule, 'ave_match_set_size', None)}")
-                print(f"Deletion Probability: {getattr(rule, 'deletion_prob', None)}")
-            print("--------------------------------------------------")
-        # Save initialized rule population as .csv file using 'export_rule_population' method.
-        rule_pop_df = self.export_rule_population()
-        rule_pop_df.to_csv('output/rule_pop_tree_init.csv', index=False)
+        #rule_pop_df = self.export_rule_population()
+        #rule_pop_df.to_csv('output/rule_pop_tree_init.csv', index=False)
 
 
 
-    def export_rule_population(self):
+    def export_rule_population(self,rsl='Unspecified'):
         """ Prepares and exports a dataframe capturing the rule population."""
         pop_list = []
         column_names = ['ID',
@@ -1195,7 +972,7 @@ class RULE_POP:
                         'Prediction',
                         'Outcome Range Probability',
                         'Birth Iteration',
-                        'Specified Count',
+                        'Specified Count (RSL='+str(rsl)+')',
                         'Average Match Set Size',
                         'Deletion Probabiilty']
         for rule in self.pop_set:

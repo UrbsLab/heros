@@ -19,10 +19,10 @@ from .methods.model_prediction import MODEL_PREDICTION
 #import inspect #temporary testing
 
 class HEROS(BaseEstimator, TransformerMixin):
-    def __init__(self, outcome_type='class',iterations=100000,pop_size=1000,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,fitness_function='pareto',
+    def __init__(self,outcome_type='class',iterations=100000,pop_size=1000,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,fitness_function='pareto',
                  subsumption='both',rsl=0,feat_track=None,model_iterations=500,model_pop_size=100, model_pop_init = 'target_acc', new_gen=1.0,merge_prob=0.1,
                  rule_pop_init=None,compaction='sub',track_performance=0,model_tracking=False,stored_rule_iterations=None,stored_model_iterations=None,random_state=None,
-                 verbose=False, mode = 'default', feedback = False):
+                 verbose=False,alternate=0,alternate_mode=None,feedback=False):
         """
         A Scikit-Learn compatible implementation of the 'Heuristic Evolutionary Rule Optimization System' (HEROS) Algorithm.
         ..
@@ -52,7 +52,10 @@ class HEROS(BaseEstimator, TransformerMixin):
         :param stored_model_iterations: specifies iterations where a copy of the model population is stored (Must be positive integers separated by commas or None)
         :param random_state: the seed value needed to generate a random number
         :param verbose: Boolean flag to run in 'verbose' mode - display run details
-        :param init: model population initialization method 
+        :param alternate: Number of phase alternations between Phase I and Phase II (must be int >= 0)
+        :param alternate_mode: Experimental parameter to specify the method for determining when to alternate between Phase I and Phase II (must be 'limit', 'converge', 'equal', or None)
+        :param feedback: TBD
+   
         """
         # Basic run parameter checks
         if not outcome_type == 'class' and not outcome_type == 'quant':
@@ -130,6 +133,12 @@ class HEROS(BaseEstimator, TransformerMixin):
             verbose = False
         if not self.check_is_bool(verbose):
             raise Exception("'verbose' param must be a boolean, i.e. True or False")
+
+        if not self.check_is_int(alternate) or alternate < 0:
+            raise Exception("'alternate' param must be a non-negative integer")
+
+        if not alternate_mode == 'limit' and not alternate_mode == 'converge' and not alternate_mode == 'equal' and not alternate_mode is None and not alternate_mode == 'None':
+            raise Exception("'alternate_mode' param must be 'limit', 'converge', 'equal', or None")
         
         #Initialize global variables
         self.outcome_type = str(outcome_type)
@@ -174,16 +183,21 @@ class HEROS(BaseEstimator, TransformerMixin):
         self.verbose = verbose
         self.use_ek = False #internal parameter - set to False by default, but switched to true of ek scores passed to fit()
         self.y_encoding = None
+
+        #New Parameters
+        self.alternate = int(alternate)
+        self.alternate = alternate
+        self.alternate_mode = alternate_mode
+        self.curr_alt = 0 #internal parameter to track current number of alternations between Phase I and Phase II
+
+        #Experimental Parameters 
         #self.top_models = [] #for tracking model performance increase over iterations !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        self.curr_alt = 0
+        self.feedback = feedback 
+        self.training_weights = []
         self.phase_one_limit = 5000
         self.phase_one_ratio = 0
-        self.training_weights = []
         self.phase_two_convergence = 5
         self.phase_two_limit = 100
-        self.mode = str(mode)
-        self.feedback = feedback 
-        self.alternations = 5
 
     @staticmethod
     def check_is_int(num):
@@ -337,14 +351,17 @@ class HEROS(BaseEstimator, TransformerMixin):
         self.tracking = RULE_TRACK(self)
 
         # Initialize Rule Population (if specified)
+        verbose_debug_tree_init = False #DEBUG FLAG
         if self.rule_pop_init == 'load': # Initialize rule population based on loaded rule population
-            self.rule_population.load_rule_population(pop_df,self,random)
-        elif self.rule_pop_init == 'dt_verbose': # Train and utilize decision tree models to initialize rule population (based on individual tree 'branches')
-            self.rule_population.tree_init_population(X,y,self,random,np,True)
+            self.rule_population.load_rule_population(pop_df,self,random,np)
         elif self.rule_pop_init == 'dt':
-            self.rule_population.tree_init_population(X,y,self,random,np)
+            self.rule_population.tree_init_population(X,y,self,random,np,verbose_debug_tree_init)
+            print('PopSize After Tree Initialization ' +str(len(self.rule_population.pop_set))) #DEBUG
+            print('Micro PopSize After Tree Initialization ' +str(self.rule_population.micro_pop_count)) #DEBUG
         elif self.rule_pop_init == 'dt_bstrap':
-            self.rule_population.tree_init_population(X,y,self,random,np, bstrap= True)
+            self.rule_population.tree_init_population(X,y,self,random,np,verbose_debug_tree_init, bstrap= True)
+            print('PopSize After Tree Initialization ' +str(len(self.rule_population.pop_set))) #DEBUG
+            print('Micro PopSize After Tree Initialization ' +str(self.rule_population.micro_pop_count)) #DEBUG
         else: # No rule population initialization other than standard LCS-algorithm-style 'covering' mechanism.
             pass
 
@@ -352,16 +369,20 @@ class HEROS(BaseEstimator, TransformerMixin):
         X = None
         y = None
         self.timer.init_time_stop() #initialization time tracking
-        
+        print("HEROS Evolution Beginning!")
+
+        #CODE TO RUN PHASE I ONLY ----------------------------------------------------
         if self.model_iterations > 1: #Apply Phase II
             # Initialize model population and 
             self.model_population = MODEL_POP() # Initialize rule sets
             self.model_iteration = 0
         else: 
+            print("Running HEROS with Phase I only (no model iterations).")
             while self.iterations - self.iteration > 0: 
                 self.phase_one()
             return self
-        
+        #-----------------------------------------------------------------------------
+
         while (self.iterations - self.iteration > 0) and (self.model_iterations - self.model_iteration > 1):
             self.phase_one()
 
@@ -383,15 +404,12 @@ class HEROS(BaseEstimator, TransformerMixin):
         while (self.model_iterations - self.model_iteration > 0):
             self.phase_two()
 
-        
-
+    
         #self.env.clear_data_from_memory()        
         return self
     
 
     
-
-
     def phase_one(self):
 
         # CONVERGENCE ON NON-NEW DISCOVERY?? CHECKING WITH ARCHIVE
@@ -423,18 +441,18 @@ class HEROS(BaseEstimator, TransformerMixin):
             ## SWITCH EVALUATION AND STOP CRITERIA AND ADD COMPACTION IN BETWEEN
 
             ### STOP CRITERIA CHECK
-            if self.mode == "limit": #EXPERIMENTAL 
+            if self.alternate_mode == "limit": #EXPERIMENTAL 
                 if i >= self.phase_one_limit or self.iteration >= self.iterations:
                     phase_one_stop = False
-            elif self.mode == "converge": #EXPERIMENTAL: PHASE I CONVERGENCE 
+            elif self.alternate_mode == "converge": #EXPERIMENTAL: PHASE I CONVERGENCE 
                 # IMPLEMENT
 
                 # IDEAS: 
                 # CHECK AT EACH ITERATION IF OFFSPRING RULE IMPROVES MATCH SET PARETO FRONT
                 if improvement >= 250 or self.iteration >= self.iterations: 
                     phase_one_stop = False
-            elif self.mode == "equal": #EQUAL DISTRIBUTION OF RESOURCES ACROSS AMOUNT OF ALTERNATION 
-                if i >= self.iterations / self.alternations:
+            elif self.alternate_mode == "equal": #EQUAL DISTRIBUTION OF RESOURCES ACROSS AMOUNT OF ALTERNATION 
+                if i >= self.iterations / self.alternate:
                     phase_one_stop = False
             else: #DEFAULT SEQUENTIAL HEROS 
                 if i >= self.iterations:
@@ -554,23 +572,21 @@ class HEROS(BaseEstimator, TransformerMixin):
 
 
                     # STOP CRITERIA CHECK 
-                    if self.mode == "limit": #EXPERIMENTAL 
+                    if self.alternate_mode == "limit": #EXPERIMENTAL 
                         if not (iter < self.phase_two_convergence and count < self.phase_two_limit and self.model_iteration < self.model_iterations - 1):
                             phase_two_stop = False
-                    elif self.mode == "converge": #EXPERIMENTAL: PHASE I CONVERGENCE 
+                    elif self.alternate_mode == "converge": #EXPERIMENTAL: PHASE I CONVERGENCE 
                         ## IMPLEMENT BASED ON PHASE I CONVERGENCE
                         if count >= int(self.model_iterations * self.phase_one_ratio) or self.model_iteration >= self.model_iterations - 1:
                             phase_two_stop = False
-                    elif self.mode == "equal": #EQUAL DISTRIBUTION OF RESOURCES ACROSS AMOUNT OF ALTERNATION 
-                        if count >= self.model_iterations / self.alternations:
+                    elif self.alternate_mode == "equal": #EQUAL DISTRIBUTION OF RESOURCES ACROSS AMOUNT OF ALTERNATION (New as of 2026 GECCO Paper)
+                        if count >= self.model_iterations / self.alternate:
                             phase_two_stop = False
-                    else:  #DEFAULT SEQUENTIAL HEROS
+                    else:  #DEFAULT SEQUENTIAL HEROS (2025 GECCO Paper)
                         if self.model_iteration >= self.model_iterations:
                             phase_two_stop = False
 
                     
-
-
                 self.model_population.sort_model_pop()
                 self.model_population.identify_models_on_front() #For evaluating all models on the front.
                 self.model_population.get_target_model(0) #the 'model' object with the best accuracy, then coverage, then lowest rule count (assumes prior sorting)
@@ -644,7 +660,7 @@ class HEROS(BaseEstimator, TransformerMixin):
 
         result = None 
 
-        if self.mode == "converge":
+        if self.alternate_mode == "converge":
             if self.offspring_improves(new_rules):
                 result = 0
             else: 
@@ -1048,7 +1064,7 @@ class HEROS(BaseEstimator, TransformerMixin):
     def get_pop(self):
         """ Return a dataframe of the rule population. """
         self.rule_population.order_all_rule_conditions()
-        pop_df = self.rule_population.export_rule_population()
+        pop_df = self.rule_population.export_rule_population(self.rsl)
         return pop_df
     
     def get_ft(self,feature_names):
