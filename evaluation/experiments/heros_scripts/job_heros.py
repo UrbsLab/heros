@@ -9,7 +9,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 #UPDATE Path below as needed!!!
-sys.path.append('/project/kamoun_shared/gabe/heros/src')
+sys.path.append('/project/kamoun_shared/output_shared/heros_v0.3_dev/heros/src')
 #sys.path.append('/project/kamoun_shared/code_shared/new_heros/scikit-heros/')
 #from src.skheros.heros import HEROS
 from skheros.heros import HEROS #PIP INSTALL RUN
@@ -150,11 +150,12 @@ def main(argv):
     ek = loaded_data['Score'].tolist()
 
     #Train HEROS --------------------------------------------------------------------------------------------------------------------
-    heros = HEROS(outcome_type=outcome_type,iterations=iterations,pop_size=pop_size, cross_prob=cross_prob,mut_prob=mut_prob, nu=nu,beta=beta,theta_sel=theta_sel,
+    heros = HEROS(outcome_type=outcome_type,iterations=iterations,pop_size=pop_size, cross_prob=cross_prob,mut_prob=mut_prob,nu=nu,beta=beta,theta_sel=theta_sel,
                 fitness_function=fitness_function,subsumption=subsumption,rsl=rsl,feat_track=feat_track, model_iterations=model_iterations,
                 model_pop_size=model_pop_size,model_pop_init=model_pop_init,new_gen=new_gen,merge_prob=merge_prob,rule_pop_init=rule_pop_init,compaction=compaction,
                 track_performance=track_performance,model_tracking=True,stored_rule_iterations=stored_rule_iterations,stored_model_iterations=stored_model_iterations,
                 random_state=random_state,verbose=verbose,alternate=alternate,alternate_mode=alternate_mode,feedback=feedback)
+    
     heros = heros.fit(train_X, train_y, row_id, cat_feat_indexes=cat_feat_indexes, ek=ek)
     # Save Rule Population
     pop_df = heros.get_pop()
