@@ -585,7 +585,7 @@ class HEROS(BaseEstimator, TransformerMixin):
                         iter += 1
                     else:
                         iter = 0
-                    print(iter)
+                    #print(iter)
                     count += 1
                     models_prev = models
 

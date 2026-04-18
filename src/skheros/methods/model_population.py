@@ -52,7 +52,8 @@ class MODEL_POP:
         """ Prints the tracking information for the current training iteration. """
         self.tracking_entry = [round(num,3) for num in self.tracking_entry]
         report_df = pd.DataFrame([self.tracking_entry], columns=self.tracking_header,index=None)
-        print(report_df)
+        print(report_df.to_string(index=False))
+        #print(report_df)
 
     def get_performance_tracking_df(self):
         """ Returns performance tracking over all training iterations as a dataframe. """
