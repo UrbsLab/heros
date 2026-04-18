@@ -31,7 +31,7 @@ python run_multisurf_hpc.py --d /project/kamoun_shared/data_shared/heros_sim_dat
 
 SHORT ClUSTER TEST: ------------------------------------------------------------------------------------------------
 
-python /project/kamoun_shared/gabe/I2C2-Documentation/run_heros_alt.py --d /project/kamoun_shared/data_shared/heros_sim_data/test_multiplexer_data_cv --w /project/kamoun_shared/gabe/I2C2-Documentation --o test2 --ekf /project/kamoun_shared/output_shared/heros_gecco_2025/output/MultiSURF_multiplexer_cv --ol Class --il InstanceID --el Group --rc LSF --rm 4 --q i2c2_normal --cv 1 --r 1 --m limit --in random --it 10000 --ps 500 --nu 1 --mi 100 --ms 100 --c sub --tp 1000 --sr 500,1000,10000 --sm 5,10,50,100 --m default 
+python run_heros.py --d /project/kamoun_shared/data_shared/heros_sim_data/test_multiplexer_data_cv --w /project/kamoun_shared/output_shared/heros_v0.3_dev --o quicktest --ekf /project/kamoun_shared/output_shared/heros_gecco_2025/output/MultiSURF_multiplexer_cv --ol Class --il InstanceID --el Group --rc LSF --rm 4 --q i2c2_normal --cv 1 --r 1 --m limit --in target_acc --it 10000 --ps 500 --nu 1 --mi 50 --ms 100 --c sub --tp 1000 --sr 500,1000,10000 --sm 5,10,50 --m equal --a 5 --pt dt_bstrap
 
 
 #HEROS INITIAL Training and Evaluation 

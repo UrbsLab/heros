@@ -143,6 +143,7 @@ class RULE:
                 if feat in o2_condition_indexes:
                     feature_occurence += 2
                 # Perform exchange
+                """
                 if feature_occurence == 1: #feature only in o1 (was self)
                     rule_position = self.condition_indexes.index(feat)
                     other_rule.condition_values.append(self.condition_values.pop(rule_position))
@@ -153,6 +154,24 @@ class RULE:
                     self.condition_values.append(other_rule.condition_values.pop(rule_position))
                     self.condition_indexes.append(feat)
                     other_rule.condition_indexes.remove(feat)
+                """
+                #Reproducibility FIX Reccommended by Google Gemini
+                if feature_occurence == 1: # feature only in self, move to other
+                    idx = self.condition_indexes.index(feat)
+                    val = self.condition_values.pop(idx)
+                    self.condition_indexes.pop(idx) # Use pop(idx) here too! 
+                    
+                    other_rule.condition_indexes.append(feat)
+                    other_rule.condition_values.append(val)
+
+                elif feature_occurence == 2: # feature only in other, move to self
+                    idx = other_rule.condition_indexes.index(feat)
+                    val = other_rule.condition_values.pop(idx)
+                    other_rule.condition_indexes.pop(idx) # Keep them in sync!
+                    
+                    self.condition_indexes.append(feat)
+                    self.condition_values.append(val)
+
                 else: #feature in both o1 and o2
                     if not is_categorical: #if quantiative feature
                         feat_index_1 = self.condition_indexes.index(feat)
@@ -584,7 +603,7 @@ class RULE:
         if target_instance_outcome in candidate_actions: #go with the current target instance class if there is a tie for best class
             self.action = target_instance_outcome
         else:
-            self.action = random.choice(candidate_actions)
+            self.action = random.choice(sorted(candidate_actions))
         self.correct_cover = self.instance_outcome_count[self.action]
         # Calculate rule accuracy ***************************
         try:

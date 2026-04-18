@@ -359,11 +359,26 @@ class HEROS(BaseEstimator, TransformerMixin):
             print('PopSize After Tree Initialization ' +str(len(self.rule_population.pop_set))) #DEBUG
             print('Micro PopSize After Tree Initialization ' +str(self.rule_population.micro_pop_count)) #DEBUG
         elif self.rule_pop_init == 'dt_bstrap':
-            self.rule_population.tree_init_population(X,y,self,random,np,verbose_debug_tree_init, bstrap= True)
+            self.rule_population.tree_init_population(X,y,self,random,np,verbose_debug_tree_init, bstrap=True)
             print('PopSize After Tree Initialization ' +str(len(self.rule_population.pop_set))) #DEBUG
             print('Micro PopSize After Tree Initialization ' +str(self.rule_population.micro_pop_count)) #DEBUG
         else: # No rule population initialization other than standard LCS-algorithm-style 'covering' mechanism.
             pass
+
+        # Clean/Compact Initialized Population
+        if len(self.rule_population.pop_set) > 1:
+            self.timer.compaction_time_start()
+            compact = COMPACT(self)
+            self.sufficient_rule_pop_remain = True
+            self.sufficient_rule_pop_remain = compact.basic_rule_cleaning(self)
+            if self.compaction == 'sub' and self.sufficient_rule_pop_remain:
+                self.sufficient_rule_pop_remain = compact.subsumption_compation(self)
+            compact.clear_pop_copy()
+            self.timer.compaction_time_stop()
+
+        # Archive tree-intialized rule population for external examination
+        if self.rule_pop_init == 'dt' or self.rule_pop_init == 'dt_bstrap':
+            self.rule_population.archive_rule_pop(0)
 
         # Memory Cleanup
         X = None
@@ -380,12 +395,13 @@ class HEROS(BaseEstimator, TransformerMixin):
             print("Running HEROS with Phase I only (no model iterations).")
             while self.iterations - self.iteration > 0: 
                 self.phase_one()
+            print("HEROS (Phase 1) run complete!")
+            print("Random Seed Check - End: "+ str(random.random()))
             return self
         #-----------------------------------------------------------------------------
 
         while (self.iterations - self.iteration > 0) and (self.model_iterations - self.model_iteration > 1):
             self.phase_one()
-
             self.tracking.alternations.append(self.iteration)
 
             if self.model_iteration == 0:
@@ -426,12 +442,15 @@ class HEROS(BaseEstimator, TransformerMixin):
             #print('Iteration: '+str(self.iteration)+' RulePopSize: '+str(len(self.rule_population.pop_set)))
             # Run a single training iteration focused on the current training instance
             #print(instance)
+
             if self.run_iteration(instance) == 1: 
                 improvement += 1
             else: 
                 improvement = 0
             
 
+            #if self.iteration == 5:
+            #    x = 5/0
             
             # Increment iteration and training instance
             self.iteration += 1
@@ -459,7 +478,7 @@ class HEROS(BaseEstimator, TransformerMixin):
                     phase_one_stop = False
 
             if phase_one_stop == False: 
-                # RULE COMPACTION ********************************************* # CONSIDER USAGE
+                # RULE COMPACTION *********************************************
                 self.timer.compaction_time_start()
                 compact = COMPACT(self)
                 self.sufficient_rule_pop_remain = True
@@ -660,11 +679,11 @@ class HEROS(BaseEstimator, TransformerMixin):
 
         result = None 
 
-        if self.alternate_mode == "converge":
-            if self.offspring_improves(new_rules):
-                result = 0
-            else: 
-                result = 1
+        #if self.alternate_mode == "converge":
+        #    if self.offspring_improves(new_rules):
+        #        result = 0
+        #    else: 
+        #        result = 1
             
 
         # Apply Rule Deletion

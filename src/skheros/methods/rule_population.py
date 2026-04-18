@@ -9,7 +9,6 @@ import networkx as nx
 from collections import defaultdict
 from itertools import combinations
 import struct
-
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import _tree, DecisionTreeClassifier
 from sklearn.preprocessing import OneHotEncoder
@@ -52,9 +51,6 @@ class RULE_POP:
         if encoded in self.explored_rules:
             return self.decode_rule_binary(encoded, heros.env.num_feat)
         return None
-
-    
-
     
 
     def equals(self,target_rule,rule_summary):
@@ -230,6 +226,7 @@ class RULE_POP:
         heros.timer.selection_time_start() #parent selection time tracking
         parent_list = self.tournament_selection(heros,random)
         heros.timer.selection_time_stop() #parent selection time tracking
+
         # INITIALIZE OFFSPRING *************************************
         heros.timer.mating_time_start() #mating time tracking
         offspring_list = []
@@ -237,24 +234,30 @@ class RULE_POP:
             new_rule = RULE(heros)
             new_rule.initialize_by_parent(parent_rule,heros)
             offspring_list.append(new_rule)
+
         # CROSSOVER OPERATOR **************************************
         if len(offspring_list) > 1: #crossover only applied between two parent rules
             if random.random() < heros.cross_prob:
                 offspring_list[0].uniform_crossover(offspring_list[1],heros,random,np)
         #for offspring in offspring_list: #debug
         #    self.debug_confirm_offspring_match(offspring, instance,heros,'crossover',parent_list)
+
         # MUTATION OPERATOR ***************************************
         for offspring in offspring_list:
             offspring.mutation(instance_state,outcome_state,heros,random,np)
         #for offspring in offspring_list: #debug
         #    self.debug_confirm_offspring_match(offspring, instance,heros,'mutation',parent_list)
         heros.timer.mating_time_stop() #mating time tracking
+
         #Check for offspring duplication
         if len(offspring_list) > 1:
             if offspring_list[0].equals(offspring_list[1]): 
                 offspring_list.pop()
+                #print('This happened')
+                #print("Random Seed Check post GA - equal offspring: "+ str(random.random()))
                 if len(offspring_list) > 1:
                     print("ERROR: More than 2 expected offspring in GA")
+
         # CHECK FOR DUPLICATE RULES IN {P} and EVALUATE Non-Duplicate Ruels
         front_updated = False
         final_offspring_list = []
@@ -278,6 +281,7 @@ class RULE_POP:
 
             if self.no_identical_rule_exists(offspring,heros,'pop_set'):
                 final_offspring_list.append(offspring)
+
         # Update all rule fitness values if one or both offspring rules updated the pareto front
         heros.timer.rule_eval_time_start() #rule evaluation time tracking
         if heros.fitness_function == 'pareto' and front_updated: #new 3/29/25
@@ -286,26 +290,36 @@ class RULE_POP:
             for offspring in final_offspring_list:
                 offspring.update_rule_fitness(heros)
         heros.timer.rule_eval_time_stop() #rule evaluation time tracking
+
         # INSERT RULE(S) IN POPULATON (OPTIONAL GA SUBSUMPTION) ***************************
         return self.process_offspring(parent_list,final_offspring_list,heros)
 
 
     def tournament_selection(self,heros,random):
         """ Applies tournament selection to choose and return two parent rules. """
-        parent_options = copy.deepcopy(self.match_set)
+        parent_options = sorted(copy.deepcopy(self.match_set)) #extra code to ensure random seed reproducibility
         parent_list = []
+        #print("length of match set: "+str(len(self.match_set)))
+        #for rule_ref in parent_options: #debugging
+        #    self.pop_set[rule_ref].show_rule()
+
         if len(parent_options) == 1: #only one rule in {M}
-            parent_list = [self.pop_set[self.match_set[0]]] #only one parent returned
+            #parent_list = [self.pop_set[self.match_set[0]]] #only one parent returned
+            parent_list = [self.pop_set[parent_options[0]]]
         elif len(parent_options) == 2: #only two rules in {M}
-            parent_list = [self.pop_set[self.match_set[0]],self.pop_set[self.match_set[1]]]
+            #parent_list = [self.pop_set[self.match_set[0]],self.pop_set[self.match_set[1]]]
+            parent_list = [self.pop_set[parent_options[0]], self.pop_set[parent_options[1]]]
         else:
             while len(parent_list) < 2:
                 tournament_size = max(2,int(len(parent_options)*heros.theta_sel))
                 tournament_set = random.sample(parent_options,tournament_size)
-                best_fitness = 0
-                best_rule_index = self.match_set[0]
+                #best_fitness = 0
+                #best_rule_index = self.match_set[0]
+                best_rule_index = tournament_set[0]
+                best_fitness = self.pop_set[best_rule_index].fitness
+
                 for i in tournament_set:
-                    if self.pop_set[i].fitness >= best_fitness:
+                    if self.pop_set[i].fitness > best_fitness or (self.pop_set[i].fitness == best_fitness and self.pop_set[i].ID < self.pop_set[best_rule_index].ID): #extra code to ensure random seed reproducibility
                         best_fitness = self.pop_set[i].fitness
                         best_rule_index = i
                 parent_list.append(self.pop_set[best_rule_index])
@@ -688,6 +702,8 @@ class RULE_POP:
         # Save the first RF for fidelity proof and visualization - FOR DEBUGGING ONLY, CAN BE REMOVED LATER
         self.rf_model = rf_models[0]
 
+        print("Random Seed Check After RF: "+ str(random.random()))
+
         def print_rf_training_summary(rf_models):
             print("\nSummary: Trained {} random forests with varying hyperparameters.".format(len(rf_models)))
             for i, rf in enumerate(rf_models):
@@ -745,17 +761,29 @@ class RULE_POP:
             plt.grid(True)
             plt.savefig("output/tree_depth_vs_num_rules.png", bbox_inches="tight")
             plt.show()
+        print("Random Seed Check After Rule Extract: "+ str(random.random()))
 
         # STEP 5: Deduplicate rules (based on rule's condition and action)
         print("Deduplicating rules...")
+        #rule_tuples = [tuple((tuple(r[0]), tuple(r[1]), r[2])) for r in all_rules]
+        #unique_rules_tuples = list(set(rule_tuples))
+        #unique_rules = [[list(r[0]), list(r[1]), r[2]] for r in unique_rules_tuples]
+        
+        # 1. Convert to tuples so they are hashable for the set
         rule_tuples = [tuple((tuple(r[0]), tuple(r[1]), r[2])) for r in all_rules]
-        unique_rules_tuples = list(set(rule_tuples))
+
+        # 2. Use set to get unique items, but IMMEDIATELY sort the resulting list
+        # Sorting ensures that the order is identical across every run
+        unique_rules_tuples = sorted(list(set(rule_tuples)))
+
+        # 3. Convert back to the original list-of-lists format
         unique_rules = [[list(r[0]), list(r[1]), r[2]] for r in unique_rules_tuples]
 
         if verbose: 
             print("\nSummary: Extracted {} branch-rules from all trees.".format(len(all_rules)))
             print("After deduplication, {} unique rules remain.".format(len(unique_rules)))
 
+        print("Random Seed Check After Deduplication: "+ str(random.random()))
         # STEP 5: Convert rules to HEROS format, check for redundancy, and add to population
         print("\nConverting extracted rules to HEROS format and checking for redundancy...")
 
@@ -833,13 +861,18 @@ class RULE_POP:
 
             # Create a new RULE object
             rule_obj = RULE(heros)
-            rule_obj.condition_indexes = list(condition_indexes)
-            rule_obj.condition_values = list(condition_values)
-            rule_obj.action = action
+            #rule_obj.condition_indexes = list(condition_indexes)
+            rule_obj.condition_indexes = [x.item() if hasattr(x, 'item') else x for x in condition_indexes]
+            #print(type(rule_obj.condition_indexes[0]))
+            #rule_obj.condition_values = list(condition_values)
+            rule_obj.condition_values = [x.item() if hasattr(x, 'item') else x for x in condition_values]  #CHECK THIS STILL WORKS FOR Quantitative features
+            #print(type(rule_obj.condition_values[0]))
+            rule_obj.action = None
             rule_obj.numerosity = 1
+            rule_obj.birth_iteration = 0
             try: #FUTURE EXPANSION TO QUANTITATIVE OUTCOMES NEEDED
                 if hasattr(rule_obj, 'complete_rule_evaluation_class'): #Evaluates rules and assignes best outcome.
-                    rule_obj.complete_rule_evaluation_class(heros, random, None)
+                    front_updated = rule_obj.complete_rule_evaluation_class(heros, random, None)
                 else:
                     continue
                 if not hasattr(rule_obj, 'match_cover') or rule_obj.match_cover == 0:
@@ -848,7 +881,7 @@ class RULE_POP:
                 print(f"An unexpected error occurred: {e}")
                 print(f"Type of unexpected exception: {type(e)}")
                 continue
-            if heros.fitness_function == 'pareto':
+            if heros.fitness_function == 'pareto':  #Needs expansion for non-pareto option
                 rule_obj.update_rule_fitness(heros)
             identical_rule = self.search_pop_for_identical_rule(rule_obj)
             if identical_rule is not None:
@@ -860,13 +893,23 @@ class RULE_POP:
                 self.ID_counter += 1
                 self.micro_pop_count += 1
 
+        #Global Fitness update
+        if heros.fitness_function == 'pareto':  #Needs expansion for non-pareto option
+            self.global_fitness_update(heros)
+        print("Random Seed Check After Convert to HEROS rules: "+ str(random.random()))
+
         def print_rule_conversion_summary(pop_set, micro_pop_count):
             print("\nSummary: Converted rules to HEROS format and added to population.")
             print(f"Total Population Numerosity: {micro_pop_count}")
             print(f"Unique HEROS Rules: {len(pop_set)}")
+
+        print_rule_conversion_summary(self.pop_set, self.micro_pop_count)
+
+        self.order_all_rule_conditions() #New potential random seed reproducibitliy fix
+
         """
         if verbose: 
-            print_rule_conversion_summary(self.pop_set, self.micro_pop_count)
+
 
             # STEP 8: Visualize the first decision tree in the random forest
             print("\nVisualizing the first decision tree in the random forest...")
@@ -946,11 +989,6 @@ class RULE_POP:
                 print("\nSummary: Printed a single branch from a tree and its conversion to a HEROS rule.")
             print_branch_visualization_summary()
         """
-        # Archive tree-intialized rule population for external examination
-        self.archive_rule_pop(0)
-
-        #rule_pop_df = self.export_rule_population()
-        #rule_pop_df.to_csv('output/rule_pop_tree_init.csv', index=False)
 
 
 
