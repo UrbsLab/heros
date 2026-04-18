@@ -314,9 +314,9 @@ def mux_ideal_rule_scan(output_path: str, cv_partitions: int, random_seeds: int)
     mux_output_folders = {
         "A_multiplexer_6_bit_500_inst": 6,
         "B_multiplexer_11_bit_5000_inst": 11,
-        # "C_multiplexer_20_bit_10000_inst": 20,
-        # "D_multiplexer_37_bit_10000_inst": 37,
-        # "E_multiplexer_70_bit_20000_inst": 70,
+        "C_multiplexer_20_bit_10000_inst": 20,
+        "D_multiplexer_37_bit_10000_inst": 37,
+        "E_multiplexer_70_bit_20000_inst": 70,
     }
 
     header = ["Dataset", "Seed", "CV", "Ideal Count", "Ideal Proportion"]

@@ -29,7 +29,7 @@ def submit_lsf(scratch_path, log_path, reserved_memory, queue, output_root, cv_p
         sh.write(f"#BSUB -o {os.path.join(log_path, job_name)}.o\n")
         sh.write(f"#BSUB -e {os.path.join(log_path, job_name)}.e\n")
         sh.write(
-            "python -u I2C2-Documentation/job_heros_alt_sum2.0.py"
+            "python -u job_heros_sum.py"
             f" --o {output_root}"
             f" --ol {outcome_label} --il {instanceID_label} --el {excluded_column}"
             f" --cv {cv_partitions} --r {random_seeds}\n"
@@ -51,7 +51,7 @@ def submit_slurm(scratch_path, log_path, reserved_memory, queue, output_root, cv
         sh.write(f"#SBATCH -o {os.path.join(log_path, job_name)}.o\n")
         sh.write(f"#SBATCH -e {os.path.join(log_path, job_name)}.e\n")
         sh.write(
-            "srun python -u I2C2-Documentation/job_heros_alt_sum2.0.py"
+            "srun python -u job_heros_sum.py"
             f" --o {output_root}"
             f" --ol {outcome_label} --il {instanceID_label} --el {excluded_column}"
             f" --cv {cv_partitions} --r {random_seeds}\n"

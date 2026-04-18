@@ -65,7 +65,7 @@ def main(argv):
     logPath.mkdir(parents=True, exist_ok=True)
 
     # Job python file (must exist in writepath)
-    job_py = writepath / "job_heros_alt_table2.0.py"
+    job_py = "job_heros_table.py"
     if not job_py.exists():
         print(f"[ERR] job file not found: {job_py}")
         return 2
