@@ -25,7 +25,7 @@ To date, HEROS functionality has been validated on binary classification problem
 
 A schematic detailing how the HEROS algorithm works is given below:
 
-![alttext](https://github.com/UrbsLab/heros/blob/main/images/HEROS_1.0_Paper_Schematic_white_back.png?raw=true)
+![alttext](https://github.com/UrbsLab/heros/blob/main/images/HEROS_1.1_Paper_Schematic_New4.png?raw=true)
 
 
 ***
@@ -188,6 +188,9 @@ The table below gives other HEROS hyperparameters that should generally be left 
 
 | Hyperparameter | Description | Type/Options | Default Value |
 | -------------- | ----------- | ------------- | ------------- |
+| *rule_pop_init* | Specifies rule population pre-initialization method | None, 'load','dt'| None |
+| *alternate* | Number of phase alternations (i.e. Phase I to Phase II transitions) | int | 5 |
+| *alternate_mode* | Phase alternation strategy | 'equal', None | 'equal' |
 | *beta* | Learning parameter - used in calculating average match set size (Phase I) | float | 0.2 |
 | *theta_sel* | The fraction of the correct set to be included in tournament selection (Phases I & II) | float | 0.5 |
 | *cross_prob* |  The probability of applying crossover in rule discovery with the genetic algorithm (Phases I & II) | float | 0.8 |
@@ -219,7 +222,7 @@ This last table gives hyperparameters that are 'in-development' and should be le
 | *outcome_type* | Defines the type of outcome in the dataset | 'class','quant' | 'class' |
 | *fitness_function* | Defines the Phase I fitness function used by HEROS. The 'accuracy' option should only be used for clean-signal problems. | 'accuracy','pareto' | 'pareto' |
 | *feat_track* | Feature tracking strategy applied | None, 'add','wh','end' | None |
-| *rule_pop_init* | Specifies rule population pre-initialization method | None, 'load','dt'| None |
+| *feedback* | Feedback strategy used between phases when alternation is applied | Bool | False |
 
 ### fit() Parameters
 In addition to the typical *X* and *y* parameters for HEROS's fit function users can utilize the following fit() parameters:
@@ -262,13 +265,26 @@ Most recently, in 2024, we released [Survival-LCS](https://github.com/UrbsLab/su
 ***
 <a id="item-seven"></a>
 ## Citing HEROS
-If you use HEROS in a scientific publication, cite the following paper:
+If you use HEROS in a scientific publication, cite the following paper(s):
 
 Gabe Lipschutz-Villa, Harsh Bandhey, Ruonan Yin, Malek Kamoun, Ryan Urbanowicz. 2025. [Rule-based Machine Learning: Separating Rule and Rule-Set Pareto-Optimization for Interpretable Noise-Agnostic Modeling](https://dl.acm.org/doi/10.1145/3712256.3726461) GECCO '25: Proceedings of the Genetic and Evolutionary Computation Conference. 407-415. 
 
 BibTeX entry:
 ```bibtex
-Not yet available
+@inproceedings{lipschutz2025rule,
+  title={Rule-based Machine Learning: Separating Rule and Rule-Set Pareto-Optimization for Interpretable Noise-Agnostic Modeling},
+  author={Lipschutz-Villa, Gabriel and Bandhey, Harsh and Yin, Ruonan and Kamoun, Malek and Urbanowicz, Ryan},
+  booktitle={Proceedings of the Genetic and Evolutionary Computation Conference},
+  pages={407--415},
+  year={2025}
+}
+```
+
+Gabe Lipschutz-Villa, Harsh Bandhey, Khoi Dinh, Michael Heider, Malek Kamoun, Ryan Urbanowicz. 2026. [Phase-Alternation and Tree-Initialization to Facilitate Interpretable Rule-based Machine Learning](https://dl.acm.org/doi/10.1145/3712256.3726461) GECCO '26: Proceedings of the Genetic and Evolutionary Computation Conference.(In Press) 
+
+BibTeX entry:
+```bibtex
+Not Yet Available
 ```
 
 ***
@@ -295,9 +311,11 @@ The study was supported by Cedars Sinai Medical Center and NIH grants R01 AI1730
 
 ### Code Contributors
 * Ryan Urbanowicz - Developed algorithm concepts, implemented algorithm, led debugging and evaluation
-* Gabriel Lipschutz-Villa - Prototyped implementation of Phase II, model initialization strategies, and phase alternation (in development)
-* Harsh Bandhey - Prototyped implementation of random forest rule initialization (in development)
-* Khoi Dinh - Prototyped implementation of model interpretation visualization 
+* Gabriel Lipschutz-Villa - Prototyped implementation of Phase II, model initialization strategies, and phase alternation 
+* Harsh Bandhey - Prototyped implementation of random forest rule initialization 
+* Akshita Islam - Further prototyped random forest rule initialization
+* Khoi Dinh - Prototyped implementation of model interpretation visualization, and contributions to tree-initialization and LLM explanation translator
 * Ruonan Yin - Developed strategy for calculating distance from the rule-pareto front for Phase I rule fitness
 * Robert Zhang - Prototyped strategy for rule batch-learning (adapted for HEROS)
+
 
