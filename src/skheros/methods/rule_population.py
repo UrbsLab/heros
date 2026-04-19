@@ -458,16 +458,16 @@ class RULE_POP:
         """ Applies probabalistic deletion to the rule population to maintain maximum population size."""
         heros.timer.deletion_time_start()
         while self.micro_pop_count > heros.pop_size:
-            self.delete_rule(random)
+            self.delete_rule(random,heros)
         heros.timer.deletion_time_stop()
     
 
-    def delete_rule(self,random):
+    def delete_rule(self,random,heros):
         """ Probabilistically identifies a rule to delete with roulette wheel selection, and deletes it at the micro-rule level."""
         vote_sum = 0.0
         vote_list = []
         for rule in self.pop_set:
-            vote = rule.get_deletion_vote()
+            vote = rule.get_deletion_vote(heros)
             vote_sum += vote
             vote_list.append(vote)
         i = 0
@@ -885,8 +885,9 @@ class RULE_POP:
                 rule_obj.update_rule_fitness(heros)
             identical_rule = self.search_pop_for_identical_rule(rule_obj)
             if identical_rule is not None:
-                identical_rule.update_numerosity(1)
-                self.micro_pop_count += 1
+                pass # NEW 4/18/26 only a single copy of each rule is used for initialization (i.e. numerosity = 1)
+                #identical_rule.update_numerosity(1)
+                #self.micro_pop_count += 1
             else:
                 rule_obj.assign_ID(self.ID_counter)
                 self.pop_set.append(rule_obj)

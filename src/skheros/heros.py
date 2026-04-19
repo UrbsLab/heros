@@ -22,7 +22,7 @@ class HEROS(BaseEstimator, TransformerMixin):
     def __init__(self,outcome_type='class',iterations=100000,pop_size=1000,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,fitness_function='pareto',
                  subsumption='both',rsl=0,feat_track=None,model_iterations=500,model_pop_size=100, model_pop_init = 'target_acc', new_gen=1.0,merge_prob=0.1,
                  rule_pop_init=None,compaction='sub',track_performance=0,model_tracking=False,stored_rule_iterations=None,stored_model_iterations=None,random_state=None,
-                 verbose=False,alternate=5,alternate_mode='equal',feedback=False):
+                 verbose=False,alternate=5,alternate_mode='equal',feedback=False,min_correct_cover=0,over_specific_removal=True):
         """
         A Scikit-Learn compatible implementation of the 'Heuristic Evolutionary Rule Optimization System' (HEROS) Algorithm.
         ..
@@ -55,6 +55,8 @@ class HEROS(BaseEstimator, TransformerMixin):
         :param alternate: Number of phase alternations between Phase I and Phase II (must be int >= 0)
         :param alternate_mode: Experimental parameter to specify the method for determining when to alternate between Phase I and Phase II (must be 'limit', 'converge', 'equal', or None)
         :param feedback: TBD
+        :param min_correct_cover: Minimum number of correctly covered instances in a rule (Must be integer greater than 0)
+        :param over_specific_removal: Automatic removal of rules with high liklihood of being overspecific in most problems. (Boolean)
    
         """
         # Basic run parameter checks
@@ -139,7 +141,17 @@ class HEROS(BaseEstimator, TransformerMixin):
 
         if not alternate_mode == 'limit' and not alternate_mode == 'converge' and not alternate_mode == 'equal' and not alternate_mode is None and not alternate_mode == 'None':
             raise Exception("'alternate_mode' param must be 'limit', 'converge', 'equal', or None")
-        
+
+        if not self.check_is_int(min_correct_cover) and not rsl == 0:
+            raise Exception("'min_correct_cover' param must be zero or a positive int")
+
+        if over_specific_removal == 'True' or over_specific_removal == True:
+            over_specific_removal = True
+        if over_specific_removal == 'False' or over_specific_removal == False:
+            over_specific_removal = False
+        if not self.check_is_bool(over_specific_removal):
+            raise Exception("'over_specific_removal' param must be a boolean, i.e. True or False")
+
         #Initialize global variables
         self.outcome_type = str(outcome_type)
         self.iterations = int(iterations)
@@ -181,6 +193,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         else:
             self.random_state = int(random_state)
         self.verbose = verbose
+        self.over_specific_removal = over_specific_removal
         self.use_ek = False #internal parameter - set to False by default, but switched to true of ek scores passed to fit()
         self.y_encoding = None
 
@@ -193,6 +206,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         #Experimental Parameters 
         #self.top_models = [] #for tracking model performance increase over iterations !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         self.feedback = feedback 
+        self.min_correct_cover = min_correct_cover
         self.training_weights = []
         self.phase_one_limit = 5000
         self.phase_one_ratio = 0
