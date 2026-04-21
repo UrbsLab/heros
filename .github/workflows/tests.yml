@@ -33,4 +33,4 @@ jobs:
 
       - name: Run pytest
         run: |
-          pytest --disable-warnings --maxfail=1 --tb=short
+          pytest src --disable-warnings --maxfail=1 --tb=short
