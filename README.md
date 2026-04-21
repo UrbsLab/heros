@@ -267,7 +267,14 @@ Most recently, in 2024, we released [Survival-LCS](https://github.com/UrbsLab/su
 ## Citing HEROS
 If you use HEROS in a scientific publication, cite the following paper(s):
 
-Gabe Lipschutz-Villa, Harsh Bandhey, Ruonan Yin, Malek Kamoun, Ryan Urbanowicz. 2025. [Rule-based Machine Learning: Separating Rule and Rule-Set Pareto-Optimization for Interpretable Noise-Agnostic Modeling](https://dl.acm.org/doi/10.1145/3712256.3726461) GECCO '25: Proceedings of the Genetic and Evolutionary Computation Conference. 407-415. 
+1. Gabe Lipschutz-Villa, Harsh Bandhey, Khoi Dinh, Michael Heider, Malek Kamoun, Ryan Urbanowicz. 2026. Phase-Alternation and Tree-Initialization to Facilitate Interpretable Rule-based Machine Learning. GECCO '26: Proceedings of the Genetic and Evolutionary Computation Conference. (In Press) 
+
+BibTeX entry:
+```bibtex
+Not Yet Available
+```
+
+2. Gabe Lipschutz-Villa, Harsh Bandhey, Ruonan Yin, Malek Kamoun, Ryan Urbanowicz. 2025. [Rule-based Machine Learning: Separating Rule and Rule-Set Pareto-Optimization for Interpretable Noise-Agnostic Modeling](https://dl.acm.org/doi/10.1145/3712256.3726461) GECCO '25: Proceedings of the Genetic and Evolutionary Computation Conference. 407-415. 
 
 BibTeX entry:
 ```bibtex
@@ -280,12 +287,7 @@ BibTeX entry:
 }
 ```
 
-Gabe Lipschutz-Villa, Harsh Bandhey, Khoi Dinh, Michael Heider, Malek Kamoun, Ryan Urbanowicz. 2026. [Phase-Alternation and Tree-Initialization to Facilitate Interpretable Rule-based Machine Learning](https://dl.acm.org/doi/10.1145/3712256.3726461) GECCO '26: Proceedings of the Genetic and Evolutionary Computation Conference.(In Press) 
 
-BibTeX entry:
-```bibtex
-Not Yet Available
-```
 
 ***
 <a id="item-eight"></a>
@@ -307,7 +309,7 @@ Commercial entities or for commercial use of the Software: please contact CSTech
 ***
 <a id="item-eleven"></a>
 ## Acknowledgements
-The study was supported by Cedars Sinai Medical Center and NIH grants R01 AI173095, U01 AG066833 and P30 AG0373105. We thank Drs. John Holmes and Jason Moore for their mentorship and and research insights regarding rule-based machine learning for biomedicine, and Robert Zhang, who implemented scikit-ExSTraCS and prototyped an early batch-learning version of ExSTraCS. Additional thanks to Jay Moran for his technical expertise and assistance. 
+The study was supported by Cedars Sinai Medical Center and NIH grants R01 AI173095, U01 AG066833, P30 AG0373105, and P01 HL160471. We thank Drs. John Holmes and Jason Moore for their mentorship and and research insights regarding rule-based machine learning for biomedicine, and Robert Zhang, who implemented scikit-ExSTraCS and prototyped an early batch-learning version of ExSTraCS. Additional thanks to Jay Moran for his technical expertise and assistance.
 
 ### Code Contributors
 * Ryan Urbanowicz - Developed algorithm concepts, implemented algorithm, led debugging and evaluation

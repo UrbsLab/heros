@@ -66,9 +66,9 @@ def main(argv):
 
     # Job python file (must exist in writepath)
     job_py = "job_heros_table.py"
-    if not job_py.exists():
-        print(f"[ERR] job file not found: {job_py}")
-        return 2
+    #if not job_py.exists():
+    #    print(f"[ERR] job file not found: {job_py}")
+    #    return 2
 
     groups_csv = ",".join([g.strip() for g in args.groups.split(",") if g.strip()])
     if not groups_csv:

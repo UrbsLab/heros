@@ -1,4 +1,4 @@
-import pytest
+#import pytest
 import os
 import pandas as pd
 from src.skheros.heros import HEROS
