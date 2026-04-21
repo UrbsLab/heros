@@ -1,4 +1,4 @@
-import pytest
+#import pytest
 import os
 import pandas as pd
 from src.skheros.heros import HEROS
@@ -99,7 +99,7 @@ def test_mixed_feature_types():
     print(ek)
     heros = HEROS(outcome_type='class',iterations=20000,pop_size=500,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,
                 fitness_function='pareto',subsumption='both',rsl=0,feat_track=None, model_iterations=40,
-                model_pop_size=100,model_pop_init='target_acc',new_gen=1.0,merge_prob=0.1,rule_pop_init=None,compaction='sub',
+                model_pop_size=100,model_pop_init='target_acc',new_gen=1.0,merge_prob=0.1,rule_pop_init="dt",compaction='sub',
                 track_performance=1000,model_tracking=True,stored_rule_iterations=None,stored_model_iterations=None,random_state=42,verbose=True)
     heros = heros.fit(X, y, None, cat_feat_indexes=cat_feat_indexes, ek=ek)
     #Select best model from the front

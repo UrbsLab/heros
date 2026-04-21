@@ -1,4 +1,5 @@
 import copy
+import struct
 
 class RULE:
     def __init__(self,heros):
@@ -38,6 +39,7 @@ class RULE:
         self.ave_match_set_size = 1 #average size of the match sets in which this rule was included across all training instances - used in deletion to promote niching
         self.deletion_prob = None #probability of rule being selected for deletion
         self.prediction = None
+        self.encoding = None
 
     def __eq__(self, other):
         return isinstance(other, RULE) and self.ID == other.ID
@@ -69,6 +71,7 @@ class RULE:
             self.quantitative_range_check_fix(self.action,outcome_state,random,np)  
         else:
             print("Error: Outcome type undefined.")
+        #self.encoding = self.encode_rule_binary(heros.env.num_feat)
 
 
     def initialize_by_parent(self,parent_rule,heros):
@@ -86,6 +89,7 @@ class RULE:
         self.numerosity = 1 
         self.ave_match_set_size = copy.deepcopy(parent_rule.ave_match_set_size) 
         self.deletion_prob = None 
+        #self.encoding = self.encode_rule_binary(heros.env.num_feat)
 
 
     def match(self, instance_state, heros):
@@ -139,6 +143,7 @@ class RULE:
                 if feat in o2_condition_indexes:
                     feature_occurence += 2
                 # Perform exchange
+                """
                 if feature_occurence == 1: #feature only in o1 (was self)
                     rule_position = self.condition_indexes.index(feat)
                     other_rule.condition_values.append(self.condition_values.pop(rule_position))
@@ -149,6 +154,24 @@ class RULE:
                     self.condition_values.append(other_rule.condition_values.pop(rule_position))
                     self.condition_indexes.append(feat)
                     other_rule.condition_indexes.remove(feat)
+                """
+                #Reproducibility FIX Reccommended by Google Gemini
+                if feature_occurence == 1: # feature only in self, move to other
+                    idx = self.condition_indexes.index(feat)
+                    val = self.condition_values.pop(idx)
+                    self.condition_indexes.pop(idx) # Use pop(idx) here too! 
+                    
+                    other_rule.condition_indexes.append(feat)
+                    other_rule.condition_values.append(val)
+
+                elif feature_occurence == 2: # feature only in other, move to self
+                    idx = other_rule.condition_indexes.index(feat)
+                    val = other_rule.condition_values.pop(idx)
+                    other_rule.condition_indexes.pop(idx) # Keep them in sync!
+                    
+                    self.condition_indexes.append(feat)
+                    self.condition_values.append(val)
+
                 else: #feature in both o1 and o2
                     if not is_categorical: #if quantiative feature
                         feat_index_1 = self.condition_indexes.index(feat)
@@ -514,7 +537,7 @@ class RULE:
 
     def reestablish_rule(self,rule_summary,heros):
         #[rule.condition_indexes, rule.condition_values, rule.action, rule.instance_outcome_count,rule.ID, rule.birth_iteration]
-        self.ID = rule_summary[4] #unique identifier for this rule (used in model evolution and does not guarantee global uniqueness)
+        self.ID = rule_summary[4]
         self.birth_iteration = rule_summary[5]
         self.condition_indexes = rule_summary[0] #list of feature indexes from the dataset that are 'specified' in this rule
         self.condition_values = rule_summary[1] #list of feature values or value-ranges corresponding to the feature indexes in self.feature_index_list
@@ -522,6 +545,7 @@ class RULE:
         self.match_cover = sum(self.instance_outcome_count.values())
         # Assign class that yields highest rule accuracy - regardless of current target instance class
         self.instance_outcome_prop = copy.deepcopy(self.instance_outcome_count)
+        #self.ID = self.encode_rule_binary(heros.env.num_feat)
         #Convert class counts first into class accuracies then into 'useful' accuracies to take class imbalance into account
         for each in self.instance_outcome_prop:
             self.instance_outcome_prop[each] /= self.match_cover
@@ -579,7 +603,7 @@ class RULE:
         if target_instance_outcome in candidate_actions: #go with the current target instance class if there is a tie for best class
             self.action = target_instance_outcome
         else:
-            self.action = random.choice(candidate_actions)
+            self.action = random.choice(sorted(candidate_actions))
         self.correct_cover = self.instance_outcome_count[self.action]
         # Calculate rule accuracy ***************************
         try:
@@ -606,9 +630,12 @@ class RULE:
             if self.fitness is None: #Pareto front only has (0,0) for useful_accuracy and useful_coverage
                 self.fitness = pow(self.accuracy, heros.nu)
             if front_updated: #all rule-fitnesses will be re-calculated externally
+                #self.encoding = self.encode_rule_binary(heros.env.num_feat)
                 return True
         else:
             print("Fitness metric not available.")
+        
+        #self.encoding = self.encode_rule_binary(heros.env.num_feat)
         return False
     
 
@@ -746,6 +773,7 @@ class RULE:
                         return False #final check yields inequality
                 return True #rules are equivalent
         return False #initial or secondary checks yield inequality
+        #return self.encoding == other_rule.encoding
     
 
     def get_deletion_vote(self):
@@ -812,6 +840,62 @@ class RULE:
         translation += " THEN: predict outcome '"+str(self.action)+"' with "+str(100 * self.instance_outcome_prop[self.action])+"% confidence based on "+str(self.match_cover)+' matching training instances ('+str(round(100*self.match_cover /float(heros.env.num_instances),2))+"% of training instances)."
         print(translation)
 
+    def to_explanation_dict(self, feature_names, heros):
+        """Return a structured, LLM-friendly explanation of this rule.
+
+        The structure includes both machine- and human-readable fields for conditions and
+        key rule statistics useful for downstream reasoning layers.
+        """
+        # Ensure deterministic ordering of conditions
+        self.order_rule_conditions()
+        conditions = []
+        for i in range(len(self.condition_indexes)):
+            feature_index = self.condition_indexes[i]
+            value = self.condition_values[i]
+            is_categorical = (heros.env.feat_types[feature_index] == 1)
+            if is_categorical:
+                human = {
+                    "text": str(feature_names[feature_index])+" = "+str(value)
+                }
+                cond = {
+                    "feature_index": feature_index,
+                    "feature_name": feature_names[feature_index],
+                    "type": "categorical",
+                    "operator": "=",
+                    "value": value,
+                    "human_readable": human["text"]
+                }
+            else:
+                # quantitative range (min, max)
+                range_min, range_max = value[0], value[1]
+                human_text = str(feature_names[feature_index])+" in ["+str(range_min)+", "+str(range_max)+"]"
+                cond = {
+                    "feature_index": feature_index,
+                    "feature_name": feature_names[feature_index],
+                    "type": "quantitative",
+                    "operator": "in_range",
+                    "min": range_min,
+                    "max": range_max,
+                    "human_readable": human_text
+                }
+            conditions.append(cond)
+
+        explanation = {
+            "rule_id": getattr(self, "ID", None),
+            "action": self.action,
+            "instance_outcome_proportions": dict(self.instance_outcome_prop) if hasattr(self, "instance_outcome_prop") else {},
+            "numerosity": self.numerosity,
+            "fitness": self.fitness,
+            "accuracy": self.accuracy,
+            "match_cover": self.match_cover,
+            "correct_cover": self.correct_cover,
+            "average_match_set_size": self.ave_match_set_size,
+            "deletion_probability": self.deletion_prob,
+            "birth_iteration": self.birth_iteration,
+            "conditions": conditions
+        }
+        return explanation
+
 
     def order_rule_conditions(self):
         """ Order the rule conditions by increasing feature index; keeping the ordering consistent between condition_indexes and condition_values."""
@@ -826,3 +910,71 @@ class RULE:
         # Convert the tuples back to lists
         self.condition_indexes = list(sorted_list1)
         self.condition_values = list(sorted_list2)
+
+    """def encode_rule_binary(self, num_features):
+        # --- 1. Bitmask ---
+        bitmask = ['0'] * num_features
+        for idx in self.condition_indexes:
+            bitmask[idx] = '1'
+        bitmask_str = ''.join(bitmask)
+
+        # --- 2. Type indicators + values ---
+        type_indicators = ['0'] * num_features  # all values are int → '0'
+        value_bits = ['00'] * num_features      # pre-fill with 2-bit zeros
+
+        # Sorted index-value pairs for consistent position
+        index_to_value = dict(zip(self.condition_indexes, self.condition_values))
+        for i in range(num_features):
+            if i in index_to_value:
+                val = index_to_value[i]
+                if not (0 <= val <= 3):
+                    raise ValueError(f"Value {val} at index {i} exceeds 2-bit range.")
+                value_bits[i] = format(val, '02b')  # 2 bits per int
+
+        type_str = ''.join(type_indicators)
+        values_str = ''.join(value_bits)
+
+        # --- 3. Action (assumed 2-bit) ---
+        if not (0 <= self.action <= 3):
+            raise ValueError(f"Action value {self.action} exceeds 2-bit range.")
+        action_bits = format(self.action, '02b')
+
+        # --- 4. Combine everything ---
+        full_binary_str = bitmask_str + type_str + values_str + action_bits
+        return full_binary_str"""
+    
+    def encode_rule_binary(self, num_features):
+        "Deterministically encodes a rule into a binary string."
+        # --- 1. Bitmask: fixed order for feature indexes ---
+        bitmask = ['0'] * num_features
+        for idx in sorted(self.condition_indexes):  # sort to ensure order
+            bitmask[idx] = '1'
+        bitmask_str = ''.join(bitmask)
+        # --- 2. Condition types and values ---
+        # Pair condition values with sorted condition indexes
+        sorted_pairs = sorted(zip(self.condition_indexes, self.condition_values), key=lambda x: x[0])
+        encoded_values = []
+        type_indicators = []
+        for _, value in sorted_pairs:
+            if isinstance(value, int):
+                type_indicators.append('0')
+                encoded_values.append(format(value, '032b'))
+            elif isinstance(value, tuple) and len(value) == 2:
+                type_indicators.append('1')
+                min_binary = format(struct.unpack('>I', struct.pack('>f', value[0]))[0], '032b')
+                max_binary = format(struct.unpack('>I', struct.pack('>f', value[1]))[0], '032b')
+                encoded_values.append(min_binary + max_binary)
+            #else:
+                #raise ValueError(f”Unsupported value type: {value}“)
+        type_str = ''.join(type_indicators)
+        # --- 3. Action: fixed 32-bit integer ---
+        action_binary = format(self.action, '032b')
+        # --- 4. Combine all sections into final binary string ---
+        full_binary_str = (
+            bitmask_str +
+            type_str +
+            ''.join(encoded_values) +
+            action_binary
+        )
+        # --- 5. Return the full binary string ---
+        return full_binary_str

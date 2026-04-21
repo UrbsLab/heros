@@ -19,8 +19,10 @@ from .methods.model_prediction import MODEL_PREDICTION
 #import inspect #temporary testing
 
 class HEROS(BaseEstimator, TransformerMixin):
-    def __init__(self, outcome_type='class',iterations=100000,pop_size=1000,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,fitness_function='pareto',
-                 subsumption='both',rsl=0,feat_track=None,model_iterations=500,model_pop_size=100, model_pop_init = 'target_acc', new_gen=1.0,merge_prob=0.1,rule_pop_init=None,compaction='sub',track_performance=0,model_tracking=False,stored_rule_iterations=None,stored_model_iterations=None,random_state=None,verbose=False):
+    def __init__(self,outcome_type='class',iterations=100000,pop_size=1000,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,fitness_function='pareto',
+                 subsumption='both',rsl=0,feat_track=None,model_iterations=500,model_pop_size=100, model_pop_init = 'target_acc', new_gen=1.0,merge_prob=0.1,
+                 rule_pop_init=None,compaction='sub',track_performance=0,model_tracking=False,stored_rule_iterations=None,stored_model_iterations=None,random_state=None,
+                 verbose=False,alternate=5,alternate_mode='equal',feedback=False):
         """
         A Scikit-Learn compatible implementation of the 'Heuristic Evolutionary Rule Optimization System' (HEROS) Algorithm.
         ..
@@ -50,7 +52,10 @@ class HEROS(BaseEstimator, TransformerMixin):
         :param stored_model_iterations: specifies iterations where a copy of the model population is stored (Must be positive integers separated by commas or None)
         :param random_state: the seed value needed to generate a random number
         :param verbose: Boolean flag to run in 'verbose' mode - display run details
-        :param init: model population initialization method 
+        :param alternate: Number of phase alternations between Phase I and Phase II (must be int >= 0)
+        :param alternate_mode: Experimental parameter to specify the method for determining when to alternate between Phase I and Phase II (must be 'limit', 'converge', 'equal', or None)
+        :param feedback: TBD
+   
         """
         # Basic run parameter checks
         if not outcome_type == 'class' and not outcome_type == 'quant':
@@ -103,7 +108,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         if not self.check_is_float(merge_prob) or merge_prob < 0 or merge_prob > 1:
             raise Exception("'merge_prob' param must be float from 0 - 1")
 
-        if not rule_pop_init == 'load' and not rule_pop_init == 'dt' and not rule_pop_init is None and not rule_pop_init == 'None':
+        if not rule_pop_init == 'load' and not rule_pop_init == 'dt' and not rule_pop_init == 'dt_verbose' and not rule_pop_init == 'dt_bstrap' and not rule_pop_init is None and not rule_pop_init == 'None':
             raise Exception("'rule_pop_init' param must be 'load', 'dt', or None")
 
         if not compaction == 'sub' and not compaction is None and not compaction == 'None':
@@ -128,6 +133,12 @@ class HEROS(BaseEstimator, TransformerMixin):
             verbose = False
         if not self.check_is_bool(verbose):
             raise Exception("'verbose' param must be a boolean, i.e. True or False")
+
+        if not self.check_is_int(alternate) or alternate < 0:
+            raise Exception("'alternate' param must be a non-negative integer")
+
+        if not alternate_mode == 'limit' and not alternate_mode == 'converge' and not alternate_mode == 'equal' and not alternate_mode is None and not alternate_mode == 'None':
+            raise Exception("'alternate_mode' param must be 'limit', 'converge', 'equal', or None")
         
         #Initialize global variables
         self.outcome_type = str(outcome_type)
@@ -172,7 +183,21 @@ class HEROS(BaseEstimator, TransformerMixin):
         self.verbose = verbose
         self.use_ek = False #internal parameter - set to False by default, but switched to true of ek scores passed to fit()
         self.y_encoding = None
+
+        #New Parameters
+        self.alternate = int(alternate)
+        self.alternate = alternate
+        self.alternate_mode = alternate_mode
+        self.curr_alt = 0 #internal parameter to track current number of alternations between Phase I and Phase II
+
+        #Experimental Parameters 
         #self.top_models = [] #for tracking model performance increase over iterations !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        self.feedback = feedback 
+        self.training_weights = []
+        self.phase_one_limit = 5000
+        self.phase_one_ratio = 0
+        self.phase_two_convergence = 5
+        self.phase_two_limit = 100
 
     @staticmethod
     def check_is_int(num):
@@ -308,9 +333,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         # Data Preparation
         X, y, row_id, cat_feat_indexes, pop_df, ek = self.check_inputs(X, y, row_id, cat_feat_indexes, pop_df, ek) #check loaded data
         self.env = DATA_MANAGE(X, y, row_id, cat_feat_indexes, ek, self) #initialize the data environment; data formatting, summary statistics, and expert knowledge preparation
-        # Memory Cleanup
-        X = None
-        y = None
+       
         # Initialize Objects
         self.iteration = 0
         self.rule_population = RULE_POP() # Initialize rule sets
@@ -328,65 +351,179 @@ class HEROS(BaseEstimator, TransformerMixin):
         self.tracking = RULE_TRACK(self)
 
         # Initialize Rule Population (if specified)
+        verbose_debug_tree_init = False #DEBUG FLAG
         if self.rule_pop_init == 'load': # Initialize rule population based on loaded rule population
             self.rule_population.load_rule_population(pop_df,self,random,np)
-        elif self.rule_pop_init == 'dt': # Train and utilize decision tree models to initialize rule population (based on individual tree 'branches')
-            print("Not yet implemented.")
-            pass
+        elif self.rule_pop_init == 'dt':
+            self.rule_population.tree_init_population(X,y,self,random,np,verbose_debug_tree_init)
+            print('PopSize After Tree Initialization ' +str(len(self.rule_population.pop_set))) #DEBUG
+            print('Micro PopSize After Tree Initialization ' +str(self.rule_population.micro_pop_count)) #DEBUG
+        elif self.rule_pop_init == 'dt_bstrap':
+            self.rule_population.tree_init_population(X,y,self,random,np,verbose_debug_tree_init, bstrap=True)
+            print('PopSize After Tree Initialization ' +str(len(self.rule_population.pop_set))) #DEBUG
+            print('Micro PopSize After Tree Initialization ' +str(self.rule_population.micro_pop_count)) #DEBUG
         else: # No rule population initialization other than standard LCS-algorithm-style 'covering' mechanism.
             pass
+
+        # Clean/Compact Initialized Population
+        if len(self.rule_population.pop_set) > 1:
+            self.timer.compaction_time_start()
+            compact = COMPACT(self)
+            self.sufficient_rule_pop_remain = True
+            self.sufficient_rule_pop_remain = compact.basic_rule_cleaning(self)
+            if self.compaction == 'sub' and self.sufficient_rule_pop_remain:
+                self.sufficient_rule_pop_remain = compact.subsumption_compation(self)
+            compact.clear_pop_copy()
+            self.timer.compaction_time_stop()
+
+        # Archive tree-intialized rule population for external examination
+        if self.rule_pop_init == 'dt' or self.rule_pop_init == 'dt_bstrap':
+            self.rule_population.archive_rule_pop(0)
+
+        # Memory Cleanup
+        X = None
+        y = None
         self.timer.init_time_stop() #initialization time tracking
-        # RUN RULE-LEARNING TRAINING ITERATIONS **************************************************************
-        while self.iteration < self.iterations:
+        print("HEROS Evolution Beginning!")
+
+        #CODE TO RUN PHASE I ONLY ----------------------------------------------------
+        if self.model_iterations > 1: #Apply Phase II
+            # Initialize model population and 
+            self.model_population = MODEL_POP() # Initialize rule sets
+            self.model_iteration = 0
+        else: 
+            print("Running HEROS with Phase I only (no model iterations).")
+            while self.iterations - self.iteration > 0: 
+                self.phase_one()
+            print("HEROS (Phase 1) run complete!")
+            print("Random Seed Check - End: "+ str(random.random()))
+            return self
+        #-----------------------------------------------------------------------------
+
+        while (self.iterations - self.iteration > 0) and (self.model_iterations - self.model_iteration > 1):
+            self.phase_one()
+            self.tracking.alternations.append(self.iteration)
+
+            if self.model_iteration == 0:
+                self.model_population.initialize_model_population(
+                    self, random, self.model_pop_init
+                )
+            
+            self.phase_two()
+            self.model_population.model_alterations.append(self.model_iteration)
+            self.curr_alt += 1
+
+        while self.iterations - self.iteration > 0:
+            self.phase_one()
+
+        # 3) Drain *all but one* of the remaining Phase II calls
+        while (self.model_iterations - self.model_iteration > 0):
+            self.phase_two()
+
+    
+        #self.env.clear_data_from_memory()        
+        return self
+    
+
+    
+    def phase_one(self):
+
+        # CONVERGENCE ON NON-NEW DISCOVERY?? CHECKING WITH ARCHIVE
+        phase_one_stop = True
+        i = 0
+        improvement = 0
+        """ (HEROS PHASE 1) RUN RULE-LEARNING TRAINING ITERATIONS"""
+        while phase_one_stop:
             # Get current training instance
-            instance = self.env.get_instance()
+            if i % 2 == 0 or self.model_iteration == 0 or self.feedback == False:
+                instance = self.env.get_instance()
+            else: 
+                instance = self.env.get_weighted_instance(self)
             #print('Iteration: '+str(self.iteration)+' RulePopSize: '+str(len(self.rule_population.pop_set)))
             # Run a single training iteration focused on the current training instance
             #print(instance)
-            self.run_iteration(instance)
-            # Evaluation tracking ***************************************************
-            if self.track_performance > 0:
-                if (self.iteration + 1) % self.track_performance == 0:
-                    self.tracking.update_performance_tracking(self.iteration,self)
-                    if self.verbose:
-                        self.tracking.print_tracking_entry()
-            #Pause learning to conduct a complete evaluation of the current rule population
-            if self.stored_rule_iterations != None and (self.iteration + 1) in self.stored_rule_iterations:
-                #Archive current rule population
-                if self.verbose:
-                    print('Archiving: '+str(self.iteration+1))
-                self.rule_population.archive_rule_pop(self.iteration+1)
-                self.timer.archive_rule_pop(self.iteration+1)
+
+            if self.run_iteration(instance) == 1: 
+                improvement += 1
+            else: 
+                improvement = 0
+            
+
+            #if self.iteration == 5:
+            #    x = 5/0
+            
             # Increment iteration and training instance
             self.iteration += 1
             self.env.next_instance()
+            i += 1
 
-        # RULE COMPACTION *********************************************
-        self.timer.compaction_time_start()
-        compact = COMPACT(self)
-        sufficient_rule_pop_remain = True
-        sufficient_rule_pop_remain = compact.basic_rule_cleaning(self)
-        if self.compaction == 'sub' and sufficient_rule_pop_remain:
-            sufficient_rule_pop_remain = compact.subsumption_compation(self)
-        compact.clear_pop_copy()
-        self.timer.compaction_time_stop()
+            ## SWITCH EVALUATION AND STOP CRITERIA AND ADD COMPACTION IN BETWEEN
 
-        # BATCH FEATURE TRACKING **************************************
+            ### STOP CRITERIA CHECK
+            if self.alternate_mode == "limit": #EXPERIMENTAL 
+                if i >= self.phase_one_limit or self.iteration >= self.iterations:
+                    phase_one_stop = False
+            elif self.alternate_mode == "converge": #EXPERIMENTAL: PHASE I CONVERGENCE 
+                # IMPLEMENT
+
+                # IDEAS: 
+                # CHECK AT EACH ITERATION IF OFFSPRING RULE IMPROVES MATCH SET PARETO FRONT
+                if improvement >= 250 or self.iteration >= self.iterations: 
+                    phase_one_stop = False
+            elif self.alternate_mode == "equal": #EQUAL DISTRIBUTION OF RESOURCES ACROSS AMOUNT OF ALTERNATION 
+                if i >= self.iterations / self.alternate:
+                    phase_one_stop = False
+            else: #DEFAULT SEQUENTIAL HEROS 
+                if i >= self.iterations:
+                    phase_one_stop = False
+
+            if phase_one_stop == False: 
+                # RULE COMPACTION *********************************************
+                self.timer.compaction_time_start()
+                compact = COMPACT(self)
+                self.sufficient_rule_pop_remain = True
+                self.sufficient_rule_pop_remain = compact.basic_rule_cleaning(self)
+                if self.compaction == 'sub' and self.sufficient_rule_pop_remain:
+                    self.sufficient_rule_pop_remain = compact.subsumption_compation(self)
+                compact.clear_pop_copy()
+                self.timer.compaction_time_stop()
+                
+
+            # Evaluation tracking ***************************************************
+            if self.track_performance > 0:
+                if (self.iteration) % self.track_performance == 0:
+                    self.tracking.update_performance_tracking(self.iteration - 1,self)
+                    if self.verbose:
+                        self.tracking.print_tracking_entry()
+            #Pause learning to conduct a complete evaluation of the current rule population
+            if self.stored_rule_iterations != None and (self.iteration) in self.stored_rule_iterations:
+                #Archive current rule population
+                if self.verbose:
+                    print('Archiving: '+str(self.iteration))
+                self.rule_population.archive_rule_pop(self.iteration)
+                self.timer.archive_rule_pop(self.iteration)
+
+        
+
+        ### THIS SHOULD HAPPEN AT THE VERY END OF LAST PHASE I RUN # BATCH FEATURE TRACKING **************************************
         if self.feat_track == 'end':
             self.FT.batch_calculate_ft_scores(self)
         self.timer.phase1_time_stop()
         if self.verbose:
             print("HEROS (Phase 1) run complete!")
             print("Number of Unique Rules Identified: "+str(len(self.rule_population.explored_rules)))
+            print("Number of Iterations Used:" + str(i))
             #print(self.rule_population.explored_rules)
+        self.phase_one_ratio = float(i/self.iterations)
 
-        # (HEROS PHASE 2) RUN RULE-SET-LEARNING TRAINING ITERATIONS  ********************************************************************
+
+    def phase_two(self):
+        """(HEROS PHASE 2) RUN RULE-SET-LEARNING TRAINING ITERATIONS  """
         self.timer.phase2_time_start()
+        phase_two_stop = True
+
         if self.model_iterations > 1: #Apply Phase II
-            # Initialize model population and 
-            self.model_population = MODEL_POP() # Initialize rule sets
-            self.model_iteration = 0
-            if not sufficient_rule_pop_remain: #abort Phase II and use Phase I rule population as final phase II model. 
+            if not self.sufficient_rule_pop_remain: #abort Phase II and use Phase I rule population as final phase II model. 
                 self.model_population.skip_phase2(self)
                 self.model_population.get_target_model(0) #the 'model' object with the best accuracy, then coverage, then lowest rule count (assumes prior sorting)
                 self.timer.phase2_time_stop()
@@ -396,9 +533,12 @@ class HEROS(BaseEstimator, TransformerMixin):
                     print("Random Seed Check - End: "+ str(random.random()))
 
             else: #Run Phase 2 normally
-                self.model_population.initialize_model_population(self,random,self.model_pop_init)
+                models_prev = []
+                models = []
+                iter = 0 
+                count = 0
                 # RUN MODEL-LEARNING TRAINING ITERATIONS **************************************************************
-                while self.model_iteration < self.model_iterations:
+                while phase_two_stop:
                     #Apply NSGAII-like fast non dominated sorting of models into ranked fronts of models
                     fronts = self.model_population.fast_non_dominated_sort(self)
                     #Calculate crowding distances
@@ -437,7 +577,35 @@ class HEROS(BaseEstimator, TransformerMixin):
                         self.timer.archive_model_pop(self.model_iteration+1)
                     #Next Iteration
                     self.model_iteration += 1
-                #Sort the model population first by accuracy and then by number of rules in model.
+                    #Sort the model population first by accuracy and then by number of rules in model.
+                    self.model_population.sort_model_pop()
+                    self.model_population.identify_models_on_front() #For evaluating all models on the front.
+                    models = set(filter(lambda m: m.model_on_front == 1,self.model_population.pop_set))
+                    if models == models_prev:
+                        iter += 1
+                    else:
+                        iter = 0
+                    #print(iter)
+                    count += 1
+                    models_prev = models
+
+
+                    # STOP CRITERIA CHECK 
+                    if self.alternate_mode == "limit": #EXPERIMENTAL 
+                        if not (iter < self.phase_two_convergence and count < self.phase_two_limit and self.model_iteration < self.model_iterations - 1):
+                            phase_two_stop = False
+                    elif self.alternate_mode == "converge": #EXPERIMENTAL: PHASE I CONVERGENCE 
+                        ## IMPLEMENT BASED ON PHASE I CONVERGENCE
+                        if count >= int(self.model_iterations * self.phase_one_ratio) or self.model_iteration >= self.model_iterations - 1:
+                            phase_two_stop = False
+                    elif self.alternate_mode == "equal": #EQUAL DISTRIBUTION OF RESOURCES ACROSS AMOUNT OF ALTERNATION (New as of 2026 GECCO Paper)
+                        if count >= self.model_iterations / self.alternate:
+                            phase_two_stop = False
+                    else:  #DEFAULT SEQUENTIAL HEROS (2025 GECCO Paper)
+                        if self.model_iteration >= self.model_iterations:
+                            phase_two_stop = False
+
+                    
                 self.model_population.sort_model_pop()
                 self.model_population.identify_models_on_front() #For evaluating all models on the front.
                 self.model_population.get_target_model(0) #the 'model' object with the best accuracy, then coverage, then lowest rule count (assumes prior sorting)
@@ -447,9 +615,24 @@ class HEROS(BaseEstimator, TransformerMixin):
                     print("HEROS (Phase 2) run complete!")
                     #print("Number of Unique Models Identified: "+str(len(self.model_population.explored_models)))
                     print("Random Seed Check - End: "+ str(random.random()))
-
-        #self.env.clear_data_from_memory()
-        return self
+                instance_weights = [0 for instance in self.env.train_data[0]]
+                
+                for i in range(len(self.env.train_data)):
+                    for model in models: 
+                        instance = self.env.train_data[0][i]
+                        self.model_population.get_target_model(self.model_population.pop_set.index(model))
+                        self.model_population.make_eval_match_set(instance,self)
+                        prediction = MODEL_PREDICTION(self, self.model_population,random)
+                        outcome_prediction = prediction.get_prediction()
+                        if prediction.covered == False: 
+                            instance_weights[i] += 1
+                        else: 
+                            if outcome_prediction == self.env.train_data[1][i]: 
+                                instance_weights[i] -= 1
+                            else: 
+                                instance_weights[i] += 1 
+                normalized_weights = [((weight + len(models))/(2 * len(models))) for weight in instance_weights]
+                self.training_weights = normalized_weights
 
     def run_iteration(self,instance):
         # Make 'Match Set', {M}
@@ -492,7 +675,16 @@ class HEROS(BaseEstimator, TransformerMixin):
             self.timer.feature_track_time_stop()
 
         # Apply Genetic Algorithm To Generate Offspring Rules
-        self.rule_population.genetic_algorithm(instance,self,random,np)
+        new_rules = self.rule_population.genetic_algorithm(instance,self,random,np)
+
+        result = None 
+
+        #if self.alternate_mode == "converge":
+        #    if self.offspring_improves(new_rules):
+        #        result = 0
+        #    else: 
+        #        result = 1
+            
 
         # Apply Rule Deletion
         self.rule_population.deletion(self,random)
@@ -500,8 +692,20 @@ class HEROS(BaseEstimator, TransformerMixin):
         #Clear Match and Correct Sets
         self.rule_population.clear_sets()
 
+        return result
 
-    def predict_explanation(self, x, feature_names, whole_rule_pop=False, target_model=0):
+    def offspring_improves(self, offspring_list):
+        best_idx = max(self.rule_population.match_set, key=lambda r: self.rule_population.pop_set[r].fitness)
+        best_fitness = self.rule_population.pop_set[best_idx].fitness
+        for offspring in offspring_list:
+            if offspring.fitness > best_fitness:
+                return True
+        return False
+                
+
+
+
+    def predict_explanation(self, x, feature_names, whole_rule_pop=False, target_model=0, verbose=True):
         """ Applies model to predict a single instance outcome with full explanation of prediction. """
         # Data point checks ************************
         for value in x:
@@ -518,6 +722,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             outcome_proba = prediction.get_prediction_proba_dictionary()
             outcome_coverage = prediction.get_if_covered()
             match_set = self.rule_population.match_set
+            rule_source = self.rule_population.pop_set
             self.rule_population.clear_sets()
         else:
             self.model_population.get_target_model(target_model)
@@ -528,47 +733,139 @@ class HEROS(BaseEstimator, TransformerMixin):
             outcome_proba = prediction.get_prediction_proba_dictionary()
             outcome_coverage = prediction.get_if_covered()
             match_set = self.model_population.match_set
+            rule_source = self.model_population.target_rule_set
             self.model_population.clear_sets()
 
         # Technical Report of Matching Rules ------------------------------------------
-        print("PREDICTION REPORT ------------------------------------------------------------------")
-        print("Outcome Prediction: "+str(outcome_prediction))
-        print("Model Prediction Probabilities: "+ str(outcome_proba))
-        if outcome_coverage == 0:
-            print("Instance Covered by Model: No")
-        else:
-            print("Instance Covered by Model: Yes")
-        print("Number of Matching Rules: "+str(len(match_set)))
-        # TECHNICAL RULE REPORT
-        #for rule_index in match_set:
-        #    self.model_population.target_rule_set[rule_index].display_key_rule_info()
-        print("PREDICTION EXPLANATION -------------------------------------------------------------")
-        if prediction.majority_class_selection_made:
-            print("Majority class selected since there is probability tie among matching rules, but there is a training majority class")
-        if prediction.random_selection_made:
-            print("Random class selected since there is probability tie among matching rules, but no training majority class")
+        if verbose:
+            print("PREDICTION REPORT ------------------------------------------------------------------")
+            print("Outcome Prediction: "+str(outcome_prediction))
+            print("Model Prediction Probabilities: "+ str(outcome_proba))
+            if outcome_coverage == 0:
+                print("Instance Covered by Model: No")
+            else:
+                print("Instance Covered by Model: Yes")
+            print("Number of Matching Rules: "+str(len(match_set)))
+            # TECHNICAL RULE REPORT
+            #for rule_index in match_set:
+            #    self.model_population.target_rule_set[rule_index].display_key_rule_info()
+            print("PREDICTION EXPLANATION -------------------------------------------------------------")
+            if prediction.majority_class_selection_made:
+                print("Majority class selected since there is probability tie among matching rules, but there is a training majority class")
+            if prediction.random_selection_made:
+                print("Random class selected since there is probability tie among matching rules, but no training majority class")
         if len(match_set) > 0:
             # Sort match set for intuitive ordering
-            match_set =  sorted(match_set, key=lambda i: (self.model_population.target_rule_set[i].numerosity, self.model_population.target_rule_set[i].correct_cover), reverse=True)
+            match_set =  sorted(match_set, key=lambda i: (rule_source[i].numerosity, rule_source[i].correct_cover), reverse=True)
             # Give explanations for matching rules
-            print("Supporting Rules: --------------------")
+            if verbose:
+                print("Supporting Rules: --------------------")
             for rule_index in match_set:
-                if str(self.model_population.target_rule_set[rule_index].action) == str(prediction.prediction):
-                    self.model_population.target_rule_set[rule_index].translate_rule(feature_names,self)
-            print("Contradictory Rules: -----------------")
+                if str(rule_source[rule_index].action) == str(prediction.prediction):
+                    if verbose:
+                        rule_source[rule_index].translate_rule(feature_names,self)
+            if verbose:
+                print("Contradictory Rules: -----------------")
             counter = 0
             for rule_index in match_set:
-                if str(self.model_population.target_rule_set[rule_index].action) != str(prediction.prediction):
-                    self.model_population.target_rule_set[rule_index].translate_rule(feature_names,self)
+                if str(rule_source[rule_index].action) != str(prediction.prediction):
+                    if verbose:
+                        rule_source[rule_index].translate_rule(feature_names,self)
                     counter += 1
-            if counter == 0:
+            if counter == 0 and verbose:
                 print("No contradictory rules matched.")  
         else: # No matching rules
-            if prediction.random_selection_made:
-                print("Random class selected since there are no matching rules and no training majority class")
+            if verbose:
+                if prediction.random_selection_made:
+                    print("Random class selected since there are no matching rules and no training majority class")
+                else:
+                    print("Majority class selected since there are no matching rules, but there is a training majority class")
+        
+        # Build and return structured explanation for programmatic use
+        features_view = [
+            {
+                "feature_index": idx,
+                "feature_name": feature_names[idx],
+                "value": x[idx]
+            }
+            for idx in range(len(x))
+        ]
+
+        supporting_rules = []
+        contradictory_rules = []
+        per_rule_contributions = []
+        for rule_index in match_set:
+            rule_obj = rule_source[rule_index]
+            rule_dict = rule_obj.to_explanation_dict(feature_names, self)
+            # compute this rule's weighted vote contribution (classification only)
+            vote_contrib = {}
+            if hasattr(rule_obj, 'instance_outcome_prop') and isinstance(outcome_proba, dict):
+                for cls, prob in rule_obj.instance_outcome_prop.items():
+                    vote_contrib[cls] = prob * rule_obj.numerosity
+            rule_dict["vote_contribution"] = vote_contrib
+            rule_dict["selected_action_matches_prediction"] = (str(rule_obj.action) == str(outcome_prediction))
+            if str(rule_obj.action) == str(outcome_prediction):
+                supporting_rules.append(rule_dict)
             else:
-                print("Majority class selected since there are no matching rules, but there is a training majority class")
-            
+                contradictory_rules.append(rule_dict)
+            per_rule_contributions.append({
+                "rule_id": getattr(rule_obj, "ID", None),
+                "numerosity": rule_obj.numerosity,
+                "action": rule_obj.action,
+                "vote_contribution": vote_contrib
+            })
+
+        selection_reason = None
+        if prediction.majority_class_selection_made and len(match_set) > 0:
+            selection_reason = "tie_break_by_training_majority"
+        elif prediction.random_selection_made and len(match_set) > 0:
+            selection_reason = "tie_break_random"
+        elif prediction.random_selection_made and len(match_set) == 0:
+            selection_reason = "no_matching_rules_random"
+        elif not prediction.random_selection_made and not prediction.majority_class_selection_made and len(match_set) == 0:
+            selection_reason = "no_matching_rules_training_majority"
+
+        structured = {
+            "outcome_prediction": outcome_prediction,
+            "prediction_probabilities": outcome_proba,
+            "covered": bool(outcome_coverage),
+            "num_matching_rules": len(match_set),
+            "whole_rule_population": bool(whole_rule_pop),
+            "target_model_index": int(target_model) if not whole_rule_pop else None,
+            "selection_reason": selection_reason,
+            "algorithm": {
+                "outcome_type": self.outcome_type,
+                "classes": list(self.env.classes) if hasattr(self.env, 'classes') else None,
+                "voting_scheme": "whole_population" if whole_rule_pop else "top_model_rule_set",
+                "numerosity_sum": getattr(prediction, 'numerosity_sum', None),
+                "tie_breaking": {
+                    "majority_class": bool(getattr(prediction, 'majority_class_selection_made', False)),
+                    "random": bool(getattr(prediction, 'random_selection_made', False))
+                }
+            },
+            "features": features_view,
+            "supporting_rules": supporting_rules,
+            "contradictory_rules": contradictory_rules,
+            "per_rule_contributions": per_rule_contributions,
+            "match_set_rule_ids": [getattr(rule_source[i], 'ID', None) for i in match_set]
+        }
+
+        # A short narrative for user-facing explanation layers
+        try:
+            num_support = len(supporting_rules)
+            num_contra = len(contradictory_rules)
+            coverage_text = "covered" if structured["covered"] else "not covered"
+            tie_text = " with tie broken by training majority" if structured["algorithm"]["tie_breaking"]["majority_class"] else (" with random tie-break" if structured["algorithm"]["tie_breaking"]["random"] else "")
+            narrative = (
+                "Instance is "+coverage_text+" by "+str(structured["num_matching_rules"]) +
+                " rule(s); " + str(num_support) + " support the predicted class '"+str(outcome_prediction)+"' and " +
+                str(num_contra) + " contradict. Prediction made via " + structured["algorithm"]["voting_scheme"] + tie_text + "."
+            )
+            structured["narrative"] = narrative
+        except Exception:
+            structured["narrative"] = None
+
+        return structured
 
     def predict(self, X, whole_rule_pop=False, target_model=0, rule_pop_iter=None, model_pop_iter=None):
         """Scikit-learn required: Apply trained model to predict outcomes of instances. 
@@ -786,7 +1083,7 @@ class HEROS(BaseEstimator, TransformerMixin):
     def get_pop(self):
         """ Return a dataframe of the rule population. """
         self.rule_population.order_all_rule_conditions()
-        pop_df = self.rule_population.export_rule_population()
+        pop_df = self.rule_population.export_rule_population(self.rsl)
         return pop_df
     
     def get_ft(self,feature_names):

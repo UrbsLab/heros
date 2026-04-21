@@ -175,4 +175,5 @@ cython_debug/
 
 #Project specific
 output/
+.DS_Store
 version.py

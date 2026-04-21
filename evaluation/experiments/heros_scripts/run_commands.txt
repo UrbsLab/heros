@@ -1,0 +1,126 @@
+### Run Commands for HEROS Alternation Scheme analyses
+## General Useful Commands
+#-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# module load git
+# git clone --single-branch --branch dev_gabe_to_merge https://github.com/UrbsLab/heros.git
+# pip install -r heros/requirements.txt
+
+##Cluster Space check:
+du -sh folder/ #reports human readable summary of space used in folder 
+##Delete all files of a given type
+find /path/to/folder -type f -name "*.pickle" -delete
+
+#deleting files/folders
+rm -r folder
+
+#copy directory recursively
+cp -r /project/kamoun_shared/output_shared/heros_gecco/output/ExSTraCS_gametes_cv /project/kamoun_shared/output_shared/heros_gecco2/output/
+cp -r /project/kamoun_shared/output_shared/heros_gecco/output/ExSTraCS_multiplexer_cv /project/kamoun_shared/output_shared/heros_gecco2/output/
+cp -r /project/kamoun_shared/output_shared/heros_gecco/output/ExSTraCS_multiplexer_cv_nu10 /project/kamoun_shared/output_shared/heros_gecco2/output/
+#-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+## Cross Validation Partitioning ---------------------------------------------------------------------------------------------
+python run_CV_Partitioner.py --d /project/kamoun_shared/data_shared/heros_sim_data/gametes_data --w /project/kamoun_shared/data_shared/heros_sim_data --o gametes_data_cv --cv 10 --l Class
+python run_CV_Partitioner.py --d /project/kamoun_shared/data_shared/heros_sim_data/multiplexer_data --w /project/kamoun_shared/data_shared/heros_sim_data --o multiplexer_data_cv --cv 10 --l Class
+#-----------------------------------------------------------------------------------------------------------------------------
+
+## MultiSURF Training ---------------------------------------------------------------------------------------------
+python run_multisurf_hpc.py --d /project/kamoun_shared/data_shared/heros_sim_data/multiplexer_data_cv --w /project/kamoun_shared/output_shared/heros_gecco --o multiplexer_cv --cv 10 --m 2000 --ol Class --il InstanceID --el Group --rc LSF --rm 4 --q i2c2_normal
+python run_multisurf_hpc.py --d /project/kamoun_shared/data_shared/heros_sim_data/gametes_data_cv --w /project/kamoun_shared/output_shared/heros_gecco --o gametes_cv --cv 10 --m 2000 --ol Class --il InstanceID --el Model --rc LSF --rm 4 --q i2c2_normal
+#------------------------------------------------------------------------------------------------------------------
+
+SHORT ClUSTER TEST: ------------------------------------------------------------------------------------------------
+
+python run_heros.py --d /project/kamoun_shared/data_shared/heros_sim_data/test_multiplexer_data_cv --w /project/kamoun_shared/output_shared/heros_v0.3_dev --o quicktest --ekf /project/kamoun_shared/output_shared/heros_gecco_2025/output/MultiSURF_multiplexer_cv --ol Class --il InstanceID --el Group --rc LSF --rm 4 --q i2c2_normal --cv 1 --r 1 --m limit --in target_acc --it 10000 --ps 500 --nu 1 --mi 50 --ms 100 --c sub --tp 1000 --sr 500,1000,10000 --sm 5,10,50 --m equal --a 5 --pt dt_bstrap
+
+
+## HEROS 2026 Paper Evaluations
+
+### GAMETES DATA
+python run_heros.py --d /project/kamoun_shared/data_shared/heros_sim_data/gametes_data_cv --w /project/kamoun_shared/output_shared/heros_v0.3_dev --o gametes_cv_default --ekf /project/kamoun_shared/output_shared/heros_gecco_2025/output/MultiSURF_gametes_cv --ol Class --il InstanceID --el Model --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20 --in target_acc --it 200000 --ps 2000 --nu 1 --mi 200 --ms 100 --c sub --tp 1000 --sr 500,1000,10000,100000,200000 --sm 5,10,50,100,200 --m None --a 0 --check --resub
+
+python run_heros.py --d /project/kamoun_shared/data_shared/heros_sim_data/gametes_data_cv --w /project/kamoun_shared/output_shared/heros_v0.3_dev --o gametes_cv_default_tree_bstrap --ekf /project/kamoun_shared/output_shared/heros_gecco_2025/output/MultiSURF_gametes_cv --ol Class --il InstanceID --el Model --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20 --in target_acc --it 200000 --ps 2000 --nu 1 --mi 200 --ms 100 --c sub --tp 1000 --sr 500,1000,10000,100000,200000 --sm 5,10,50,100,200 --m None --a 0 --pt dt_bstrap --check --resub
+
+python run_heros.py --d /project/kamoun_shared/data_shared/heros_sim_data/gametes_data_cv --w /project/kamoun_shared/output_shared/heros_v0.3_dev --o gametes_cv_equal_tree_bstrap --ekf /project/kamoun_shared/output_shared/heros_gecco_2025/output/MultiSURF_gametes_cv --ol Class --il InstanceID --el Model --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20 --in target_acc --it 200000 --ps 2000 --nu 1 --mi 200 --ms 100 --c sub --tp 1000 --sr 500,1000,10000,100000,200000 --sm 5,10,50,100,200 --m equal --a 5 --pt dt_bstrap --check --resub
+
+
+### MUX DATA
+python run_heros.py --d /project/kamoun_shared/data_shared/heros_sim_data/multiplexer_data_cv --w /project/kamoun_shared/output_shared/heros_v0.3_dev --o mux_cv_default --ekf /project/kamoun_shared/output_shared/heros_gecco_2025/output/MultiSURF_multiplexer_cv --ol Class --il InstanceID --el Group --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20 --in target_acc --it 200000 --ps 2000 --nu 1 --mi 200 --ms 100 --c sub --tp 1000 --sr 500,1000,10000,100000,200000 --sm 5,10,50,100,200 --m None --a 0 --check --resub
+
+python run_heros.py --d /project/kamoun_shared/data_shared/heros_sim_data/multiplexer_data_cv --w /project/kamoun_shared/output_shared/heros_v0.3_dev --o mux_cv_default_tree_bstrap --ekf /project/kamoun_shared/output_shared/heros_gecco_2025/output/MultiSURF_multiplexer_cv --ol Class --il InstanceID --el Group --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20 --in target_acc --it 200000 --ps 2000 --nu 1 --mi 200 --ms 100 --c sub --tp 1000 --sr 500,1000,10000,100000,200000 --sm 5,10,50,100,200 --m None --a 0 --pt dt_bstrap --check --resub
+
+python run_heros.py --d /project/kamoun_shared/data_shared/heros_sim_data/multiplexer_data_cv --w /project/kamoun_shared/output_shared/heros_v0.3_dev --o mux_cv_equal_tree_bstrap --ekf /project/kamoun_shared/output_shared/heros_gecco_2025/output/MultiSURF_multiplexer_cv --ol Class --il InstanceID --el Group --rc LSF --rm 4 --q i2c2_normal --cv 10 --r 20 --in target_acc --it 200000 --ps 2000 --nu 1 --mi 200 --ms 100 --c sub --tp 1000 --sr 500,1000,10000,100000,200000 --sm 5,10,50,100,200 --m equal --a 5 --pt dt_bstrap --check --resub
+
+
+
+## SUMMARY SCRIPTS
+### GAMETES DATA
+python run_heros_sum.py \
+  --w /project/kamoun_shared/output_shared/heros_v0.3_dev \
+  --o gametes_cv_default \
+  --cv 10 \
+  --r 20 \
+  --rc LSF \
+  --rm 4 \
+  --q i2c2_normal
+
+python run_heros_sum.py \
+  --w /project/kamoun_shared/output_shared/heros_v0.3_dev \
+  --o gametes_cv_default_tree_bstrap \
+  --cv 10 \
+  --r 20 \
+  --rc LSF \
+  --rm 4 \
+  --q i2c2_normal
+
+python run_heros_sum.py \
+  --w /project/kamoun_shared/output_shared/heros_v0.3_dev \
+  --o gametes_cv_equal_tree_bstrap \
+  --cv 10 \
+  --r 20 \
+  --rc LSF \
+  --rm 4 \
+  --q i2c2_normal
+
+### MUX DATA
+python run_heros_sum.py \
+  --w /project/kamoun_shared/output_shared/heros_v0.3_dev \
+  --o mux_cv_default \
+  --cv 10 \
+  --r 20 \
+  --rc LSF \
+  --rm 4 \
+  --q i2c2_normal
+
+python run_heros_sum.py \
+  --w /project/kamoun_shared/output_shared/heros_v0.3_dev \
+  --o mux_cv_default_tree_bstrap \
+  --cv 10 \
+  --r 20 \
+  --rc LSF \
+  --rm 4 \
+  --q i2c2_normal
+
+python run_heros_sum.py \
+  --w /project/kamoun_shared/output_shared/heros_v0.3_dev \
+  --o mux_cv_equal_tree_bstrap \
+  --cv 10 \
+  --r 20 \
+  --rc LSF \
+  --rm 4 \
+  --q i2c2_normal
+
+
+
+
+## TABLE SUMMARY SCRIPT
+python run_heros_table.py \
+  --w /project/kamoun_shared/output_shared/heros_v0.3_dev \
+  --o output \
+  --groups mux_cv_default,mux_cv_default_tree_bstrap,gametes_cv_default,gametes_cv_default_tree_bstrap,mux_cv_equal_tree_bstrap,gametes_cv_equal_tree_bstrap  \
+  --baseline-map multiplexer:mux_cv_default,gametes:gametes_cv_default \
+  --alpha 0.05 \
+  --rc LSF \
+  --rm 8 \
+  --q i2c2_normal \
+  --outcsv HEROS_Combined_Table.csv
