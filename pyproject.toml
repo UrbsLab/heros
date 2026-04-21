@@ -34,7 +34,16 @@ dependencies = [
 "matplotlib",
 "seaborn",
 "scipy",
+"collections",
+"random",
 "skrebate==0.7",
+"os",
+"time",
+"copy",
+"math",
+"ast",
+"itertools",
+"struct",
 "networkx"]
 
 [project.optional-dependencies]
