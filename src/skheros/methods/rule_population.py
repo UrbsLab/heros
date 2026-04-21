@@ -10,7 +10,7 @@ from collections import defaultdict
 from itertools import combinations
 import struct
 from sklearn.ensemble import RandomForestClassifier
-#from sklearn.tree import _tree, DecisionTreeClassifier
+from sklearn.tree import _tree#, DecisionTreeClassifier
 from sklearn.preprocessing import OneHotEncoder
 #from collections import Counter
 #from sklearn import tree as sktree
