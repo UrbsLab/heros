@@ -10,13 +10,13 @@ from collections import defaultdict
 from itertools import combinations
 import struct
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.tree import _tree, DecisionTreeClassifier
+#from sklearn.tree import _tree, DecisionTreeClassifier
 from sklearn.preprocessing import OneHotEncoder
-from collections import Counter
-from sklearn import tree as sktree
-from matplotlib.table import Table
-from textwrap import fill
-import matplotlib.patches as mpatches
+#from collections import Counter
+#from sklearn import tree as sktree
+#from matplotlib.table import Table
+#from textwrap import fill
+#import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 
 class RULE_POP:
