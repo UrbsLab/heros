@@ -776,9 +776,13 @@ class RULE:
         #return self.encoding == other_rule.encoding
     
 
-    def get_deletion_vote(self):
+    def get_deletion_vote(self,heros):
         """  Returns the vote for deletion of the rule. """
         if self.fitness == 0.0:
+            deletion_vote = self.ave_match_set_size * self.numerosity / (0.001 / self.numerosity)
+        elif heros.over_specific_removal and len(self.condition_indexes) >= 2 and self.correct_cover <= len(self.condition_indexes): # Automatic deletion of rules very likely to be over-specific
+            deletion_vote = self.ave_match_set_size * self.numerosity / (0.001 / self.numerosity)
+        elif self.correct_cover <= heros.min_correct_cover: # User specified minimum allowed correct cover in rules
             deletion_vote = self.ave_match_set_size * self.numerosity / (0.001 / self.numerosity)
         else: #regular calculation
             deletion_vote = self.ave_match_set_size * self.numerosity / (self.fitness / self.numerosity) 
