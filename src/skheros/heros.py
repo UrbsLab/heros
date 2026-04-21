@@ -186,7 +186,6 @@ class HEROS(BaseEstimator, TransformerMixin):
 
         #New Parameters
         self.alternate = int(alternate)
-        self.alternate = alternate
         self.alternate_mode = alternate_mode
         self.curr_alt = 0 #internal parameter to track current number of alternations between Phase I and Phase II
 
@@ -781,91 +780,94 @@ class HEROS(BaseEstimator, TransformerMixin):
                 else:
                     print("Majority class selected since there are no matching rules, but there is a training majority class")
         
-        # Build and return structured explanation for programmatic use
-        features_view = [
-            {
-                "feature_index": idx,
-                "feature_name": feature_names[idx],
-                "value": x[idx]
-            }
-            for idx in range(len(x))
-        ]
-
-        supporting_rules = []
-        contradictory_rules = []
-        per_rule_contributions = []
-        for rule_index in match_set:
-            rule_obj = rule_source[rule_index]
-            rule_dict = rule_obj.to_explanation_dict(feature_names, self)
-            # compute this rule's weighted vote contribution (classification only)
-            vote_contrib = {}
-            if hasattr(rule_obj, 'instance_outcome_prop') and isinstance(outcome_proba, dict):
-                for cls, prob in rule_obj.instance_outcome_prop.items():
-                    vote_contrib[cls] = prob * rule_obj.numerosity
-            rule_dict["vote_contribution"] = vote_contrib
-            rule_dict["selected_action_matches_prediction"] = (str(rule_obj.action) == str(outcome_prediction))
-            if str(rule_obj.action) == str(outcome_prediction):
-                supporting_rules.append(rule_dict)
-            else:
-                contradictory_rules.append(rule_dict)
-            per_rule_contributions.append({
-                "rule_id": getattr(rule_obj, "ID", None),
-                "numerosity": rule_obj.numerosity,
-                "action": rule_obj.action,
-                "vote_contribution": vote_contrib
-            })
-
-        selection_reason = None
-        if prediction.majority_class_selection_made and len(match_set) > 0:
-            selection_reason = "tie_break_by_training_majority"
-        elif prediction.random_selection_made and len(match_set) > 0:
-            selection_reason = "tie_break_random"
-        elif prediction.random_selection_made and len(match_set) == 0:
-            selection_reason = "no_matching_rules_random"
-        elif not prediction.random_selection_made and not prediction.majority_class_selection_made and len(match_set) == 0:
-            selection_reason = "no_matching_rules_training_majority"
-
-        structured = {
-            "outcome_prediction": outcome_prediction,
-            "prediction_probabilities": outcome_proba,
-            "covered": bool(outcome_coverage),
-            "num_matching_rules": len(match_set),
-            "whole_rule_population": bool(whole_rule_pop),
-            "target_model_index": int(target_model) if not whole_rule_pop else None,
-            "selection_reason": selection_reason,
-            "algorithm": {
-                "outcome_type": self.outcome_type,
-                "classes": list(self.env.classes) if hasattr(self.env, 'classes') else None,
-                "voting_scheme": "whole_population" if whole_rule_pop else "top_model_rule_set",
-                "numerosity_sum": getattr(prediction, 'numerosity_sum', None),
-                "tie_breaking": {
-                    "majority_class": bool(getattr(prediction, 'majority_class_selection_made', False)),
-                    "random": bool(getattr(prediction, 'random_selection_made', False))
+        # EXPERIMENTAL - for LLM explanation system use
+        give_structured_explanation = False
+        if give_structured_explanation:
+            # Build and return structured explanation for programmatic use
+            features_view = [
+                {
+                    "feature_index": idx,
+                    "feature_name": feature_names[idx],
+                    "value": x[idx]
                 }
-            },
-            "features": features_view,
-            "supporting_rules": supporting_rules,
-            "contradictory_rules": contradictory_rules,
-            "per_rule_contributions": per_rule_contributions,
-            "match_set_rule_ids": [getattr(rule_source[i], 'ID', None) for i in match_set]
-        }
+                for idx in range(len(x))
+            ]
 
-        # A short narrative for user-facing explanation layers
-        try:
-            num_support = len(supporting_rules)
-            num_contra = len(contradictory_rules)
-            coverage_text = "covered" if structured["covered"] else "not covered"
-            tie_text = " with tie broken by training majority" if structured["algorithm"]["tie_breaking"]["majority_class"] else (" with random tie-break" if structured["algorithm"]["tie_breaking"]["random"] else "")
-            narrative = (
-                "Instance is "+coverage_text+" by "+str(structured["num_matching_rules"]) +
-                " rule(s); " + str(num_support) + " support the predicted class '"+str(outcome_prediction)+"' and " +
-                str(num_contra) + " contradict. Prediction made via " + structured["algorithm"]["voting_scheme"] + tie_text + "."
-            )
-            structured["narrative"] = narrative
-        except Exception:
-            structured["narrative"] = None
+            supporting_rules = []
+            contradictory_rules = []
+            per_rule_contributions = []
+            for rule_index in match_set:
+                rule_obj = rule_source[rule_index]
+                rule_dict = rule_obj.to_explanation_dict(feature_names, self)
+                # compute this rule's weighted vote contribution (classification only)
+                vote_contrib = {}
+                if hasattr(rule_obj, 'instance_outcome_prop') and isinstance(outcome_proba, dict):
+                    for cls, prob in rule_obj.instance_outcome_prop.items():
+                        vote_contrib[cls] = prob * rule_obj.numerosity
+                rule_dict["vote_contribution"] = vote_contrib
+                rule_dict["selected_action_matches_prediction"] = (str(rule_obj.action) == str(outcome_prediction))
+                if str(rule_obj.action) == str(outcome_prediction):
+                    supporting_rules.append(rule_dict)
+                else:
+                    contradictory_rules.append(rule_dict)
+                per_rule_contributions.append({
+                    "rule_id": getattr(rule_obj, "ID", None),
+                    "numerosity": rule_obj.numerosity,
+                    "action": rule_obj.action,
+                    "vote_contribution": vote_contrib
+                })
 
-        return structured
+            selection_reason = None
+            if prediction.majority_class_selection_made and len(match_set) > 0:
+                selection_reason = "tie_break_by_training_majority"
+            elif prediction.random_selection_made and len(match_set) > 0:
+                selection_reason = "tie_break_random"
+            elif prediction.random_selection_made and len(match_set) == 0:
+                selection_reason = "no_matching_rules_random"
+            elif not prediction.random_selection_made and not prediction.majority_class_selection_made and len(match_set) == 0:
+                selection_reason = "no_matching_rules_training_majority"
+
+            structured = {
+                "outcome_prediction": outcome_prediction,
+                "prediction_probabilities": outcome_proba,
+                "covered": bool(outcome_coverage),
+                "num_matching_rules": len(match_set),
+                "whole_rule_population": bool(whole_rule_pop),
+                "target_model_index": int(target_model) if not whole_rule_pop else None,
+                "selection_reason": selection_reason,
+                "algorithm": {
+                    "outcome_type": self.outcome_type,
+                    "classes": list(self.env.classes) if hasattr(self.env, 'classes') else None,
+                    "voting_scheme": "whole_population" if whole_rule_pop else "top_model_rule_set",
+                    "numerosity_sum": getattr(prediction, 'numerosity_sum', None),
+                    "tie_breaking": {
+                        "majority_class": bool(getattr(prediction, 'majority_class_selection_made', False)),
+                        "random": bool(getattr(prediction, 'random_selection_made', False))
+                    }
+                },
+                "features": features_view,
+                "supporting_rules": supporting_rules,
+                "contradictory_rules": contradictory_rules,
+                "per_rule_contributions": per_rule_contributions,
+                "match_set_rule_ids": [getattr(rule_source[i], 'ID', None) for i in match_set]
+            }
+
+            # A short narrative for user-facing explanation layers
+            try:
+                num_support = len(supporting_rules)
+                num_contra = len(contradictory_rules)
+                coverage_text = "covered" if structured["covered"] else "not covered"
+                tie_text = " with tie broken by training majority" if structured["algorithm"]["tie_breaking"]["majority_class"] else (" with random tie-break" if structured["algorithm"]["tie_breaking"]["random"] else "")
+                narrative = (
+                    "Instance is "+coverage_text+" by "+str(structured["num_matching_rules"]) +
+                    " rule(s); " + str(num_support) + " support the predicted class '"+str(outcome_prediction)+"' and " +
+                    str(num_contra) + " contradict. Prediction made via " + structured["algorithm"]["voting_scheme"] + tie_text + "."
+                )
+                structured["narrative"] = narrative
+            except Exception:
+                structured["narrative"] = None
+
+            return structured
 
     def predict(self, X, whole_rule_pop=False, target_model=0, rule_pop_iter=None, model_pop_iter=None):
         """Scikit-learn required: Apply trained model to predict outcomes of instances. 
