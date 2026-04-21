@@ -193,7 +193,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         else:
             self.random_state = int(random_state)
         self.verbose = verbose
-        self.over_specific_removal = over_specific_removal
+        
         self.use_ek = False #internal parameter - set to False by default, but switched to true of ek scores passed to fit()
         self.y_encoding = None
 
@@ -207,6 +207,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         #self.top_models = [] #for tracking model performance increase over iterations !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         self.feedback = feedback 
         self.min_correct_cover = min_correct_cover
+        self.over_specific_removal = over_specific_removal
         self.training_weights = []
         self.phase_one_limit = 5000
         self.phase_one_ratio = 0
