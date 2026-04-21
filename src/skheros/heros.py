@@ -429,11 +429,11 @@ class HEROS(BaseEstimator, TransformerMixin):
     def phase_one(self):
 
         # CONVERGENCE ON NON-NEW DISCOVERY?? CHECKING WITH ARCHIVE
-        phase_one_stop = True
+        continue_phase_one = True
         i = 0
         improvement = 0
         """ (HEROS PHASE 1) RUN RULE-LEARNING TRAINING ITERATIONS"""
-        while phase_one_stop:
+        while continue_phase_one:
             # Get current training instance
             if i % 2 == 0 or self.model_iteration == 0 or self.feedback == False:
                 instance = self.env.get_instance()
@@ -462,22 +462,22 @@ class HEROS(BaseEstimator, TransformerMixin):
             ### STOP CRITERIA CHECK
             if self.alternate_mode == "limit": #EXPERIMENTAL 
                 if i >= self.phase_one_limit or self.iteration >= self.iterations:
-                    phase_one_stop = False
+                    continue_phase_one = False
             elif self.alternate_mode == "converge": #EXPERIMENTAL: PHASE I CONVERGENCE 
                 # IMPLEMENT
 
                 # IDEAS: 
                 # CHECK AT EACH ITERATION IF OFFSPRING RULE IMPROVES MATCH SET PARETO FRONT
                 if improvement >= 250 or self.iteration >= self.iterations: 
-                    phase_one_stop = False
+                    continue_phase_one = False
             elif self.alternate_mode == "equal": #EQUAL DISTRIBUTION OF RESOURCES ACROSS AMOUNT OF ALTERNATION 
                 if i >= self.iterations / self.alternate:
-                    phase_one_stop = False
+                    continue_phase_one = False
             else: #DEFAULT SEQUENTIAL HEROS 
                 if i >= self.iterations:
-                    phase_one_stop = False
+                    continue_phase_one = False
 
-            if phase_one_stop == False: 
+            if continue_phase_one == False: 
                 # RULE COMPACTION *********************************************
                 self.timer.compaction_time_start()
                 compact = COMPACT(self)
@@ -520,7 +520,7 @@ class HEROS(BaseEstimator, TransformerMixin):
     def phase_two(self):
         """(HEROS PHASE 2) RUN RULE-SET-LEARNING TRAINING ITERATIONS  """
         self.timer.phase2_time_start()
-        phase_two_stop = True
+        continue_phase_two = True
 
         if self.model_iterations > 1: #Apply Phase II
             if not self.sufficient_rule_pop_remain: #abort Phase II and use Phase I rule population as final phase II model. 
@@ -538,7 +538,7 @@ class HEROS(BaseEstimator, TransformerMixin):
                 iter = 0 
                 count = 0
                 # RUN MODEL-LEARNING TRAINING ITERATIONS **************************************************************
-                while phase_two_stop:
+                while continue_phase_two:
                     #Apply NSGAII-like fast non dominated sorting of models into ranked fronts of models
                     fronts = self.model_population.fast_non_dominated_sort(self)
                     #Calculate crowding distances
@@ -593,17 +593,17 @@ class HEROS(BaseEstimator, TransformerMixin):
                     # STOP CRITERIA CHECK 
                     if self.alternate_mode == "limit": #EXPERIMENTAL 
                         if not (iter < self.phase_two_convergence and count < self.phase_two_limit and self.model_iteration < self.model_iterations - 1):
-                            phase_two_stop = False
+                            continue_phase_two = False
                     elif self.alternate_mode == "converge": #EXPERIMENTAL: PHASE I CONVERGENCE 
                         ## IMPLEMENT BASED ON PHASE I CONVERGENCE
                         if count >= int(self.model_iterations * self.phase_one_ratio) or self.model_iteration >= self.model_iterations - 1:
-                            phase_two_stop = False
+                            continue_phase_two = False
                     elif self.alternate_mode == "equal": #EQUAL DISTRIBUTION OF RESOURCES ACROSS AMOUNT OF ALTERNATION (New as of 2026 GECCO Paper)
                         if count >= self.model_iterations / self.alternate:
-                            phase_two_stop = False
+                            continue_phase_two = False
                     else:  #DEFAULT SEQUENTIAL HEROS (2025 GECCO Paper)
                         if self.model_iteration >= self.model_iterations:
-                            phase_two_stop = False
+                            continue_phase_two = False
 
                     
                 self.model_population.sort_model_pop()
