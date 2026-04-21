@@ -702,8 +702,6 @@ class RULE_POP:
         # Save the first RF for fidelity proof and visualization - FOR DEBUGGING ONLY, CAN BE REMOVED LATER
         self.rf_model = rf_models[0]
 
-        print("Random Seed Check After RF: "+ str(random.random()))
-
         def print_rf_training_summary(rf_models):
             print("\nSummary: Trained {} random forests with varying hyperparameters.".format(len(rf_models)))
             for i, rf in enumerate(rf_models):
@@ -761,7 +759,6 @@ class RULE_POP:
             plt.grid(True)
             plt.savefig("output/tree_depth_vs_num_rules.png", bbox_inches="tight")
             plt.show()
-        print("Random Seed Check After Rule Extract: "+ str(random.random()))
 
         # STEP 5: Deduplicate rules (based on rule's condition and action)
         print("Deduplicating rules...")
@@ -783,7 +780,6 @@ class RULE_POP:
             print("\nSummary: Extracted {} branch-rules from all trees.".format(len(all_rules)))
             print("After deduplication, {} unique rules remain.".format(len(unique_rules)))
 
-        print("Random Seed Check After Deduplication: "+ str(random.random()))
         # STEP 5: Convert rules to HEROS format, check for redundancy, and add to population
         print("\nConverting extracted rules to HEROS format and checking for redundancy...")
 
@@ -897,7 +893,6 @@ class RULE_POP:
         #Global Fitness update
         if heros.fitness_function == 'pareto':  #Needs expansion for non-pareto option
             self.global_fitness_update(heros)
-        print("Random Seed Check After Convert to HEROS rules: "+ str(random.random()))
 
         def print_rule_conversion_summary(pop_set, micro_pop_count):
             print("\nSummary: Converted rules to HEROS format and added to population.")

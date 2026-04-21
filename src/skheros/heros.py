@@ -55,7 +55,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         :param alternate: Number of phase alternations between Phase I and Phase II (must be int >= 0)
         :param alternate_mode: Experimental parameter to specify the method for determining when to alternate between Phase I and Phase II (must be 'limit', 'converge', 'equal', or None)
         :param feedback: TBD
-        :param min_correct_cover: Minimum number of correctly covered instances in a rule (Must be integer greater than 0)
+        :param min_correct_cover: Minimum number of correctly covered instances by a rule in training data (Must be 0 or int)
         :param over_specific_removal: Automatic removal of rules with high liklihood of being overspecific in most problems. (Boolean)
    
         """
@@ -142,8 +142,8 @@ class HEROS(BaseEstimator, TransformerMixin):
         if not alternate_mode == 'limit' and not alternate_mode == 'converge' and not alternate_mode == 'equal' and not alternate_mode is None and not alternate_mode == 'None':
             raise Exception("'alternate_mode' param must be 'limit', 'converge', 'equal', or None")
 
-        if not self.check_is_int(min_correct_cover) and not rsl == 0:
-            raise Exception("'min_correct_cover' param must be zero or a positive int")
+        if not self.check_is_int(min_correct_cover) and not min_correct_cover == 0:
+            raise Exception("'min_correct_cover' param must be int >= 0")
 
         if over_specific_removal == 'True' or over_specific_removal == True:
             over_specific_removal = True
@@ -205,7 +205,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         #Experimental Parameters 
         #self.top_models = [] #for tracking model performance increase over iterations !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         self.feedback = feedback 
-        self.min_correct_cover = min_correct_cover
+        self.min_correct_cover = int(min_correct_cover)
         self.over_specific_removal = over_specific_removal
         self.training_weights = []
         self.phase_one_limit = 5000
