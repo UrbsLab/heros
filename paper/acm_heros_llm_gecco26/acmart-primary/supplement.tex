@@ -10,14 +10,19 @@
 \newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
 \newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}
 
-\title{Supplementary Material}
+\title{Supplementary Material for Audience-Customized Translation of Rule-Based Evidence with Large Language Models Across Multiplexer Benchmarks}
+\author{}
 \date{}
 
 \begin{document}
 \maketitle
+\begin{center}
+Harsh Bandhey, Gabriel Lipschutz-Villa, Khoi Dinh, Malek Kamoun, and Ryan J. Urbanowicz\\
+Cedars Sinai Health Sciences University; University of Pennsylvania
+\end{center}
 
 \section{Supplementary Tables}
-This supplement provides supporting detail for the main paper. The main manuscript retains the full argument, the metric definitions, the primary result tables, and the qualitative example discussed in the Results section. The material collected here is limited to reproducibility-oriented setup information and one worked ideal-MUX6 reference table used to clarify the HEROS prediction mechanics described in Methods. It does not add new empirical claims.
+This supplement provides supporting detail for the main paper. The main manuscript retains the full argument, the metric definitions, the primary result tables, and the qualitative example discussed in the Results section. The material collected here is limited to reproducibility-oriented setup information, prompt and judge documentation, and one worked ideal-MUX6 reference table used to clarify the HEROS prediction mechanics described in Methods. It does not add new empirical claims.
 
 \begin{table}[H]
 \caption{\textbf{Supplementary Table S1.} Benchmark configuration with mean matching rules (MMR) from the final runs. Each benchmark contributes 50 evaluated held-out instances under two HEROS training profiles, producing 600 generated explanations per dataset and 1{,}800 explanations overall.}
@@ -118,6 +123,50 @@ $r_8$ & $A_0=1$, $A_1=1$ & $R_3=1$ & 1 \\
 \begin{minipage}{0.92\linewidth}
 \textbf{Worked instance.} Consider the instance $A_0=1$, $A_1=0$, $R_0=1$, $R_1=0$, $R_2=1$, $R_3=1$. Under the ideal rule set, only $r_6$ matches, so the match set is $M=\{r_6\}$. If numerosity is 1 for every ideal rule, then the class vote totals are $V(0)=0$ and $V(1)=1$. After normalization, $P(0)=0.0$ and $P(1)=1.0$, so the predicted class is 1. This illustrates the minimal single-rule case against which denser learned HEROS match sets can be contrasted.
 \end{minipage}
+\end{table}
+
+\section{Prompt and Judge Documentation}
+The final study used versioned prompt templates and a separate judge rubric that are implemented in \path{evaluation/experiments/heros_llm/prompt_templates.py}, \path{evaluation/experiments/heros_llm/prompt_builder.py}, and \path{evaluation/experiments/heros_llm/judge.py} on the \path{llm_exp} branch. Supplementary Tables S5 and S6 summarize the parts of those prompts that are most important for interpreting the experiments.
+
+\begin{table}[H]
+\caption{\textbf{Supplementary Table S5.} Prompt structure used in the final study. The code labels \texttt{condition\_b} and \texttt{condition\_c} correspond to \emph{Experiment 1} and \emph{Experiment 2} in the paper.}
+\label{tab:prompt-docs-supp}
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.05}
+\begin{tabular}{L{0.26\linewidth}L{0.66\linewidth}}
+\toprule
+\textbf{Component} & \textbf{Implemented behavior} \\
+\midrule
+Shared system prompt (\texttt{v2\_minimal}) & Explain only one prediction, use only the supplied prediction-time evidence packet, do not use the underlying algorithm name, do not add domain meaning or unseen features, describe model behavior rather than reality, acknowledge conflict when present, and end with a brief limitation sentence. \\
+Layman addon & Plain language, feature names exactly as given, no rule IDs, no metadata counts, and no numeric probabilities. \\
+Clinician addon & Concise feature--value reasoning with moderate technical detail, no rule IDs, and optional training-support summaries when provided. \\
+Expert addon & Technical wording that may include rule IDs, exact probabilities, conflict structure, and detailed rule metadata when provided. \\
+Experiment 1 (\texttt{condition\_b}) & User prompt includes predicted class, confidence wording, evidence summary, relevant instance feature values, and active rules, but no feature definitions. \\
+Experiment 2 (\texttt{condition\_c}) & Uses the same packet fields as Experiment 1 and additionally includes concise feature definitions for rule-relevant features; these definitions are used only to clarify labels, not to infer extra domain meaning. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\caption{\textbf{Supplementary Table S6.} Judge-rubric structure used in the final study.}
+\label{tab:judge-docs-supp}
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.05}
+\begin{tabular}{L{0.26\linewidth}L{0.66\linewidth}}
+\toprule
+\textbf{Component} & \textbf{Implemented behavior} \\
+\midrule
+Judge system prompt (\texttt{v2}) & Strictly evaluate the explanation against the supplied packet, intended audience, and stated constraints. \\
+Judge inputs & Audience, experiment condition, predicted class, agreement status, evidence-strength label, and the generated explanation text. \\
+Judge outputs & JSON containing \texttt{audience\_understandability\_score}, \texttt{audience\_technical\_fit\_score}, and brief \texttt{judge\_notes}. \\
+Judge scoring rules & Score understandability for the intended audience, score technical fit for the intended audience, penalize added domain meaning beyond the packet evidence, and return JSON only. \\
+Artifact writing & The pipeline writes prompt rows, judge-request rows, and judge-result rows for completed runs when prompt writing and judge scoring are enabled in the configuration. \\
+\bottomrule
+\end{tabular}
 \end{table}
 
 \end{document}
