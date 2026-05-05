@@ -54,11 +54,20 @@
   \providecommand\BibTeX{{%
 Bib\TeX}}}
 
-\acmConference[GECCO '26]{Genetic and Evolutionary Computation Conference Companion}{July 13--17, 2026}{San Jose, Costa Rica}
-\acmYear{2026}
+% \acmConference[GECCO '26]{Genetic and Evolutionary Computation Conference Companion}{July 13--17, 2026}{San Jose, Costa Rica}
+% \acmYear{2026}
+% \copyrightyear{2026}
+% \acmDOI{10.1145/nnnnnnn.nnnnnnn}
+% \acmISBN{978-x-xxxx-xxxx-x/YY/MM}
+
 \copyrightyear{2026}
-\acmDOI{10.1145/nnnnnnn.nnnnnnn}
-\acmISBN{978-x-xxxx-xxxx-x/YY/MM}
+\acmYear{2026}
+\setcopyright{cc}
+\setcctype{by}
+\acmConference[GECCO Companion '26]{Genetic and Evolutionary Computation Conference}{July 13--17, 2026}{San Jose, Costa Rica}
+\acmBooktitle{Genetic and Evolutionary Computation Conference (GECCO Companion '26), July 13--17, 2026, San Jose, Costa Rica}
+\acmDOI{10.1145/3795101.3814722}
+\acmISBN{979-8-4007-2488-6/2026/07}
 
 % \setcopyright{acmlicensed}
 % \copyrightyear{2018}
@@ -242,7 +251,7 @@ This preliminary study examines three related questions. First, how strongly doe
 We therefore conduct a preliminary six-run study on MUX6, MUX11, and MUX20. The central premise is that explanation quality is jointly shaped by three comparison levels: upstream model quality (\emph{minimal} versus \emph{extensive} HEROS training), prompt design (\emph{Experiment 1} versus \emph{Experiment 2}), and audience target (\emph{Layman}, \emph{Clinician}, and \emph{Expert}). Across all six runs, \emph{Evidence Precision} and \emph{Prediction--Explanation Agreement} remain perfect, whereas \emph{Evidence Recall}, \emph{Hallucination Rate}, \emph{Causal Overclaim Rate}, audience-fit scores, and readability vary substantially across these three axes. MUX6 serves as a control case in which both HEROS profiles recover ideal models, MUX11 improves sharply under the larger HEROS training budget, and MUX20 improves only modestly and does not yield an equally clean learned model under the larger budget used here. The glossary-style prompt generally increases audience-fit scores while lengthening text, and the three audience settings expose distinct failure profiles. The contribution is therefore an audience-conditioned natural-language translation layer for ERBML prediction-time evidence, not a new ERBML learner and not a claim that an LLM is uniquely necessary for every presentation setting.
 
 \section{Methods}
-The experimental design corresponds directly to the three study questions. HEROS supplies the evidential content so that the LLM is never required to infer explanations from raw inputs alone. The first comparison level varies HEROS training budget and therefore the quality of the learned rule model that supplies the prediction-time evidence packet. The second varies prompt design through the presence or absence of a minimal glossary. The third varies the intended audience and therefore the level and style of explanation requested from the LLM. Evaluation then separates evidence preservation, unsupported addition, and audience fit.
+The experimental design corresponds directly to the three study questions. HEROS supplies the evidential content so that the LLM is never required to infer explanations from raw inputs alone. The first comparison level varies HEROS training budget and therefore the quality of the learned rule model that supplies the prediction-time evidence packet. The second varies in prompt design through the presence or absence of a minimal glossary. The third varies the intended audience and therefore the level and style of explanation requested from the LLM. Evaluation then separates evidence preservation, unsupported addition, and audience fit.
 
 \subsection{HEROS and rule-based machine learning context}
 Interpretable rule-based machine learning spans several related traditions. Classical rule-induction systems such as RIPPER learn compact ordered IF--THEN rules directly from labeled data~\cite{cohen1995ripper}, whereas evolutionary rule learners such as BioHEL search for readable rule sets through genetic optimization~\cite{bacardit2006biohel}. Within learning classifier systems, XCS and UCS established an accuracy-based formulation in which predictions are made from matched rules and fitness favors accurate, general classifiers rather than only raw reward or coverage~\cite{wilson2000xcs,bernado2003ucs}. More recent supervised Michigan-style systems such as ExSTraCS adapted this lineage to noisy, heterogeneous biomedical settings while preserving explicit rule representations~\cite{urbanowicz2015exstracs,urbanowicz2017intro}. HEROS is most usefully interpreted within this broader rule-based context rather than as an isolated architecture. Like XCS, UCS, and ExSTraCS, HEROS remains within the Michigan-style evolutionary rule-learning tradition: candidate rules are evolved under crossover and mutation, and rule quality depends on accuracy- and coverage-oriented signals rather than only raw frequency. HEROS differs most clearly at the model level, where it separates the evolution of individual rules from the evolution of candidate predictive rule sets assembled from those rules.
@@ -474,7 +483,7 @@ Taken together, these results support a limited but useful conclusion: LLM-based
 %% identification of the section in the article metadata, and the
 %% consistent spelling of the heading.
 \begin{acks}
-The study was supported by Cedars Sinai Health Sciences University and NIH grants R01 AI173095, U01 AG066833, and P30 AG073105. Generative AI tools, including GPT-based systems, were used for code scaffolding, analysis scripting, wording revisions, table preparation, and drafting assistance. All such material was reviewed, edited, and verified by the authors, who take full responsibility for the final content.
+The study was supported by Cedars Sinai Health Sciences University and NIH grants R01 AI173095, U01 AG066833, P01 HL160471 and P30 AG073105. Generative AI tools, including GPT-based systems, were used for code scaffolding, analysis scripting, wording revisions, table preparation, and drafting assistance. All such material was reviewed, edited, and verified by the authors, who take full responsibility for the final content.
 
 \end{acks}
 

@@ -16,13 +16,14 @@
 
 \begin{document}
 \maketitle
+
 \begin{center}
-Harsh Bandhey, Gabriel Lipschutz-Villa, Khoi Dinh, Malek Kamoun, and Ryan J. Urbanowicz\\
-Cedars Sinai Health Sciences University; University of Pennsylvania
+Harsh Bandhey$^1$, Gabriel Lipschutz-Villa$^2$, Khoi Dinh$^2$, Malek Kamoun$^2$, and Ryan J. Urbanowicz$^{*1}$\\
+Cedars Sinai Health Sciences University$^1$; University of Pennsylvania$^2$
 \end{center}
 
 \section{Supplementary Tables}
-This supplement provides supporting detail for the main paper. The main manuscript retains the full argument, the metric definitions, the primary result tables, and the qualitative example discussed in the Results section. The material collected here is limited to reproducibility-oriented setup information, prompt and judge documentation, and one worked ideal-MUX6 reference table used to clarify the HEROS prediction mechanics described in Methods. It does not add new empirical claims.
+This supplement provides supporting detail for the main paper. The main manuscript retains the full argument, the metric definitions, the primary result tables, and the qualitative example discussed in the Results section. The material collected here is limited to reproducibility-oriented setup information, prompt and judge documentation,  and one worked ideal-MUX6 reference table used to clarify the HEROS prediction mechanics described in Methods. It does not add new empirical claims.
 
 \begin{table}[H]
 \caption{\textbf{Supplementary Table S1.} Benchmark configuration with mean matching rules (MMR) from the final runs. Each benchmark contributes 50 evaluated held-out instances under two HEROS training profiles, producing 600 generated explanations per dataset and 1{,}800 explanations overall.}
@@ -125,8 +126,9 @@ $r_8$ & $A_0=1$, $A_1=1$ & $R_3=1$ & 1 \\
 \end{minipage}
 \end{table}
 
-\section{Prompt and Judge Documentation}
-The final study used versioned prompt templates and a separate judge rubric that are implemented in \path{evaluation/experiments/heros_llm/prompt_templates.py}, \path{evaluation/experiments/heros_llm/prompt_builder.py}, and \path{evaluation/experiments/heros_llm/judge.py} on the \path{llm_exp} branch. Supplementary Tables S5 and S6 summarize the parts of those prompts that are most important for interpreting the experiments.
+
+% \section{Prompt and Judge Documentation}
+% The final study used versioned prompt templates and a separate judge rubric that are implemented in \path{evaluation/experiments/heros_llm/prompt_templates.py}, \path{evaluation/experiments/heros_llm/prompt_builder.py}, and \path{evaluation/experiments/heros_llm/judge.py} on the \path{llm_exp} branch. Supplementary Tables S5 and S6 summarize the parts of those prompts that are most important for interpreting the experiments.
 
 \begin{table}[H]
 \caption{\textbf{Supplementary Table S5.} Prompt structure used in the final study. The code labels \texttt{condition\_b} and \texttt{condition\_c} correspond to \emph{Experiment 1} and \emph{Experiment 2} in the paper.}
