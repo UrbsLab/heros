@@ -1,25 +1,26 @@
-#import pytest
+# To test using pytest run `pytest --log-cli-level=DEBUG` from the root folder`
+
 import os
 import pandas as pd
 from src.skheros.heros import HEROS
 from sklearn.metrics import classification_report
-from skrebate import MultiSURF # Install using: pip install skrebate==0.7
+#from skrebate import MultiSURF 
+from skrebate import MultiSWRFDB
 
-# To test using pytest run `pytest --log-cli-level=DEBUG` from the root folder`
-
-def get_EK(X,y,data_name,feature_names):
+def get_EK(X,y,data_name,feature_names,cat_feat_indexes):
     """ Calculates or loads expert knowledge (EK) scores for the given unit testing dataset """
     # Further data preparation for expert knowldge generation (i.e. balanced subsampling of training instances for faster run times)
-    score_path_name = 'evaluation/datasets/unit_testing/unit_EK/'+str(data_name)+'_MultiSURF_Scores.csv' #No need to change
-    # Calculate or load feature importance estimates with MultiSURF ------------------------------------
+    score_path_name = 'evaluation/datasets/unit_testing/unit_EK/'+str(data_name)+'_MultiSWRFDB_Scores.csv' #No need to change
+    # Calculate or load feature importance estimates with MultiSWRFDB ------------------------------------
     if not os.path.isfile(score_path_name):
-        print("Generating MultiSURF Scores:")
-        clf = MultiSURF(n_jobs=1).fit(X, y)
+        print("Generating MultiSWRFDB Scores:")
+        #clf = MultiSURF(n_jobs=1).fit(X, y)
+        clf = MultiSWRFDB(n_jobs=1,categorical_features=cat_feat_indexes).fit(X, y)
         ek = clf.feature_importances_
         score_data = pd.DataFrame({'Feature':feature_names,'Score':ek})
         score_data.to_csv(score_path_name,index=False)
     else: #load previously trained scores
-        print("Loading MultiSURF Scores")
+        print("Loading MultiSWRFDB Scores")
         loaded_data = pd.read_csv(score_path_name)
         ek = loaded_data['Score'].tolist()
     return ek
@@ -36,7 +37,7 @@ def test_6mux():
     cat_feat_indexes = list(range(X.shape[1])) #all feature are categorical so provide indexes 0-5 in this list for 6-bit multiplexer dataset
     X = X.values
     y = df[outcome_label].values #outcome values
-    ek = get_EK(X,y,data_name,feature_names)
+    ek = get_EK(X,y,data_name,feature_names,cat_feat_indexes)
     print(ek)
     heros = HEROS(outcome_type='class',iterations=10000,pop_size=500,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,
                 fitness_function='pareto',subsumption='both',rsl=0,feat_track=None, model_iterations=40,
@@ -65,7 +66,8 @@ def test_na():
     cat_feat_indexes = list(range(X.shape[1])) #all feature are categorical so provide indexes 0-5 in this list for 6-bit multiplexer dataset
     X = X.values
     y = df[outcome_label].values #outcome values
-    ek = [0.0527170745920746, 0.0527170745920746, 0.00982931998557, 0.0098293199855699, 0.0098293199855699, 0.00982931998557] #temporary overide until Rebate fixed
+    ek = get_EK(X,y,data_name,feature_names,cat_feat_indexes)
+    #ek = [0.0527170745920746, 0.0527170745920746, 0.00982931998557, 0.0098293199855699, 0.0098293199855699, 0.00982931998557] #temporary overide until Rebate fixed
     #ek = get_EK(X,y,data_name,feature_names)
     print(ek)
     heros = HEROS(outcome_type='class',iterations=10000,pop_size=500,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,
@@ -92,10 +94,10 @@ def test_mixed_feature_types():
     outcome_label = 'outcome'
     X = df.drop(outcome_label, axis=1)
     feature_names = X.columns 
-    cat_feat_indexes = [0,1,2,3] #all feature are categorical so provide indexes 0-5 in this list for 6-bit multiplexer dataset
+    cat_feat_indexes = [0,1,2,3] # only first four features in this dataset can be treated as categorical
     X = X.values
     y = df[outcome_label].values #outcome values
-    ek = get_EK(X,y,data_name,feature_names)
+    ek = get_EK(X,y,data_name,feature_names,cat_feat_indexes)
     print(ek)
     heros = HEROS(outcome_type='class',iterations=20000,pop_size=500,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,
                 fitness_function='pareto',subsumption='both',rsl=0,feat_track=None, model_iterations=40,
@@ -116,15 +118,16 @@ def test_mixed_feature_types_na():
     print("------------------------------------------------------")
     print("Test: 6-bit MUX with mixed feature types and NAs - binary and quantitative features and binary outcome")
     # Load and prepare data
-    data_name = 'Multiplexer6_NA'
+    data_name = 'Multiplexer6_feature_type_mix_NA'
     df = pd.read_csv('evaluation/datasets/unit_testing/'+str(data_name)+'.csv')
     outcome_label = 'outcome'
     X = df.drop(outcome_label, axis=1)
     feature_names = X.columns 
-    cat_feat_indexes = [0,1,2,3] #all feature are categorical so provide indexes 0-5 in this list for 6-bit multiplexer dataset
+    cat_feat_indexes = [0,1,2,3] # only first four features in this dataset can be treated as categorical
     X = X.values
     y = df[outcome_label].values #outcome values
-    ek = [0.0527170745920746, 0.0527170745920746, 0.00982931998557, 0.0098293199855699, 0.0098293199855699, 0.00982931998557] #temporary overide until Rebate fixed
+    ek = get_EK(X,y,data_name,feature_names,cat_feat_indexes)
+    #ek = [0.0527170745920746, 0.0527170745920746, 0.00982931998557, 0.0098293199855699, 0.0098293199855699, 0.00982931998557] #temporary overide until Rebate fixed
     #ek = get_EK(X,y,data_name,feature_names)
     print(ek)
     heros = HEROS(outcome_type='class',iterations=20000,pop_size=500,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,
@@ -154,7 +157,7 @@ def test_multiclass():
     cat_feat_indexes = list(range(X.shape[1])) #all feature are categorical so provide indexes 0-5 in this list for 6-bit multiplexer dataset
     X = X.values
     y = df[outcome_label].values #outcome values
-    ek = get_EK(X,y,data_name,feature_names)
+    ek = get_EK(X,y,data_name,feature_names,cat_feat_indexes)
     print(ek)
     heros = HEROS(outcome_type='class',iterations=10000,pop_size=500,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,
                 fitness_function='pareto',subsumption='both',rsl=0,feat_track=None, model_iterations=40,
