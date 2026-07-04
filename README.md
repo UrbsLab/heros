@@ -1,7 +1,7 @@
 Package information: ![Python 3.9](https://img.shields.io/badge/python-3.9-blue.svg)
 ![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg) ![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg) ![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)
 ![License](https://img.shields.io/badge/License-Custom_Academic-blue)
-
+[![PyPI version](https://img.shields.io/pypi/v/skheros.svg)](https://pypi.org/project/skheros/)
 
 ![alttext](https://github.com/UrbsLab/heros/blob/main/images/heros_logo.png?raw=true)
 
