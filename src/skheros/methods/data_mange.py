@@ -142,19 +142,6 @@ class DATA_MANAGE:
         self.avg_feat_states = unique_state_count / self.num_feat
 
 
-    def get_column_max_decimals(self, X):
-        """Calculates the maximum number of decimal places for a single column."""
-        # Convert to string (handles NaN automatically as 'nan'), split on '.', and strip trailing zeros
-        decimals = (
-            series.astype(str)
-            .str.split(".", n=1, expand=True)
-            .get(1, pd.Series(dtype=str))
-            .fillna("")
-            .str.rstrip("0")
-            .str.len()
-        )
-        return int(decimals.max()) if not decimals.empty else 0
-
     def set_rule_specificity_limit(self, heros):
         """Determine and set the rule specificity limit."""
         if heros.rsl == 0:
