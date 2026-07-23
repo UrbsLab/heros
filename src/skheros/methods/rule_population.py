@@ -1,5 +1,6 @@
 import copy
 import pandas as pd
+import math
 import ast
 from skheros.methods.rule import RULE
 import seaborn as sns
@@ -258,7 +259,7 @@ class RULE_POP:
                 if len(offspring_list) > 1:
                     print("ERROR: More than 2 expected offspring in GA")
 
-        # CHECK FOR DUPLICATE RULES IN {P} and EVALUATE Non-Duplicate Ruels
+        # CHECK FOR DUPLICATE RULES IN {P} and EVALUATE Non-Duplicate Rules
         front_updated = False
         final_offspring_list = []
         for offspring in offspring_list:
@@ -702,7 +703,7 @@ class RULE_POP:
         # Save the first RF for fidelity proof and visualization - FOR DEBUGGING ONLY, CAN BE REMOVED LATER
         self.rf_model = rf_models[0]
 
-        print("Random Seed Check After RF: "+ str(random.random()))
+        #print("Random Seed Check After RF: "+ str(random.random()))
 
         def print_rf_training_summary(rf_models):
             print("\nSummary: Trained {} random forests with varying hyperparameters.".format(len(rf_models)))
@@ -761,7 +762,7 @@ class RULE_POP:
             plt.grid(True)
             plt.savefig("output/tree_depth_vs_num_rules.png", bbox_inches="tight")
             plt.show()
-        print("Random Seed Check After Rule Extract: "+ str(random.random()))
+        #print("Random Seed Check After Rule Extract: "+ str(random.random()))
 
         # STEP 5: Deduplicate rules (based on rule's condition and action)
         print("Deduplicating rules...")
@@ -783,7 +784,7 @@ class RULE_POP:
             print("\nSummary: Extracted {} branch-rules from all trees.".format(len(all_rules)))
             print("After deduplication, {} unique rules remain.".format(len(unique_rules)))
 
-        print("Random Seed Check After Deduplication: "+ str(random.random()))
+        #print("Random Seed Check After Deduplication: "+ str(random.random()))
         # STEP 5: Convert rules to HEROS format, check for redundancy, and add to population
         print("\nConverting extracted rules to HEROS format and checking for redundancy...")
 
@@ -862,10 +863,30 @@ class RULE_POP:
             # Create a new RULE object
             rule_obj = RULE(heros)
             #rule_obj.condition_indexes = list(condition_indexes)
-            rule_obj.condition_indexes = [x.item() if hasattr(x, 'item') else x for x in condition_indexes]
+            rule_obj.condition_indexes = [x.item() if hasattr(x, 'item') else x for x in condition_indexes] #this approach gets rid of np. prefix
             #print(type(rule_obj.condition_indexes[0]))
             #rule_obj.condition_values = list(condition_values)
-            rule_obj.condition_values = [x.item() if hasattr(x, 'item') else x for x in condition_values]  #CHECK THIS STILL WORKS FOR Quantitative features
+
+            rule_obj.condition_values = [x.item() if hasattr(x, 'item') else x for x in condition_values] #this approach gets rid of np. prefix
+            #Fix the sublists to get rid of np. prefix
+            i = 0
+            for i in range(len(rule_obj.condition_values)):
+                if isinstance(rule_obj.condition_values[i],list):
+                    rule_obj.condition_values[i] = [x.item() if hasattr(x, 'item') else x for x in rule_obj.condition_values[i]]
+                    #Limit number of decimal places of value limits based on training data 
+                    if not (math.isinf(rule_obj.condition_values[i][0]) and rule_obj.condition_values[i][0] < 0): #if not negative infinity
+                        temp_index = rule_obj.condition_indexes[i]
+                        rule_obj.condition_values[i][0] = math.floor(rule_obj.condition_values[i][0]*(10**heros.env.feat_q_decimal[temp_index])) / (10**heros.env.feat_q_decimal[temp_index])
+                    if not (math.isinf(rule_obj.condition_values[i][1]) and rule_obj.condition_values[i][1] > 0): #if not positive infinity
+                        temp_index = rule_obj.condition_indexes[i]
+                        rule_obj.condition_values[i][1] = math.floor(rule_obj.condition_values[i][1]*(10**heros.env.feat_q_decimal[temp_index])) / (10**heros.env.feat_q_decimal[temp_index])
+
+            #mutate_range = math.floor(pre_mutate_range*(10**heros.env.feat_q_decimal[feat])) / (10**heros.env.feat_q_decimal[feat])
+
+
+            #print('***')
+            #print(condition_values)
+            #print(rule_obj.condition_values)
             #print(type(rule_obj.condition_values[0]))
             rule_obj.action = None
             rule_obj.numerosity = 1
@@ -897,13 +918,6 @@ class RULE_POP:
         if heros.fitness_function == 'pareto':  #Needs expansion for non-pareto option
             self.global_fitness_update(heros)
         print("Random Seed Check After Convert to HEROS rules: "+ str(random.random()))
-
-        def print_rule_conversion_summary(pop_set, micro_pop_count):
-            print("\nSummary: Converted rules to HEROS format and added to population.")
-            print(f"Total Population Numerosity: {micro_pop_count}")
-            print(f"Unique HEROS Rules: {len(pop_set)}")
-
-        print_rule_conversion_summary(self.pop_set, self.micro_pop_count)
 
         self.order_all_rule_conditions() #New potential random seed reproducibitliy fix
 

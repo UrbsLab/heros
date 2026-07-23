@@ -1,5 +1,6 @@
 import copy
 import struct
+import math
 
 class RULE:
     def __init__(self,heros):
@@ -381,21 +382,44 @@ class RULE:
             feat = random.sample(quant_feat_list,1)[0]
             quant_feat_list.remove(feat)
             if instance_state[feat] != None:
-                global_feature_range = heros.env.feat_q_range[feat][1] - heros.env.feat_q_range[feat][1] 
+                global_feature_range = heros.env.feat_q_range[feat][1] - heros.env.feat_q_range[feat][0] 
                 rule_position = self.condition_indexes.index(feat)
                 mutate_range = random.random() * 0.5 * global_feature_range
+                #pre_mutate_range = random.random() * 0.5 * global_feature_range
+                #mutate_range = math.floor(pre_mutate_range*(10**heros.env.feat_q_decimal[feat])) / (10**heros.env.feat_q_decimal[feat])
                 if random.random() > 0.5: #mutate low end
                     if random.random() > 0.5: #add to low end
-                        self.condition_values[rule_position][0] += mutate_range
+                        if math.isinf(self.condition_values[rule_position][0]) and self.condition_values[rule_position][0] < 0: # if negative infinity
+                            self.condition_values[rule_position][0] = instance_state[feat] - mutate_range # remove infinity and define new low bound
+                        else:
+                            self.condition_values[rule_position][0] += mutate_range
                     else: #subtract from low end
-                        self.condition_values[rule_position][0] -= mutate_range
+                        if math.isinf(self.condition_values[rule_position][0]) and self.condition_values[rule_position][0] < 0: # if negative infinity
+                            self.condition_values[rule_position][0] = instance_state[feat] - mutate_range # remove infinity and define new low bound
+                        else:
+                            self.condition_values[rule_position][0] -= mutate_range
                 else: #mutate high end
                     if random.random() > 0.5: #add to high end
-                        self.condition_values[rule_position][1] += mutate_range
+                        if math.isinf(self.condition_values[rule_position][1]) and self.condition_values[rule_position][1] > 0: # if positive infinity
+                            self.condition_values[rule_position][1] = instance_state[feat] + mutate_range # remove infinity and define new high bound
+                        else:
+                            self.condition_values[rule_position][1] += mutate_range
                     else: #subtract from high end
-                        self.condition_values[rule_position][1] -= mutate_range
+                        if math.isinf(self.condition_values[rule_position][1]) and self.condition_values[rule_position][1] > 0: # if positive infinity
+                            self.condition_values[rule_position][1] = instance_state[feat] + mutate_range # remove infinity and define new high bound
+                        else:
+                            self.condition_values[rule_position][1] -= mutate_range
                 #Repair range so low end specified first then high end.
                 self.condition_values[rule_position].sort()
+
+                #Limit number of decimal places of value limits based on training data 
+                if not (math.isinf(self.condition_values[rule_position][0]) and self.condition_values[rule_position][0] < 0): #if not negative infinity
+                    temp_index = self.condition_indexes[rule_position]
+                    self.condition_values[rule_position][0] = math.floor(self.condition_values[rule_position][0]*(10**heros.env.feat_q_decimal[temp_index])) / (10**heros.env.feat_q_decimal[temp_index])
+                if not (math.isinf(self.condition_values[rule_position][1]) and self.condition_values[rule_position][1] > 0): #if not positive infinity
+                    temp_index = self.condition_indexes[rule_position]
+                    self.condition_values[rule_position][1] = math.floor(self.condition_values[rule_position][1]*(10**heros.env.feat_q_decimal[temp_index])) / (10**heros.env.feat_q_decimal[temp_index])
+
                 #Ensure value range matches current instance's feature value
                 if not self.condition_values[rule_position][0] < instance_state[feat] < self.condition_values[rule_position][1]:
                     #Repair range to include current instance's feature value
@@ -408,6 +432,7 @@ class RULE:
                     self.condition_values[rule_position][0] = -np.inf
                 if self.condition_values[rule_position][1] > heros.env.feat_q_range[feat][1]: # if value range goes above that observed in training data, set high to positive infinity
                     self.condition_values[rule_position][1] = np.inf
+                #Note we later check that the value range is not from np.-inf to np.inf (and we correct it if it is.)
                 changed = True
         return feat
 
@@ -496,12 +521,19 @@ class RULE:
             high = np.inf
             while low == -np.inf and high == np.inf:
                 range_radius = (feature_range / 2.0)* random.randint(25,75)*0.01
+                #pre_range_radius = (feature_range / 2.0)* random.randint(25,75)*0.01
+                #range_radius = math.floor(pre_range_radius*(10**heros.env.feat_q_decimal[feat])) / (10**heros.env.feat_q_decimal[feat])
                 low = instance_state[feat] - range_radius
                 if low < heros.env.feat_q_range[feat][0]: # if value range goes below that observed in training data, set low to negative infinity
                     low = -np.inf
                 high = instance_state[feat] + range_radius
                 if high > heros.env.feat_q_range[feat][1]: # if value range goes above that observed in training data, set high to positive infinity
                     high = np.inf
+                #Limit number of decimal places of value limits based on training data 
+                if not (math.isinf(low) and low < 0): #if not negative infinity
+                    low = math.floor(low*(10**heros.env.feat_q_decimal[feat])) / (10**heros.env.feat_q_decimal[feat])
+                if not (math.isinf(high) and high > 0): #if not positive infinity
+                    high = math.floor(high*(10**heros.env.feat_q_decimal[feat])) / (10**heros.env.feat_q_decimal[feat])
                 condition_value = [low,high]
         return condition_value
 
