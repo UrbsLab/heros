@@ -2,6 +2,7 @@ import math
 from src.skheros.methods.zadia_project import Soft_Gini_SGD
 
 def compute_soft_gini(self, heros, np, k=1):
+    #Returns the "soft gini" of a rule based on the performance of all of its features
 
     def sigmoid(x):
         if x >= 0:
@@ -74,14 +75,17 @@ def compute_soft_gini(self, heros, np, k=1):
 
 
 def multi_iter_GD(self, heros, random, np, max_epochs = 20):
+    #Performs iterations of Gradient Descent until an individual "step" is too small
+    #Will perform a maximum number of iterations (can be specified, default is 20)
 
     prev_gini = compute_soft_gini(self, heros, np)
 
     for i in range(max_epochs):
 
         max_change = 0
-
+ 
         for feature in self.condition_indexes:
+            
 
             position = self.condition_indexes.index(feature)
 

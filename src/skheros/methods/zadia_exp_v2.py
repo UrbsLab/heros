@@ -33,12 +33,7 @@ def multi_feature_GD(self, heros, np, k=1, learning_rate=0.01):
     filtered_states = [instance_states[i] for i in valid_indices]
     filtered_outcomes = [outcomes[i] for i in valid_indices]
 
-    m = len(self.condition_indexes)
     n = len(filtered_states)
-
-    plot_history = list(getattr(self, "_gradient_arrow_history", []))
-    max_samples = getattr(self, "_gradient_arrow_sample_limit", 10)
-    plot_already_shown = getattr(self, "_gradient_arrow_plot_shown", False)
 
     # Compute p_i for every instance
     interval_probs = []
@@ -173,7 +168,6 @@ def multi_feature_GD(self, heros, np, k=1, learning_rate=0.01):
 
         
         # Repair Ranges
-        
         for instance in filtered_states:
 
             x = instance[feature]
@@ -184,50 +178,10 @@ def multi_feature_GD(self, heros, np, k=1, learning_rate=0.01):
             if x > new_upper:
                 new_upper = x
         
-
-        
         if new_lower > new_upper:
             new_lower, new_upper = new_upper, new_lower
 
         new_bounds.append((new_lower, new_upper))
-
-    
-    # Aggregate the gradient direction across features and keep a small sample
-    if m > 0:
-        gradient_dx = sum(bound[0] - self.condition_values[pos][0] for pos, bound in enumerate(new_bounds)) / m
-        gradient_dy = sum(bound[1] - self.condition_values[pos][1] for pos, bound in enumerate(new_bounds)) / m
-
-        plot_history.append((gradient_dx, gradient_dy))
-
-        if len(plot_history) >= max_samples and not plot_already_shown:
-            fig, ax = plt.subplots(figsize=(6, 6))
-            ax.axhline(0, color="gray", lw=0.7, alpha=0.6)
-            ax.axvline(0, color="gray", lw=0.7, alpha=0.6)
-
-            for dx, dy in plot_history:
-                ax.arrow(
-                    0,
-                    0,
-                    0.05 * dx,
-                    0.05 * dy,
-                    head_width=0.01,
-                    length_includes_head=True,
-                    color="C0",
-                    alpha=0.7,
-                )
-
-            ax.scatter(0, 0, color="black")
-            ax.set_xlabel("dG/d(lower)")
-            ax.set_ylabel("dG/d(upper)")
-            ax.set_title("Sampled Soft Gini GD updates")
-            ax.grid(alpha=0.3)
-            plt.show()
-            plt.close(fig)
-            plot_already_shown = True
-            plot_history = []
-
-        self._gradient_arrow_history = plot_history
-        self._gradient_arrow_plot_shown = plot_already_shown
 
     # Apply threshold updates
     for pos, (lower, upper) in enumerate(new_bounds):

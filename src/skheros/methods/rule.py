@@ -1,8 +1,6 @@
 import copy
 import struct
 
-from src.skheros.methods.zadia_project import delta_rule_mutation
-
 class RULE:
     def __init__(self,heros):
         """ Initializes objects that define an individual rule. """
@@ -308,7 +306,6 @@ class RULE:
                     else: #no valid feature could be found to mutate to (due to exhausted changes or presence of missing values in instance)
                         pass
                 else: #mutate quantitative feature range
-                    #mutated_feature = delta_rule_mutation(self,instance_state, outcome_state, quant_feat_list, heros, random, np, lr=0.01)
                     mutated_feature = self.mutate_quantitative_range(instance_state,quant_feat_list,heros,random,np)
                     changed_features.append(mutated_feature)
                 mutations_remaining -= 1
