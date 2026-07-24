@@ -173,6 +173,8 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# VS Code
+.vscode/
 #Project specific
 output/
 .DS_Store

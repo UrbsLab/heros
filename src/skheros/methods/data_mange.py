@@ -1,6 +1,7 @@
 import math
 import numpy as np
 import random
+import pandas as pd
         
 class DATA_MANAGE:
     def __init__(self, X, y, row_id, cat_feat_indexes, ek, heros):
@@ -36,6 +37,7 @@ class DATA_MANAGE:
         self.outcome_sd = None
         # Initialize feature attributes
         self.feat_q_range = [[np.inf, -np.inf] for _ in range(self.num_feat)] #for quantitative features - stores min and max quant feature values in dataset
+        self.feat_q_decimal = [None for _ in range(self.num_feat)]
         self.feat_c_values = [[] for _ in range(self.num_feat)] #for categorical features - stores unique feature values in dataset
         self.avg_feat_states = 0 #for calculating rule specificity limit - stores average number of unique feature values in each feature (quantitative features are assigned 2 unique values by default)
         # Update data attributes
@@ -124,6 +126,18 @@ class DATA_MANAGE:
                 self.feat_q_range[feat][0] = np.nanmin(X[:, feat])
                 self.feat_q_range[feat][1] = np.nanmax(X[:, feat])
                 unique_state_count += 2 #Assumption/Estimate made here for quantitative features for calculating rule specificity limit
+
+                # Calculate maximum decimal places for this feature column
+                series = pd.Series(X[:, feat])
+                decimals = (
+                    series.astype(str)
+                    .str.split(".", n=1, expand=True)
+                    .get(1, pd.Series(dtype=str))
+                    .fillna("")
+                    .str.rstrip("0")
+                    .str.len()
+                )
+                self.feat_q_decimal[feat] = (int(decimals.max()) if not decimals.empty else 0)
 
         self.avg_feat_states = unique_state_count / self.num_feat
 
@@ -223,14 +237,20 @@ class DATA_MANAGE:
         print("Total Instances: "+str(self.num_instances))
         print("Feature Types: "+str(self.feat_types))
         print("Missing Values: "+str(self.missing_values))
-        print("Quantiative Feature Range: "+str(self.feat_q_range))
-        print("Categorical Feature Values: "+str(self.feat_c_values))
+        cleaned_feat_q_range = [[float(x) if hasattr(x, "item") else x for x in sublist] for sublist in self.feat_q_range]
+        print("Quantiative Feature Range: "+str(cleaned_feat_q_range))
+        print("Quantitative Feature Max Decimal Places: "+str(self.feat_q_decimal))
+        cleaned_feat_c_values = [[float(x) if hasattr(x, "item") else x for x in sublist] for sublist in self.feat_c_values]
+        print("Categorical Feature Values: "+str(cleaned_feat_c_values))
         print("Average States: "+str(self.avg_feat_states))
         print("Rule Specificity Limit: "+str(heros.rsl))
         if heros.outcome_type == 'class':
-            print("Classes: "+str(self.classes))
-            print("Class Counts: "+str(self.class_counts))
-            print("Class Weights: "+str(self.class_weights))
+            cleaned_classes = [item.item() if hasattr(item, "item") else item for item in self.classes]
+            print("Classes: "+str(cleaned_classes))
+            cleaned_class_counts = {(k.item() if hasattr(k, "item") else k): (v.item() if hasattr(v, "item") else v) for k, v in self.class_counts.items()}
+            print("Class Counts: "+str(cleaned_class_counts))
+            cleaned_class_weights = {(k.item() if hasattr(k, "item") else k): (v.item() if hasattr(v, "item") else v) for k, v in self.class_weights.items()}
+            print("Class Weights: "+str(cleaned_class_weights))
             print("Majority Class: "+str(self.majority_class))
         elif heros.outcome_type == 'quant':
             print("Outcome Range: "+str(self.outcome_range)) 
