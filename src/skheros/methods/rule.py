@@ -1,6 +1,8 @@
 import copy
 import struct
 
+from src.skheros.methods.zadia_project import delta_rule_mutation
+
 class RULE:
     def __init__(self,heros):
         """ Initializes objects that define an individual rule. """
@@ -116,6 +118,21 @@ class RULE:
                     return False  
         return True #rule matches instance
     
+    def rule_matches_instance(self, instance, np):
+        for feat_idx, bounds in zip(self.condition_indexes, self.condition_values):
+            value = instance[feat_idx]
+
+            if value is None:
+                return False
+
+            if isinstance(value, (float, int)) and np.isnan(value):
+                return False
+
+            lower, upper = bounds
+            if not (lower <= value <= upper):
+                return False
+
+        return True
 
     def uniform_crossover(self,other_rule,heros,random,np):
         """ Apply uniform crossover between two new offspring rules """
@@ -291,6 +308,7 @@ class RULE:
                     else: #no valid feature could be found to mutate to (due to exhausted changes or presence of missing values in instance)
                         pass
                 else: #mutate quantitative feature range
+                    #mutated_feature = delta_rule_mutation(self,instance_state, outcome_state, quant_feat_list, heros, random, np, lr=0.01)
                     mutated_feature = self.mutate_quantitative_range(instance_state,quant_feat_list,heros,random,np)
                     changed_features.append(mutated_feature)
                 mutations_remaining -= 1
@@ -381,7 +399,7 @@ class RULE:
             feat = random.sample(quant_feat_list,1)[0]
             quant_feat_list.remove(feat)
             if instance_state[feat] != None:
-                global_feature_range = heros.env.feat_q_range[feat][1] - heros.env.feat_q_range[feat][1] 
+                global_feature_range = heros.env.feat_q_range[feat][1] - heros.env.feat_q_range[feat][0]
                 rule_position = self.condition_indexes.index(feat)
                 mutate_range = random.random() * 0.5 * global_feature_range
                 if random.random() > 0.5: #mutate low end
