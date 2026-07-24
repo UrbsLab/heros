@@ -1,7 +1,8 @@
 import copy
 import pandas as pd
 import ast
-from skheros.methods.rule import RULE
+#from skheros.methods.rule import RULE
+from src.skheros.methods.rule import RULE
 import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy.cluster.hierarchy import linkage #, dendrogram, leaves_list
@@ -18,6 +19,13 @@ from sklearn.preprocessing import OneHotEncoder
 #from textwrap import fill
 #import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
+import numpy as np
+
+
+from src.skheros.methods.zadia_project import Soft_Gini_SGD, delta_rule_mutation
+from src.skheros.methods.zadia_exp_v2 import multi_feature_GD
+from src.skheros.methods.zadia_experiment import multi_iter_GD
+
 
 class RULE_POP:
     def __init__(self):
@@ -194,6 +202,23 @@ class RULE_POP:
                 self.correct_set[j] -= 1
 
 
+    def apply_selected_optimization(self, offspring, heros, random, np):
+        """Apply the selected optional optimization step to an offspring rule."""
+        method = getattr(heros, 'optimization_method', None)
+        if method is None:
+            return
+
+        if method == 'soft_gini_sgd':
+            for feature in offspring.condition_indexes:
+                Soft_Gini_SGD(offspring, heros, feature, np, random)
+        elif method == 'multi_feature_gd':
+            multi_feature_GD(offspring, heros, np)
+        elif method == 'multi_iter_gd':
+            multi_iter_GD(offspring, heros, random, np)
+        else:
+            raise ValueError(f"Unsupported optimization method: {method}")
+
+
     def debug_confirm_offspring_match(self, rule, instance,heros,step,parent_list):
         instance_state = instance[0] #instance feature values
         outcome_state = instance[1] #instance outcome value
@@ -248,6 +273,13 @@ class RULE_POP:
         #for offspring in offspring_list: #debug
         #    self.debug_confirm_offspring_match(offspring, instance,heros,'mutation',parent_list)
         heros.timer.mating_time_stop() #mating time tracking
+
+
+        #ZADIA OPTIMIZATION OPERATOR ***************************************
+        for offspring in offspring_list:
+            self.apply_selected_optimization(offspring, heros, random, np)
+        
+
 
         #Check for offspring duplication
         if len(offspring_list) > 1:
