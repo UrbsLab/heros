@@ -1,6 +1,9 @@
 import math
+import matplotlib.pyplot as plt
 
-def multi_feature_GD(self, heros, np, random, k=1, learning_rate=0.01):
+
+def multi_feature_GD(self, heros, np, k=1, learning_rate=0.01):
+    #Performs gradient descent for all of a rule's features simultaneously
 
     def sigmoid(x):
         if x >= 0:
@@ -32,6 +35,10 @@ def multi_feature_GD(self, heros, np, random, k=1, learning_rate=0.01):
 
     m = len(self.condition_indexes)
     n = len(filtered_states)
+
+    plot_history = list(getattr(self, "_gradient_arrow_history", []))
+    max_samples = getattr(self, "_gradient_arrow_sample_limit", 10)
+    plot_already_shown = getattr(self, "_gradient_arrow_plot_shown", False)
 
     # Compute p_i for every instance
     interval_probs = []
@@ -159,12 +166,14 @@ def multi_feature_GD(self, heros, np, random, k=1, learning_rate=0.01):
             for c in unique_classes
         )
 
-        new_lower = lower - learning_rate * d_gini_lower
-        new_upper = upper - learning_rate * d_gini_upper
+        effective_lr = learning_rate * (heros.env.feat_q_range[feature][1]- heros.env.feat_q_range[feature][0])
+
+        new_lower = lower - effective_lr * d_gini_lower
+        new_upper = upper - effective_lr * d_gini_upper
 
         
         # Repair Ranges
-        '''
+        
         for instance in filtered_states:
 
             x = instance[feature]
@@ -174,7 +183,7 @@ def multi_feature_GD(self, heros, np, random, k=1, learning_rate=0.01):
 
             if x > new_upper:
                 new_upper = x
-        '''
+        
 
         
         if new_lower > new_upper:
@@ -183,6 +192,43 @@ def multi_feature_GD(self, heros, np, random, k=1, learning_rate=0.01):
         new_bounds.append((new_lower, new_upper))
 
     
+    # Aggregate the gradient direction across features and keep a small sample
+    if m > 0:
+        gradient_dx = sum(bound[0] - self.condition_values[pos][0] for pos, bound in enumerate(new_bounds)) / m
+        gradient_dy = sum(bound[1] - self.condition_values[pos][1] for pos, bound in enumerate(new_bounds)) / m
+
+        plot_history.append((gradient_dx, gradient_dy))
+
+        if len(plot_history) >= max_samples and not plot_already_shown:
+            fig, ax = plt.subplots(figsize=(6, 6))
+            ax.axhline(0, color="gray", lw=0.7, alpha=0.6)
+            ax.axvline(0, color="gray", lw=0.7, alpha=0.6)
+
+            for dx, dy in plot_history:
+                ax.arrow(
+                    0,
+                    0,
+                    0.05 * dx,
+                    0.05 * dy,
+                    head_width=0.01,
+                    length_includes_head=True,
+                    color="C0",
+                    alpha=0.7,
+                )
+
+            ax.scatter(0, 0, color="black")
+            ax.set_xlabel("dG/d(lower)")
+            ax.set_ylabel("dG/d(upper)")
+            ax.set_title("Sampled Soft Gini GD updates")
+            ax.grid(alpha=0.3)
+            plt.show()
+            plt.close(fig)
+            plot_already_shown = True
+            plot_history = []
+
+        self._gradient_arrow_history = plot_history
+        self._gradient_arrow_plot_shown = plot_already_shown
+
     # Apply threshold updates
     for pos, (lower, upper) in enumerate(new_bounds):
         self.condition_values[pos][0] = lower
