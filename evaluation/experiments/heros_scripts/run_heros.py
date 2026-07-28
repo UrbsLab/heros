@@ -1,6 +1,6 @@
 import sys
 import os
-#import pandas as pd 
+import pandas as pd 
 #import matplotlib.pyplot as plt
 #import numpy as np
 #import seaborn as sns
@@ -12,6 +12,8 @@ import os
 #import csv
 import time
 import argparse
+
+from sklearn.model_selection import train_test_split
 
 " HEROS Run "
 
@@ -62,11 +64,13 @@ def main(argv):
     #parser.add_argument('--v', dest='verbose', help='boolean flag to run in verbose mode', type=bool, default=False)
     parser.add_argument('--v', dest='verbose', help='boolean flag to run in verbose mode', action='store_true')
     parser.add_argument('--min', dest='min_output', help='boolean flag to minimize saved HEROS output', action='store_true')
+    parser.add_argument('--opt', dest='optimization_method', help='quantitative feature optimization method', type=str, default='None')
                         
     #HPC parameters
-    parser.add_argument('--rc', dest='run_cluster', help='cluster type', type=str, default='LSF')
+    parser.add_argument('--rc', dest='run_cluster', help='cluster type', type=str, default='SLURM')
     parser.add_argument('--rm', dest='reserved_memory', help='reserved memory for job', type=int, default= 4)
-    parser.add_argument('--q', dest='queue', help='cluster queue name', type=str, default= 'i2c2_normal')
+    #parser.add_argument('--q', dest='queue', help='cluster queue name', type=str, default= 'i2c2_normal') #ONLY FOR UPENN
+    parser.add_argument('--p', dest='partition', help='slurm partition name', type=str, default= 'defq')
     #parser.add_argument('--check', dest='check', help='boolean flag to check and report on what jobs have not yet completed', type=bool, action= False)
     parser.add_argument('--check', dest='check', help='boolean flag to check and report on what jobs have not yet completed', action='store_true')
     #parser.add_argument('--resub', dest='resubmit', help='boolean flag to resubmit incomplete jobs', type=bool, default= False)
@@ -106,6 +110,8 @@ def main(argv):
     fitness_function = options.fitness_function
     subsumption = options.subsumption
     rsl = int(options.rsl)
+    optimization_method = options.optimization_method
+
     if options.feat_track is None or options.feat_track == 'None':
         feat_track = None
     else: 
@@ -141,6 +147,7 @@ def main(argv):
     resubmit = options.resubmit
     algorithm = 'HEROS'
     #Folder Management------------------------------
+    
     #Main Write Path-----------------
     if not os.path.exists(writepath):
         os.mkdir(writepath)  
@@ -163,58 +170,95 @@ def main(argv):
     # Experiment loop to submit jobs (datasets, random seeds, cv partitions)
     jobCount = 0
     missing_count = 0
-    for entry in os.listdir(datafolder): #for each subfolder within target dataset folder        
-        if os.path.isdir(os.path.join(datafolder,entry)):
-            datapath = os.path.join(datafolder,entry)
-            #Specify output folder path
-            base_output_path_1 = base_output_path_0+'/'+entry
-            if not os.path.exists(base_output_path_1):
-                os.mkdir(base_output_path_1) 
+    jobCount = 0
 
-        for i in range(0,random_seeds):
-            target_random_seed = None
-            if random_seeds > 1:
-                target_random_seed = i
-            else: 
-                target_random_seed = random_state
-            #Specify output folder path
-            base_output_path_2 = base_output_path_1+'/'+'seed_'+str(i)
-            if not os.path.exists(base_output_path_2):
-                os.mkdir(base_output_path_2) 
+    # datafolder = FULL PATH to a single dataset file
+    full_dataset_path = datafolder
+    dataset_name = os.path.splitext(os.path.basename(full_dataset_path))[0]
 
-            for j in range(1,cv_partitions+1):
-                #Specify dataset path
-                full_data_path = datapath+'/'+str(entry)+'_CV_Train_'+str(j)+'.txt'
-                full_data_name = entry+'_CV_Train_'+str(j)
-                #Specify output folder path
-                outputPath = base_output_path_2+'/'+'cv_'+str(j)
-                if not os.path.exists(outputPath):
-                    os.mkdir(outputPath)
+    base_output_path_1 = os.path.join(base_output_path_0, dataset_name)
+    if not os.path.exists(base_output_path_1):
+        os.mkdir(base_output_path_1)
 
-                if not check: #Regular Job submission run
-                    if run_cluster == 'LSF':
-                        submit_lsf_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,min_output,alternate,alternate_mode,feedback)
-                        jobCount +=1
-                    elif run_cluster == 'SLURM':
-                        submit_slurm_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,min_output,alternate,alternate_mode,feedback)
-                        jobCount +=1
-                    else:
-                        print('ERROR: Cluster type not found')
-                else: #check what runs have completed (based on last file generated by jobs)
-                    target_file_path = outputPath+'/runtimes.csv'
-                    print(target_file_path)
-                    if not os.path.exists(target_file_path):
-                        print('Missing: '+str(outputPath))
-                        missing_count += 1
-                        if resubmit:
-                            if run_cluster == 'LSF':
-                                submit_lsf_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,min_output,alternate,alternate_mode,feedback)
-                                jobCount +=1
-                            elif run_cluster == 'SLURM':
-                                submit_slurm_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,min_output,alternate,alternate_mode,feedback)
-                                jobCount +=1
-                            else:
-                                print('ERROR: Cluster type not found')
+    df = pd.read_csv(full_dataset_path, sep=None, engine='python')
+
+    for i in range(random_seeds):
+        target_random_seed = i if random_seeds > 1 else random_state
+
+        try:
+            X = df.drop(excluded_column, axis=1)
+        except:
+            X = df.copy()
+            print('Excluded column not available')
+
+        try:
+            X = X.drop(instanceID_label, axis=1)
+        except:
+            print('Instance ID column not available')
+
+        X = X.drop(outcome_label, axis=1)
+        y = df[outcome_label]
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y,
+            random_state=target_random_seed,
+            test_size=0.25,
+            shuffle=True
+        )
+
+        train_df = pd.concat([X_train, y_train], axis=1)
+        test_df  = pd.concat([X_test, y_test], axis=1)
+
+        base_output_path_2 = os.path.join(base_output_path_1, f'seed_{i}')
+        if not os.path.exists(base_output_path_2):
+            os.mkdir(base_output_path_2)
+
+        train_file = os.path.join(base_output_path_2, f'{dataset_name}_Train.txt')
+        test_file  = os.path.join(base_output_path_2, f'{dataset_name}_Test.txt')
+
+        train_df.to_csv(train_file, sep='	', index=False)
+        test_df.to_csv(test_file, sep='	', index=False)
+
+        outputPath = os.path.join(base_output_path_2, 'run_1')
+        if not os.path.exists(outputPath):
+            os.mkdir(outputPath)
+
+        full_data_name = f'{dataset_name}_Train'
+
+        if run_cluster == 'LSF':
+            submit_lsf_cluster_job(
+                scratchPath, logPath, reserved_memory, queue,
+                full_data_name, outputPath, train_file, ekfolder,
+                outcome_label, instanceID_label, excluded_column,
+                model_pop_init, outcome_type, iterations, pop_size, nu,
+                model_iterations, model_pop_size, cross_prob, mut_prob,
+                beta, theta_sel, fitness_function, subsumption, rsl,
+                feat_track, new_gen, merge_prob, rule_pop_init,
+                compaction, track_performance, stored_rule_iterations,
+                stored_model_iterations, target_random_seed, verbose,
+                min_output, alternate, alternate_mode, feedback
+            )
+            jobCount += 1
+
+        elif run_cluster == 'SLURM':
+            submit_slurm_cluster_job(
+                scratchPath, logPath, reserved_memory, queue,
+                full_data_name, outputPath, train_file, ekfolder,
+                outcome_label, instanceID_label, excluded_column,
+                model_pop_init, outcome_type, iterations, pop_size, nu,
+                model_iterations, model_pop_size, cross_prob, mut_prob,
+                beta, theta_sel, fitness_function, subsumption, rsl,
+                feat_track, new_gen, merge_prob, rule_pop_init,
+                compaction, track_performance, stored_rule_iterations,
+                stored_model_iterations, target_random_seed, verbose,
+                min_output, alternate, alternate_mode, feedback, optimization_method
+            )
+            jobCount += 1
+
+        else:
+            print('ERROR: Cluster type not found')
+
+
     print(str(jobCount)+' jobs submitted successfully')
     if check:
         print(str(missing_count)+' jobs incomplete')
@@ -240,7 +284,7 @@ def submit_lsf_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_n
     os.system('bsub < ' + job_path)
     
 #Cedars Cluster
-def submit_slurm_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,min_output,alternate,alternate_mode,feedback): 
+def submit_slurm_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,min_output,alternate,alternate_mode,feedback, optimization_method): 
     job_ref = str(time.time())
     job_name = 'HEROS_'+full_data_name+'_seed_'+str(target_random_seed)+'_'+job_ref
     job_path = scratchPath+'/'+job_name+ '_run.sh'
@@ -255,7 +299,7 @@ def submit_slurm_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data
     fb_arg = ' --fb' if feedback else ''
     verbose_arg = ' --v' if verbose else ''
     min_arg = ' --min' if min_output else ''
-    sh_file.write('srun python job_heros.py'+' --d '+str(full_data_path)+' --o '+str(outputPath)+' --ekf '+str(ekfolder)+' --ol '+str(outcome_label) +' --il '+str(instanceID_label) +' --el '+str(excluded_column)+' --in '+str(model_pop_init)+' --ot '+str(outcome_type)+' --it '+str(iterations)+' --ps '+str(pop_size)+' --nu '+str(nu)+' --mi '+str(model_iterations)+' --ms '+str(model_pop_size)+' --cp '+str(cross_prob)+' --mp '+str(mut_prob)+' --b '+str(beta)+' --ts '+str(theta_sel)+' --ff '+str(fitness_function)+' --s '+str(subsumption)+' --rsl '+str(rsl)+' --ft '+str(feat_track)+' --ng '+str(new_gen)+' --mg '+str(merge_prob)+' --pt '+str(rule_pop_init)+' --c '+str(compaction)+' --tp '+str(track_performance)+' --sr '+str(stored_rule_iterations)+' --sm '+str(stored_model_iterations)+' --rs '+str(target_random_seed)+ verbose_arg + min_arg + ' --a ' + str(alternate)+ ' --m ' + str(alternate_mode) + fb_arg +'\n')
+    sh_file.write('srun python job_heros.py'+' --d '+str(full_data_path)+' --o '+str(outputPath)+' --ekf '+str(ekfolder)+' --ol '+str(outcome_label) +' --il '+str(instanceID_label) +' --el '+str(excluded_column)+' --in '+str(model_pop_init)+' --ot '+str(outcome_type)+' --it '+str(iterations)+' --ps '+str(pop_size)+' --nu '+str(nu)+' --mi '+str(model_iterations)+' --ms '+str(model_pop_size)+' --cp '+str(cross_prob)+' --mp '+str(mut_prob)+' --b '+str(beta)+' --ts '+str(theta_sel)+' --ff '+str(fitness_function)+' --s '+str(subsumption)+' --rsl '+str(rsl)+' --ft '+str(feat_track)+' --ng '+str(new_gen)+' --mg '+str(merge_prob)+' --pt '+str(rule_pop_init)+' --c '+str(compaction)+' --tp '+str(track_performance)+' --sr '+str(stored_rule_iterations)+' --sm '+str(stored_model_iterations)+' --rs '+str(target_random_seed)+ verbose_arg + min_arg + ' --a ' + str(alternate)+ ' --m ' + str(alternate_mode) + ' --OPT ' + str(optimization_method) + fb_arg +'\n')
     sh_file.close()
     os.system('sbatch ' + job_path)
 
