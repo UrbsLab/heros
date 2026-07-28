@@ -59,6 +59,8 @@ def main(argv):
     parser.add_argument('--rs', dest='random_state', help='random state seed', type=int, default=42)
     parser.add_argument('--v', dest='verbose', help='boolean flag to run in verbose mode', type=str, default='False')
     parser.add_argument('--min', dest='min_output', help='boolean flag to minimize saved HEROS output', action='store_true')
+    parser.add_argument('--opt', dest='optimization_method', help='quantitative feature optimization method', type=str, default='None')
+
 
     #----------------------------------------------------------------------------------------------
     options=parser.parse_args(argv[1:])
@@ -119,6 +121,10 @@ def main(argv):
     else:
         verbose = False
     min_output = options.min_output
+    optimization_method = options.optimization_method
+
+
+
 
     # Get Dataset Name
     data_name = os.path.splitext(os.path.basename(full_data_path))[0]
@@ -154,7 +160,7 @@ def main(argv):
                 fitness_function=fitness_function,subsumption=subsumption,rsl=rsl,feat_track=feat_track, model_iterations=model_iterations,
                 model_pop_size=model_pop_size,model_pop_init=model_pop_init,new_gen=new_gen,merge_prob=merge_prob,rule_pop_init=rule_pop_init,compaction=compaction,
                 track_performance=track_performance,model_tracking=True,stored_rule_iterations=stored_rule_iterations,stored_model_iterations=stored_model_iterations,
-                random_state=random_state,verbose=verbose,alternate=alternate,alternate_mode=alternate_mode,feedback=feedback)
+                random_state=random_state,verbose=verbose,alternate=alternate,alternate_mode=alternate_mode,feedback=feedback, optimization_method = optimization_method)
     
     heros = heros.fit(train_X, train_y, row_id, cat_feat_indexes=cat_feat_indexes, ek=ek)
     # Save Rule Population
