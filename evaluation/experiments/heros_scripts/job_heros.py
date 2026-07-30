@@ -9,10 +9,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 #UPDATE Path below as needed!!!
-sys.path.append('/project/kamoun_shared/output_shared/heros_v0.3_dev/heros/src')
+sys.path.append('/common/urbanowiczrlab/zadia/heros')
 #sys.path.append('/project/kamoun_shared/code_shared/new_heros/scikit-heros/')
-#from src.skheros.heros import HEROS
-from skheros.heros import HEROS #PIP INSTALL RUN
+from src.skheros.heros import HEROS
+#from skheros.heros import HEROS #PIP INSTALL RUN
 
 def main(argv):
     #ARGUMENTS:------------------------------------------------------------------------------------
@@ -143,7 +143,7 @@ def main(argv):
     print(train_X.columns)
     train_X = train_X.drop(outcome_label, axis=1)
     feature_names = train_X.columns # 6-bit multiplexer feature names are ['A_0','A_1','R_0', 'R_1', 'R_2','R_3']
-    cat_feat_indexes = list(range(train_X.shape[1])) #assumes all feature are categorical so provide indexes 0-5 in this list for 6-bit multiplexer dataset e.g. [0,1,2,3,4,5]
+    cat_feat_indexes = None #assumes all feature are quant
     train_X = train_X.values
     train_y = train_df[outcome_label].values #outcome values
     try:
@@ -151,7 +151,9 @@ def main(argv):
     except:
         row_id = None
     #Load expert knowledge scores
-    score_path_name = ekfolder+'/'+str(data_name)+'_MultiSURF_Scores.csv' #No need to change
+    #score_path_name = ekfolder+'/'+str(data_name)+'_MultiSURF_Scores.csv' #No need to change
+
+    score_path_name = ekfolder+'/'+"Multiplexer6_MultiSWRFDB_Scores.csv"
     loaded_data = pd.read_csv(score_path_name)
     ek = loaded_data['Score'].tolist()
 

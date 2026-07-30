@@ -70,7 +70,7 @@ def main(argv):
     parser.add_argument("--r", dest="random_seeds", type=int, default=30)
     parser.add_argument("--rc", dest="run_cluster", type=str, default="LSF", choices=["LSF", "SLURM"])
     parser.add_argument("--rm", dest="reserved_memory", type=int, default=4)
-    parser.add_argument("--q", dest="queue", type=str, default="i2c2_normal")
+    parser.add_argument("--q", dest="queue", type=str, default="defq")
 
     args = parser.parse_args(argv[1:])
 

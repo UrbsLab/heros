@@ -46,9 +46,9 @@ def parse_args(argv):
                    help="Significance threshold p-value (default 0.05).")
 
     # HPC params
-    p.add_argument("--rc", dest="run_cluster", type=str, default="LSF", choices=["LSF", "SLURM"])
+    p.add_argument("--rc", dest="run_cluster", type=str, default="SLURM", choices=["LSF", "SLURM"])
     p.add_argument("--rm", dest="reserved_memory", type=int, default=8, help="GB")
-    p.add_argument("--q", dest="queue", type=str, default="i2c2_normal")
+    p.add_argument("--q", dest="queue", type=str, default="defq")
 
     return p.parse_args(argv[1:])
 

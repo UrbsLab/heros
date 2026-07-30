@@ -66,6 +66,7 @@ MUX_DATASETS = [
     "C_multiplexer_20_bit_10000_inst",
     "D_multiplexer_37_bit_10000_inst",
     "E_multiplexer_70_bit_20000_inst",
+    "Multiplexer6_feature_type_mix_decimals"
 ]
 
 IDEAL_MUX_RULE_COUNT = {
@@ -154,7 +155,8 @@ def load_raw_metric_values(
 ) -> pd.Series:
     group_dir = output_root / f"HEROS_{group_name}"
     if not group_dir.exists():
-        return pd.Series(dtype=float)
+        raise FileNotFoundError(f"Group does not exist: HEROS_{group_name}")
+        #return pd.Series(dtype=float)
 
     p = raw_eval_path(group_dir, dataset, condition)
     if p is None:
@@ -343,11 +345,12 @@ def parse_baseline_map(s: str) -> dict[str, str]:
 
 
 def dataset_family(dataset: str) -> str:
-    if dataset in MUX_DATASETS or "multiplexer" in dataset:
-        return "multiplexer"
-    if dataset in GAMETES_DATASETS:
-        return "gametes"
-    return "other"
+    #if dataset in MUX_DATASETS or "mux" in dataset:
+       # return "multiplexer"
+    #if dataset in GAMETES_DATASETS:
+        #return "gametes"
+    #return "other"
+    return "multiplexer"
 
 
 def extract_one_condition(
@@ -545,6 +548,7 @@ def collect_boxplot_data(output_root: Path, allowed_groups: set[str], conditions
     for g in sorted(allowed_groups):
         group_dir = output_root / f"HEROS_{g}"
         if not group_dir.exists():
+            print(f"[WARN] Group directory not found: {group_dir}")
             continue
 
         for dataset_dir in sorted([p for p in group_dir.iterdir() if p.is_dir()], key=lambda p: p.name):
@@ -613,7 +617,7 @@ def make_grouped_boxplot_by_dataset(
     group_spacing = 0.05
     dataset_gap = 0.10
 
-    hatch_cycle = ["", "///", "..."]
+    hatch_cycle = ["", "///", "...","xxx"]
     hatch_by_config = {cfg: hatch_cycle[i % len(hatch_cycle)] for i, cfg in enumerate(configs)}
 
     if len(conditions) > len(DISTINCT_COLORS):
@@ -740,7 +744,7 @@ def main():
     p.add_argument("--outcsv", dest="outcsv", default="HEROS_Combined_Table.csv",
                    help="Output CSV file name (written inside --o).")
     p.add_argument("--baseline-map", dest="baseline_map",
-                   default="multiplexer:mux_cv_default,gametes:gametes_cv_default",
+                   default="multiplexer:mux_cv_baseline,gametes:mux_cv_baseline",
                    help="Per-family baselines for significance. Format: 'multiplexer:<group>,gametes:<group>'.")
     p.add_argument("--alpha", dest="alpha", type=float, default=0.05,
                    help="Significance threshold p-value / FDR target (default 0.05).")
@@ -802,7 +806,6 @@ def main():
     for tag, conds, _pretty in plot_specs:
         for metric_name, (metric_col, _dec) in METRICS.items():
             df_long = collect_boxplot_data(output_root, allowed_groups, conds, metric_col)
-
             ylabel = metric_name
             if metric_col == "run_time" and not df_long.empty:
                 df_long = df_long.copy()
@@ -812,6 +815,10 @@ def main():
             for split_name, dataset_set in splits:
                 df_split = df_long[df_long["Dataset"].isin(dataset_set)]
                 out_png = base_plot_dir / split_name / f"{tag}_{metric_col}_boxplot.png"
+
+                if df_long.empty:
+                    print(f"[WARN] df_long is empty")
+                    return
 
                 make_grouped_boxplot_by_dataset(
                     df_split,

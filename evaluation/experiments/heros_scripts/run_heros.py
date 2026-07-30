@@ -69,8 +69,8 @@ def main(argv):
     #HPC parameters
     parser.add_argument('--rc', dest='run_cluster', help='cluster type', type=str, default='SLURM')
     parser.add_argument('--rm', dest='reserved_memory', help='reserved memory for job', type=int, default= 4)
-    #parser.add_argument('--q', dest='queue', help='cluster queue name', type=str, default= 'i2c2_normal') #ONLY FOR UPENN
-    parser.add_argument('--p', dest='partition', help='slurm partition name', type=str, default= 'defq')
+    parser.add_argument('--q', dest='queue', help='cluster queue name', type=str, default= 'i2c2_normal') #ONLY FOR UPENN
+    #parser.add_argument('--p', dest='partition', help='slurm partition name', type=str, default= 'defq')
     #parser.add_argument('--check', dest='check', help='boolean flag to check and report on what jobs have not yet completed', type=bool, action= False)
     parser.add_argument('--check', dest='check', help='boolean flag to check and report on what jobs have not yet completed', action='store_true')
     #parser.add_argument('--resub', dest='resubmit', help='boolean flag to resubmit incomplete jobs', type=bool, default= False)
@@ -299,7 +299,7 @@ def submit_slurm_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data
     fb_arg = ' --fb' if feedback else ''
     verbose_arg = ' --v' if verbose else ''
     min_arg = ' --min' if min_output else ''
-    sh_file.write('srun python job_heros.py'+' --d '+str(full_data_path)+' --o '+str(outputPath)+' --ekf '+str(ekfolder)+' --ol '+str(outcome_label) +' --il '+str(instanceID_label) +' --el '+str(excluded_column)+' --in '+str(model_pop_init)+' --ot '+str(outcome_type)+' --it '+str(iterations)+' --ps '+str(pop_size)+' --nu '+str(nu)+' --mi '+str(model_iterations)+' --ms '+str(model_pop_size)+' --cp '+str(cross_prob)+' --mp '+str(mut_prob)+' --b '+str(beta)+' --ts '+str(theta_sel)+' --ff '+str(fitness_function)+' --s '+str(subsumption)+' --rsl '+str(rsl)+' --ft '+str(feat_track)+' --ng '+str(new_gen)+' --mg '+str(merge_prob)+' --pt '+str(rule_pop_init)+' --c '+str(compaction)+' --tp '+str(track_performance)+' --sr '+str(stored_rule_iterations)+' --sm '+str(stored_model_iterations)+' --rs '+str(target_random_seed)+ verbose_arg + min_arg + ' --a ' + str(alternate)+ ' --m ' + str(alternate_mode) + ' --OPT ' + str(optimization_method) + fb_arg +'\n')
+    sh_file.write('srun python job_heros.py'+' --d '+str(full_data_path)+' --o '+str(outputPath)+' --ekf '+str(ekfolder)+' --ol '+str(outcome_label) +' --il '+str(instanceID_label) +' --el '+str(excluded_column)+' --in '+str(model_pop_init)+' --ot '+str(outcome_type)+' --it '+str(iterations)+' --ps '+str(pop_size)+' --nu '+str(nu)+' --mi '+str(model_iterations)+' --ms '+str(model_pop_size)+' --cp '+str(cross_prob)+' --mp '+str(mut_prob)+' --b '+str(beta)+' --ts '+str(theta_sel)+' --ff '+str(fitness_function)+' --s '+str(subsumption)+' --rsl '+str(rsl)+' --ft '+str(feat_track)+' --ng '+str(new_gen)+' --mg '+str(merge_prob)+' --pt '+str(rule_pop_init)+' --c '+str(compaction)+' --tp '+str(track_performance)+' --sr '+str(stored_rule_iterations)+' --sm '+str(stored_model_iterations)+' --rs '+str(target_random_seed)+ verbose_arg + min_arg + ' --a ' + str(alternate)+ ' --m ' + str(alternate_mode) + ' --opt ' + str(optimization_method) + fb_arg +'\n')
     sh_file.close()
     os.system('sbatch ' + job_path)
 

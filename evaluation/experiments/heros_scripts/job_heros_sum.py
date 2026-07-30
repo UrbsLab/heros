@@ -42,12 +42,11 @@ def list_datasets(output_path: str) -> list[str]:
 def get_row_indexes_from_any_eval(output_path: str, dataset: str, random_seeds: int, cv_partitions: int) -> list[str]:
     # Find first existing evaluation_summary.csv and return its Row Indexes
     for i in range(random_seeds):
-        for j in range(1, cv_partitions + 1):
-            fp = os.path.join(output_path, dataset, f"seed_{i}", f"cv_{j}", "evaluation_summary.csv")
-            df = safe_read_csv(fp)
-            if df is not None and "Row Indexes" in df.columns:
-                rows = df["Row Indexes"].tolist()
-                return rows
+        fp = os.path.join(output_path, dataset, f"seed_{i}", "run_1/evaluation_summary.csv")
+        df = safe_read_csv(fp)
+        if df is not None and "Row Indexes" in df.columns:
+            rows = df["Row Indexes"].tolist()
+            return rows
     return []
 
 def aggregate_seed_level(output_path: str, dataset: str, seed: int, cv_partitions: int) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
@@ -60,21 +59,21 @@ def aggregate_seed_level(output_path: str, dataset: str, seed: int, cv_partition
     row_names = None
 
     missing = 0
-    for j in range(1, cv_partitions + 1):
-        fp = os.path.join(seed_path, f"cv_{j}", "evaluation_summary.csv")
-        df = safe_read_csv(fp)
-        if df is None:
-            missing += 1
-            print(f"[MISSING] {fp}")
-            continue
-        if "Row Indexes" not in df.columns:
-            print(f"[WARN] No 'Row Indexes' in {fp}; skipping")
-            missing += 1
-            continue
+    
+    fp = os.path.join(seed_path, "run_1/evaluation_summary.csv")
+    df = safe_read_csv(fp)
+    if df is None:
+        missing += 1
+        print(f"[MISSING] {fp}")
+        
+    if "Row Indexes" not in df.columns:
+        print(f"[WARN] No 'Row Indexes' in {fp}; skipping")
+        missing += 1
+        
 
-        row_names = df["Row Indexes"]
-        df_x = df.drop(columns=["Row Indexes"])
-        dfs.append(df_x)
+    row_names = df["Row Indexes"]
+    df_x = df.drop(columns=["Row Indexes"])
+    dfs.append(df_x)
 
     if not dfs:
         print(f"[WARN] No CV eval files found for dataset={dataset}, seed={seed}")
@@ -159,23 +158,22 @@ def write_global_eval_lists(output_path: str, dataset: str, random_seeds: int, c
 
     missing = 0
     for i in range(random_seeds):
-        for j in range(1, cv_partitions + 1):
-            fp = os.path.join(dataset_path, f"seed_{i}", f"cv_{j}", "evaluation_summary.csv")
-            df = safe_read_csv(fp)
-            if df is None or "Row Indexes" not in df.columns:
-                missing += 1
-                continue
+        fp = os.path.join(dataset_path, f"seed_{i}", "run_1/evaluation_summary.csv")
+        df = safe_read_csv(fp)
+        if df is None or "Row Indexes" not in df.columns:
+            missing += 1
+            
 
-            if header is None:
-                header = [c for c in df.columns if c != "Row Indexes"]
+        if header is None:
+            header = [c for c in df.columns if c != "Row Indexes"]
 
-            for _, row in df.iterrows():
-                ri = row["Row Indexes"]
-                if ri not in eval_point_all:
-                    # In case different runs have extra rows, include them too
-                    eval_point_all[ri] = []
-                values = [row[c] for c in header]
-                eval_point_all[ri].append(values)
+        for _, row in df.iterrows():
+            ri = row["Row Indexes"]
+            if ri not in eval_point_all:
+                # In case different runs have extra rows, include them too
+                eval_point_all[ri] = []
+            values = [row[c] for c in header]
+            eval_point_all[ri].append(values)
 
     if header is None:
         print(f"[WARN] No evaluation_summary.csv readable for dataset={dataset}; skipping")
@@ -307,7 +305,7 @@ def gen_ideal_rules(mux: int) -> list[list]:
 
 def mux_ideal_rule_scan(output_path: str, cv_partitions: int, random_seeds: int) -> None:
     # Only do if "multiplexer" experiment folder name suggests mux
-    if "multiplexer" not in output_path.lower() and "mux" not in output_path.lower():
+    if "multiplexer" not in output_path.lower():
         return
 
     # You can extend this mapping as needed
