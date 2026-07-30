@@ -298,6 +298,22 @@ class MODEL_POP:
                         #self.add_new_explored_model(new_model.rule_IDs, self.explored_models)
                     else:
                         fail_count += 1
+        elif model_pop_init == 'biohel':
+            # All the rules in the current rule population
+            pool = copy.copy(heros.rule_population.pop_set)
+            # # Only consider rules whose action is NOT the majority class and that have an accuracy > 50% (BioHEL inspired)
+            # # ... only considering rules w/ accuracy > 50%; otherwise, will use default rule (predict majority class)
+            # eligible_rules = [rule for rule in pool if rule.action != heros.env.majority_class and rule.accuracy > 0.5]
+            # Only consider rules that have an accuracy > 50% (part of BioHEL)
+            # ... unlike BioHEL, no default rule
+            eligible_rules = [rule for rule in pool if rule.accuracy > 0.5]
+             
+            while len(self.pop_set) < heros.model_pop_size and fail_count < failed_attempts_max:
+                new_model = MODEL()
+                rules_in_model = random.randint(min_rules,max_rules)
+                # new_model.initialize_biohel(eligible_rules, target_rule_max, heros)
+                new_model.initialize_biohel(eligible_rules, rules_in_model, heros)
+
         else:
             print("Specified model initialization method not available.")
 
