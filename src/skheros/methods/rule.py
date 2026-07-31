@@ -582,12 +582,13 @@ class RULE:
         front_updated = False #only actively used by pareto front rule-fitness
         train_data = heros.env.train_data
         self.instance_outcome_count = {}
-        self.correct_cover_instances_by_class = {} # to keep track of the training instances (indexes of these instances) that a rule (potentially) correctly covers, for each possible rule action scenario (rule's action will be decided later)
+        # self.correct_cover_instances_by_class = {} # to keep track of the training instances (indexes of these instances) that a rule (potentially) correctly covers, for each possible rule action scenario (rule's action will be decided later)
+        self.match_cover_instances = np.zeros(heros.env.num_instances, dtype=bool) # to keep track of the training instances (indexes of these instances) that a rule covers/matches; boolean mask representation
 
         for each in heros.env.classes:
             self.instance_outcome_count[each] = 0
             # self.correct_cover_instances_by_class[each] = []
-            self.correct_cover_instances_by_class[each] = np.zeros(heros.env.num_instances, dtype=bool) # boolean mask representation
+            # self.correct_cover_instances_by_class[each] = np.zeros(heros.env.num_instances, dtype=bool) # boolean mask representation
         for instance_index in range(heros.env.num_instances):
             instance_state = train_data[0][instance_index] 
             outcome_state = train_data[1][instance_index]
@@ -595,7 +596,8 @@ class RULE:
                 self.match_cover += 1
                 self.instance_outcome_count[outcome_state] += 1 #update rule's outcome counts for training set
                 # self.correct_cover_instances_by_class[outcome_state].append(instance_index) # update the training instances that would be correctly covered by this rule IF this action was the rule's action
-                self.correct_cover_instances_by_class[outcome_state][instance_index] = True # update the training instances that would be correctly covered by this rule IF this action was the rule's action
+                # self.correct_cover_instances_by_class[outcome_state][instance_index] = True # update the training instances that would be correctly covered by this rule IF this action was the rule's action
+                self.match_cover_instances[instance_index] = True # update the training instances covered by this rule
         # Assign class that yields highest rule accuracy - regardless of current target instance class
         self.instance_outcome_prop = copy.deepcopy(self.instance_outcome_count)
         #Convert class counts first into class accuracies then into 'useful' accuracies to take class imbalance into account
@@ -613,8 +615,8 @@ class RULE:
             self.action = random.choice(sorted(candidate_actions))
         self.correct_cover = self.instance_outcome_count[self.action]
 
-        # Now that the action for the rule has been decided, select the training instances the rule correctly covers
-        self.correct_cover_instances = self.correct_cover_instances_by_class[self.action]
+        # # Now that the action for the rule has been decided, select the training instances the rule correctly covers
+        # self.correct_cover_instances = self.correct_cover_instances_by_class[self.action]
 
         # Calculate rule accuracy ***************************
         try:

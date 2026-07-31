@@ -304,8 +304,9 @@ class MODEL_POP:
             # # Only consider rules whose action is NOT the majority class and that have an accuracy > 50% (BioHEL inspired)
             # # ... only considering rules w/ accuracy > 50%; otherwise, will use default rule (predict majority class)
             # eligible_rules = [rule for rule in pool if rule.action != heros.env.majority_class and rule.accuracy > 0.5]
-            # Only consider rules that have an accuracy > 50% (part of BioHEL)
+            # Only consider rules that have an accuracy > 50% (BioHEL-inspired)
             # ... unlike BioHEL, no default rule
+            # Consideration: should this condition be tweaked for multiclass?
             eligible_rules = [rule for rule in pool if rule.accuracy > 0.5]
              
             while len(self.pop_set) < heros.model_pop_size and fail_count < failed_attempts_max:
@@ -313,7 +314,25 @@ class MODEL_POP:
                 rules_in_model = random.randint(min_rules,max_rules)
                 # new_model.initialize_biohel(eligible_rules, target_rule_max, heros)
                 new_model.initialize_biohel(eligible_rules, rules_in_model, heros)
-
+                #Check if model already in population, and add to population
+                if self.archive_discovered_models:
+                    if not self.list_exists(new_model.rule_IDs, self.explored_models):
+                        # Evalute model and update model parameters
+                        new_model.evaluate_model_class(heros)
+                        #Add model to population
+                        self.pop_set.append(new_model) #add to model population
+                        self.add_new_explored_model(new_model.rule_IDs, self.explored_models)
+                    else:
+                        fail_count += 1
+                else: #No model archiving
+                    if not self.model_exists(new_model):
+                        # Evalute model and update model parameters
+                        new_model.evaluate_model_class(heros)
+                        #Add model to population
+                        self.pop_set.append(new_model) #add to model population
+                        #self.add_new_explored_model(new_model.rule_IDs, self.explored_models)
+                    else:
+                        fail_count += 1
         else:
             print("Specified model initialization method not available.")
 
