@@ -230,7 +230,7 @@ class MODEL:
 
         # Boolean mask of all training instances currently covered
         current_cover = first_rule.match_cover_instances.copy()
-        uncovered = ~current_cover
+        current_uncovered = ~current_cover
 
         # add additional rules to the rule set
         while eligible_rules and len(self.rule_set) < max_rules:
@@ -238,13 +238,17 @@ class MODEL:
             accuracies = []
 
             for rule in eligible_rules:
-                # calculate accuracy of rule among instances uncovered by the model
-                accuracy = np.sum(rule.correct_cover_instances & uncovered) / np.sum(rule.match_cover_instances & uncovered)
+                num_new_matches = np.sum(rule.match_cover_instances & current_uncovered)
+                num_new_correct_matches = np.sum(rule.correct_cover_instances & current_uncovered)
+
+                if num_new_matches > 0: # to avoid division by zero
+                    # calculate accuracy of rule among instances uncovered by the model
+                    accuracy = num_new_correct_matches / num_new_matches
+                else:
+                    accuracy = 0.0
 
                 # Number of NEW instances this rule would cover (normalized)
-                coverage_gain = np.sum(
-                    rule.match_cover_instances & uncovered
-                ) / heros.env.num_instances
+                coverage_gain = num_new_matches / heros.env.num_instances
 
                 # if coverage_score is greater than T, start to see diminishing returns
                 # idea is to prevent very high coverage rules from dominating rule_score
@@ -278,7 +282,7 @@ class MODEL:
 
             # Update coverage
             current_cover |= next_rule.match_cover_instances
-            uncovered = ~current_cover
+            current_uncovered = ~current_cover
 
             # Remove from candidate pool
             eligible_rules.remove(next_rule)
