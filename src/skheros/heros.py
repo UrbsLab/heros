@@ -17,6 +17,7 @@ from .methods.model_population import MODEL_POP
 from .methods.model_prediction import MODEL_PREDICTION
 #import pickle #temporary testing
 #import inspect #temporary testing
+import time #temporary testing
 
 class HEROS(BaseEstimator, TransformerMixin):
     def __init__(self,outcome_type='class',iterations=100000,pop_size=1000,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,fitness_function='pareto',
@@ -44,7 +45,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         :param model_pop_init: model population initialization method (Must be 'random', 'probabilistic', 'bootstrap', or 'target_acc')
         :param new_gen: Proportion of maximum pop size used to generate an model offspring population each generation (must be float from 0 - 1)
         :param merge_prob: The probablity of the merge operator being used during model offspring generation (must be float from 0 - 1)
-        :param rule_pop_init: Specifies type of population initiailzation (if any) (Must be 'load' or 'dt', or None)
+        :param rule_pop_init: Specifies type of population initiailzation (if any) (Must be 'load', 'dt', 'dt_bstrap', or None)
         :param compaction: Specifies type of rule-compaciton to apply at end of rule population training (if any) (Must be 'sub' or None)
         :param track_performance: Activates performance tracking when > 0. Value indicates how many iteration steps to wait to gather tracking data (Must be 0 or a positive integer)
         :param model_tracking: Boolean flag to track best model each model training iteration
@@ -403,10 +404,12 @@ class HEROS(BaseEstimator, TransformerMixin):
             self.phase_one()
             self.tracking.alternations.append(self.iteration)
 
+            start_time = time.time()
             if self.model_iteration == 0:
                 self.model_population.initialize_model_population(
                     self, random, self.model_pop_init
                 )
+            print("Time taken for BioHEL-inspired model init.:", time.time() - start_time, "sec")
             
             self.phase_two()
             self.model_population.model_alterations.append(self.model_iteration)

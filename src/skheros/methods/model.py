@@ -103,6 +103,9 @@ class MODEL:
         self.rule_set = []
         self.rule_IDs = []
 
+        # create a copy, so that original list is not modified for future models
+        eligible_rules = eligible_rules.copy()
+
         first_rule = random.choices(
             eligible_rules,
             weights=[rule.fitness for rule in eligible_rules],
