@@ -21,7 +21,7 @@ import time #temporary testing
 
 class HEROS(BaseEstimator, TransformerMixin):
     def __init__(self,outcome_type='class',iterations=100000,pop_size=1000,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,fitness_function='pareto',
-                 subsumption='both',rsl=0,feat_track=None,model_iterations=500,model_pop_size=100, model_pop_init = 'target_acc', new_gen=1.0,merge_prob=0.1,
+                 subsumption='both',rsl=0,feat_track=None,model_iterations=500,model_pop_size=100, model_pop_init = 'target_acc', new_gen=1.0,merge_prob=0.1,init_model_prob=0.05,
                  rule_pop_init=None,compaction='sub',track_performance=0,model_tracking=False,stored_rule_iterations=None,stored_model_iterations=None,random_state=None,
                  verbose=False,alternate=5,alternate_mode='equal',feedback=False):
         """
@@ -45,6 +45,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         :param model_pop_init: model population initialization method (Must be 'random', 'probabilistic', 'bootstrap', or 'target_acc')
         :param new_gen: Proportion of maximum pop size used to generate an model offspring population each generation (must be float from 0 - 1)
         :param merge_prob: The probablity of the merge operator being used during model offspring generation (must be float from 0 - 1)
+        :param init_model_prob: The probability of replacing an offspring model with a model generated through the model initialization method (must be float from 0 - 1)
         :param rule_pop_init: Specifies type of population initiailzation (if any) (Must be 'load', 'dt', 'dt_bstrap', or None)
         :param compaction: Specifies type of rule-compaciton to apply at end of rule population training (if any) (Must be 'sub' or None)
         :param track_performance: Activates performance tracking when > 0. Value indicates how many iteration steps to wait to gather tracking data (Must be 0 or a positive integer)
@@ -109,6 +110,9 @@ class HEROS(BaseEstimator, TransformerMixin):
         if not self.check_is_float(merge_prob) or merge_prob < 0 or merge_prob > 1:
             raise Exception("'merge_prob' param must be float from 0 - 1")
 
+        if not self.check_is_float(init_model_prob) or init_model_prob < 0 or init_model_prob > 1:
+            raise Exception("'init_model_prob' param must be float from 0 - 1")
+
         if not rule_pop_init == 'load' and not rule_pop_init == 'dt' and not rule_pop_init == 'dt_verbose' and not rule_pop_init == 'dt_bstrap' and not rule_pop_init is None and not rule_pop_init == 'None':
             raise Exception("'rule_pop_init' param must be 'load', 'dt', or None")
 
@@ -162,6 +166,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         self.model_pop_init = model_pop_init
         self.new_gen = float(new_gen)
         self.merge_prob = float(merge_prob)
+        self.init_model_prob = float(init_model_prob)
         self.rule_pop_init = str(rule_pop_init)
         if compaction == 'None' or compaction is None:
             self.compaction = None

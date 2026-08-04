@@ -431,6 +431,42 @@ class MODEL_POP:
         else:
             offspring_1.mutation(random,heros)
             offspring_2.mutation(random,heros)
+        # Replacing offspring models with models from the model initialization method (Offspring 1)
+        if random.random() < heros.init_model_prob:
+            rules_in_model = random.randint(random_gen_rule_min,int(len(heros.rule_population.pop_set)))
+            if heros.model_pop_init == "random":
+                offspring_1.initialize_randomly(rules_in_model,heros)
+            elif heros.model_pop_init == "target_acc":
+                if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
+                    offspring_1.initialize_target(rules_in_model,1.0, heros)
+                else:
+                    target = random.uniform(0.55,1.0)
+                    offspring_1.initialize_target(rules_in_model,target, heros)
+            elif heros.model_pop_init == "biohel":
+                pool = copy.copy(heros.rule_population.pop_set)
+                eligible_rules = [rule for rule in pool if rule.accuracy > 0.5]
+                            
+                offspring_1.initialize_biohel(eligible_rules, rules_in_model, heros)
+            else: 
+                print("Specified model initialization method not available.")
+        # Replacing offspring models with models from the model initialization method (Offspring 2)
+        if random.random() < heros.init_model_prob:
+            rules_in_model = random.randint(random_gen_rule_min,int(len(heros.rule_population.pop_set)))
+            if heros.model_pop_init == "random":
+                offspring_2.initialize_randomly(rules_in_model,heros)
+            elif heros.model_pop_init == "target_acc":
+                if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
+                    offspring_2.initialize_target(rules_in_model,1.0, heros)
+                else:
+                    target = random.uniform(0.55,1.0)
+                    offspring_2.initialize_target(rules_in_model,target, heros)
+            elif heros.model_pop_init == "biohel":
+                pool = copy.copy(heros.rule_population.pop_set)
+                eligible_rules = [rule for rule in pool if rule.accuracy > 0.5]
+                                    
+                offspring_2.initialize_biohel(eligible_rules, rules_in_model, heros)
+            else: 
+                print("Specified model initialization method not available.")
         # Offspring 1 Checks -----------------
         #Check for Empty Model
         offspring_1_empty = False
