@@ -414,7 +414,7 @@ class HEROS(BaseEstimator, TransformerMixin):
                 self.model_population.initialize_model_population(
                     self, random, self.model_pop_init
                 )
-            print("Time taken for BioHEL-inspired model init.:", time.time() - start_time, "sec")
+                print("Time taken for BioHEL-inspired model init.:", time.time() - start_time, "sec")
             
             self.phase_two()
             self.model_population.model_alterations.append(self.model_iteration)

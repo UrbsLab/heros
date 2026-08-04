@@ -98,6 +98,117 @@ class MODEL:
             self.rule_IDs.append(r.ID)
         self.birth_iteration = heros.model_iteration
 
+    # def initialize_biohel(self, eligible_rules, max_rules, heros):
+        # """ Initializes rule sets using a BioHEL-inspired, one rule at a time, greedy methodology """
+        # self.rule_set = []
+        # self.rule_IDs = []
+
+        # # create a copy, so that original list is not modified for future models
+        # eligible_rules = eligible_rules.copy()
+
+        # first_rule = random.choices(
+        #     eligible_rules,
+        #     weights=[rule.fitness for rule in eligible_rules],
+        #     k=1
+        # )[0]
+        # self.rule_set.append(first_rule)
+        # self.rule_IDs.append(first_rule.ID)
+        # # remove first_rule from eligible_rules (so that it's not added to the model again)
+        # eligible_rules.remove(first_rule)
+
+        # # Boolean mask of all training instances currently covered
+        # current_cover = first_rule.match_cover_instances.copy()
+
+    #     # lambda_overlap = 0.5      # penalty for overlap
+    #     mu_accuracy = 0.5         # reward for rule accuracy
+    #     # score_threshold = 1.0      # stop if no rule exceeds this score
+    #     score_threshold = 0      # stop adding rules if no rule provides greater number of new instances than number of instances overlapping with the current rule set
+
+        # # add additional rules to the rule set
+        # while eligible_rules and len(self.rule_set) < max_rules:
+        #     candidate_scores = []
+        #     # net_instances_gained = []
+        #     coverage_scores = []
+
+        #     for rule in eligible_rules:
+
+    #             # Number of instances already covered by the current rule set that overlap with this rule (normalized)
+    #             overlap = np.sum(
+    #                 rule.match_cover_instances & current_cover
+    #             ) / heros.env.num_instances
+
+                # # Number of NEW instances this rule would cover (normalized)
+                # coverage_gain = np.sum(
+                #     rule.match_cover_instances & ~current_cover
+                # ) / heros.env.num_instances
+
+    #             # coverage_score = coverage_gain - overlap # trying to reward rules that cover more new instances while not overlapping with already covered instances
+    #             # # if coverage_score is greater than T, start to see diminishing returns
+    #             # # idea is to prevent very high coverage rules from dominating
+    #             # T = 0.10
+    #             # alpha = 0.2
+
+    #             # if coverage_score <= T:
+    #             #     coverage_score = coverage_score
+    #             # else:
+    #             #     coverage_score = T + alpha * (coverage_score - T)
+
+    #             # score = (
+    #             #     coverage_gain
+    #             #     - lambda_overlap * overlap
+    #             #     + mu_accuracy * rule.accuracy
+    #             # )
+    #             score = (
+    #                 coverage_gain - overlap
+    #                 + mu_accuracy * rule.accuracy
+    #             )
+    #             # score = (
+    #             #     (coverage_gain - overlap) # net instances gained/covered
+    #             #     - lambda_overlap * overlap # overlap penalty
+    #             #     + mu_accuracy * rule.accuracy # accuracy reward
+    #             # )
+
+    #             candidate_scores.append(score)
+    #             coverage_scores.append(coverage_gain - overlap)
+
+    #         # Stop if no candidate is worthwhile
+    #         # max_score = max(candidate_scores)
+    #         max_score = max(coverage_scores)
+
+    #         if max_score <= score_threshold:
+    #             break
+
+    #         # Shift scores to be positive (required for random.choices)
+    #         min_score = min(candidate_scores)
+
+    #         if min_score <= 0:
+    #             weights = [
+    #                 score - min_score + 1e-6
+    #                 for score in candidate_scores
+    #             ]
+    #         else:
+    #             weights = candidate_scores
+
+            # # Randomly select next rule
+            # next_rule = random.choices(
+            #     eligible_rules,
+            #     weights=weights,
+            #     k=1
+            # )[0]
+
+    #         # Add to model
+    #         self.rule_set.append(next_rule)
+    #         self.rule_IDs.append(next_rule.ID)
+
+    #         # Update coverage
+    #         current_cover |= next_rule.match_cover_instances
+
+    #         # Remove from candidate pool
+    #         eligible_rules.remove(next_rule)
+
+    #     self.birth_iteration = heros.model_iteration
+
+    # 2nd strategy for initialize_biohel
     def initialize_biohel(self, eligible_rules, max_rules, heros):
         """ Initializes rule sets using a BioHEL-inspired, one rule at a time, greedy methodology """
         self.rule_set = []
@@ -106,6 +217,7 @@ class MODEL:
         # create a copy, so that original list is not modified for future models
         eligible_rules = eligible_rules.copy()
 
+        # first rule selected for the model, with higher fitness leading to a higher probability of being chosen
         first_rule = random.choices(
             eligible_rules,
             weights=[rule.fitness for rule in eligible_rules],
@@ -118,81 +230,45 @@ class MODEL:
 
         # Boolean mask of all training instances currently covered
         current_cover = first_rule.match_cover_instances.copy()
-
-        # lambda_overlap = 0.5      # penalty for overlap
-        mu_accuracy = 0.5         # reward for rule accuracy
-        # score_threshold = 1.0      # stop if no rule exceeds this score
-        score_threshold = 0      # stop adding rules if no rule provides greater number of new instances than number of instances overlapping with the current rule set
+        uncovered = ~current_cover
 
         # add additional rules to the rule set
         while eligible_rules and len(self.rule_set) < max_rules:
-            candidate_scores = []
-            # net_instances_gained = []
-            coverage_scores = []
+            rule_scores = []
+            accuracies = []
 
             for rule in eligible_rules:
-
-                # Number of instances already covered by the current rule set that overlap with this rule (normalized)
-                overlap = np.sum(
-                    rule.match_cover_instances & current_cover
-                ) / heros.env.num_instances
+                # calculate accuracy of rule among instances uncovered by the model
+                accuracy = np.sum(rule.correct_cover_instances & uncovered) / np.sum(rule.match_cover_instances & uncovered)
 
                 # Number of NEW instances this rule would cover (normalized)
                 coverage_gain = np.sum(
-                    rule.match_cover_instances & ~current_cover
+                    rule.match_cover_instances & uncovered
                 ) / heros.env.num_instances
 
-                # coverage_score = coverage_gain - overlap # trying to reward rules that cover more new instances while not overlapping with already covered instances
-                # # if coverage_score is greater than T, start to see diminishing returns
-                # # idea is to prevent very high coverage rules from dominating
-                # T = 0.10
-                # alpha = 0.2
+                # if coverage_score is greater than T, start to see diminishing returns
+                # idea is to prevent very high coverage rules from dominating rule_score
+                # ... and ensure coverage has a range more similar to accuracy (0-1)
+                T = 0.05
 
-                # if coverage_score <= T:
-                #     coverage_score = coverage_score
-                # else:
-                #     coverage_score = T + alpha * (coverage_score - T)
+                coverage_score = 1 - np.exp(-coverage_gain / T)
 
-                # score = (
-                #     coverage_gain
-                #     - lambda_overlap * overlap
-                #     + mu_accuracy * rule.accuracy
-                # )
-                score = (
-                    coverage_gain - overlap
-                    + mu_accuracy * rule.accuracy
-                )
-                # score = (
-                #     (coverage_gain - overlap) # net instances gained/covered
-                #     - lambda_overlap * overlap # overlap penalty
-                #     + mu_accuracy * rule.accuracy # accuracy reward
-                # )
+                # want rules that are accurate, and that cover at least a certain number of instances (before we start to see diminishing returns)
+                rule_score = accuracy * coverage_score
 
-                candidate_scores.append(score)
-                coverage_scores.append(coverage_gain - overlap)
+                rule_scores.append(rule_score)
+                accuracies.append(accuracy)
 
-            # Stop if no candidate is worthwhile
-            # max_score = max(candidate_scores)
-            max_score = max(coverage_scores)
+            max_accuracy = max(accuracies)
 
-            if max_score <= score_threshold:
+            # if no rules are better than predicting the majority class, stop adding rules to the rule set (think about how to extend for multiclass)
+            if max_accuracy < 0.5:
                 break
 
-            # Shift scores to be positive (required for random.choices)
-            min_score = min(candidate_scores)
-
-            if min_score <= 0:
-                weights = [
-                    score - min_score + 1e-6
-                    for score in candidate_scores
-                ]
-            else:
-                weights = candidate_scores
-
-            # Randomly select next rule
+            # Randomly select next rule (with weights=rule_scores)
             next_rule = random.choices(
                 eligible_rules,
-                weights=weights,
+                weights=rule_scores,
                 k=1
             )[0]
 
@@ -202,6 +278,7 @@ class MODEL:
 
             # Update coverage
             current_cover |= next_rule.match_cover_instances
+            uncovered = ~current_cover
 
             # Remove from candidate pool
             eligible_rules.remove(next_rule)
