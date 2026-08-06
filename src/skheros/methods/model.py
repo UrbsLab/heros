@@ -232,7 +232,7 @@ class MODEL:
         # current_cover = first_rule.match_cover_instances.copy()
         # current_uncovered = ~current_cover
 
-        # Boolean masks to store training covered (and uncovered) by the current state of the model; initialized to nothing currently covered
+        # Boolean masks to store training instances covered (and uncovered) by the current state of the model; initialized to nothing currently covered
         current_cover = np.zeros(heros.env.num_instances, dtype=bool)
         current_uncovered = ~current_cover
 
@@ -263,6 +263,9 @@ class MODEL:
 
                 # want rules that are accurate, and that cover at least a certain number of instances (before we start to see diminishing returns)
                 rule_score = accuracy * coverage_score
+
+                # raising rule_score to the 5th power to create larger gap between better/worse rules
+                rule_score = rule_score ** 5
 
                 rule_scores.append(rule_score)
                 accuracies.append(accuracy)
