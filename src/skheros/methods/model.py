@@ -217,19 +217,23 @@ class MODEL:
         # create a copy, so that original list is not modified for future models
         eligible_rules = eligible_rules.copy()
 
-        # first rule selected for the model, with higher fitness leading to a higher probability of being chosen
-        first_rule = random.choices(
-            eligible_rules,
-            weights=[rule.fitness for rule in eligible_rules],
-            k=1
-        )[0]
-        self.rule_set.append(first_rule)
-        self.rule_IDs.append(first_rule.ID)
-        # remove first_rule from eligible_rules (so that it's not added to the model again)
-        eligible_rules.remove(first_rule)
+        # # first rule selected for the model, with higher fitness leading to a higher probability of being chosen
+        # first_rule = random.choices(
+        #     eligible_rules,
+        #     weights=[rule.fitness for rule in eligible_rules],
+        #     k=1
+        # )[0]
+        # self.rule_set.append(first_rule)
+        # self.rule_IDs.append(first_rule.ID)
+        # # remove first_rule from eligible_rules (so that it's not added to the model again)
+        # eligible_rules.remove(first_rule)
 
-        # Boolean mask of all training instances currently covered
-        current_cover = first_rule.match_cover_instances.copy()
+        # # Boolean mask of all training instances currently covered
+        # current_cover = first_rule.match_cover_instances.copy()
+        # current_uncovered = ~current_cover
+
+        # Boolean masks to store training covered (and uncovered) by the current state of the model; initialized to nothing currently covered
+        current_cover = np.zeros(heros.env.num_instances, dtype=bool)
         current_uncovered = ~current_cover
 
         # add additional rules to the rule set
@@ -250,12 +254,12 @@ class MODEL:
                 # Number of NEW instances this rule would cover (normalized)
                 coverage_gain = num_new_matches / heros.env.num_instances
 
-                # if coverage_score is greater than T, start to see diminishing returns
+                # if coverage_score is greater than covBreak, start to see diminishing returns
                 # idea is to prevent very high coverage rules from dominating rule_score
                 # ... and ensure coverage has a range more similar to accuracy (0-1)
-                T = 0.05
+                covBreak = 0.01
 
-                coverage_score = 1 - np.exp(-coverage_gain / T)
+                coverage_score = 1 - np.exp(-coverage_gain / covBreak)
 
                 # want rules that are accurate, and that cover at least a certain number of instances (before we start to see diminishing returns)
                 rule_score = accuracy * coverage_score
