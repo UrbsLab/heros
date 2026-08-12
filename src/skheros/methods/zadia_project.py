@@ -22,16 +22,16 @@ def update_soft_gini(self, instance_state, outcome_state, feature_index, k=1, de
     self.soft_F[feature_index] += p * (outcome_state == self.action)
 
 
-def Soft_Gini_SGD(self, heros, feature_index,np, random, k=1, learning_rate=0.01):
+def Soft_Gini_SGD(self, heros, feature_index, np, random, k=1, learning_rate=0.01):
     """
     Calculate derivatives of gini with respect to lower and upper bounds.
     
     :param feature_index: The feature index to optimize
     :param k: Sigmoid steepness parameter
-    :param learning_rate: Th -pe learning rate for gradient descent
+    :param learning_rate: The learning rate for gradient descent
     :return: Dictionary with updated lower and upper bounds
     """
-    
+
     def sigmoid(x):
         if x >= 0:
             z = math.exp(-x)
@@ -39,24 +39,65 @@ def Soft_Gini_SGD(self, heros, feature_index,np, random, k=1, learning_rate=0.01
         else:
             z = math.exp(x)
             return z / (1 + z)
-            
+
     def sigmoid_derivative(x):
         s = sigmoid(x)
         return s * (1 - s)
 
+    def project_bounds(lower, upper):
+        feat_min, feat_max = heros.env.feat_q_range[feature_index]
+        lower = float(lower)
+        upper = float(upper)
 
-        
+        if feat_min is not None:
+            lower = max(lower, feat_min)
+        if feat_max is not None:
+            upper = min(upper, feat_max)
+
+        if upper <= lower:
+            midpoint = 0.5 * (lower + upper)
+            #may change
+            width = max(abs(upper - lower), 1e-6)
+            half_width = max(width, 0.01 * max(abs(feat_max - feat_min), 1.0))
+            lower = midpoint - half_width
+            upper = midpoint + half_width
+
+            if feat_min is not None:
+                lower = max(lower, feat_min)
+            if feat_max is not None:
+                upper = min(upper, feat_max)
+
+        if upper <= lower:
+            lower = feat_min if feat_min is not None else lower
+            upper = feat_max if feat_max is not None else upper
+
+        return lower, upper
+
     if feature_index not in self.condition_indexes:
-        return None
-    
-    position = self.condition_indexes.index(feature_index)
+        return {'new_lower': None, 'new_upper': None, 'current_gini': 1.0}
 
-    rule_lower = self.condition_values[position][0]
-    rule_upper = self.condition_values[position][1]
+    position = self.condition_indexes.index(feature_index)
+    rule_lower = float(self.condition_values[position][0])
+    rule_upper = float(self.condition_values[position][1])
+
+
+    ################################################# Makes one side infinity
+    if random.random() < 0.5:
+        rule_upper = np.inf
+    else:
+        rule_lower = -np.inf
 
     train_data = heros.env.train_data
     instance_states = train_data[0]
     outcomes = train_data[1]
+
+    def interval_matches_any_instance(lower, upper):
+        for instance in instance_states:
+            value = instance[feature_index]
+
+            if lower <= value <= upper:
+                return True
+        return False
 
     valid_indices = [
         i for i, instance in enumerate(instance_states)
@@ -77,7 +118,7 @@ def Soft_Gini_SGD(self, heros, feature_index,np, random, k=1, learning_rate=0.01
         feature_value = instance[feature_index]
         p = sigmoid(k * (feature_value - rule_lower)) * sigmoid(k * (rule_upper - feature_value))
         interval_probs.append(p)
-    
+
     N = sum(interval_probs)
     if N == 0:
         return {'new_lower': rule_lower, 'new_upper': rule_upper, 'current_gini': 1.0}
@@ -85,52 +126,49 @@ def Soft_Gini_SGD(self, heros, feature_index,np, random, k=1, learning_rate=0.01
     
     unique_classes = set(filtered_outcomes)
     class_probs = {}
-    
+
     for class_c in unique_classes:
         soft_correct = sum(
-            interval_probs[i] for i in range(len(filtered_outcomes)) 
+            interval_probs[i] for i in range(len(filtered_outcomes))
             if filtered_outcomes[i] == class_c
         )
-        qc = soft_correct / N
-        class_probs[class_c] = qc
-    
+        class_probs[class_c] = soft_correct / N
+
     # Step 2: Calculate dpi/d(lower) and dpi/d(upper) for each instance
+
     dpi_d_lower = []
     dpi_d_upper = []
-    
+
     for instance in filtered_states:
         feature_value = instance[feature_index]
         
         # dpi/d(lower) = -k * σ'(k*(xi - lower)) * σ(k*(upper - xi))
         term1_lower = -k * sigmoid_derivative(k * (feature_value - rule_lower))
         term2_lower = sigmoid(k * (rule_upper - feature_value))
-        dpi_dlower = term1_lower * term2_lower
-        dpi_d_lower.append(dpi_dlower)
-        
-        # dpi/d(upper) = σ(k*(xi - lower)) * (k) * σ'(k*(upper - xi))
+        dpi_d_lower.append(term1_lower * term2_lower)
+
         term1_upper = sigmoid(k * (feature_value - rule_lower))
         term2_upper = k * sigmoid_derivative(k * (rule_upper - feature_value))
-        dpi_dupper = term1_upper * term2_upper
-        dpi_d_upper.append(dpi_dupper)
-    
+        dpi_d_upper.append(term1_upper * term2_upper)
+
     # Step 3: Calculate dqc/d(lower) and dqc/d(upper)
     # dqc/d(bound) = (1/N) * Σ(dpi/d(bound) * 1[yi = c]) - (qc/N) * Σ(dpi/d(bound))
-    
+
     sum_dpi_lower = sum(dpi_d_lower)
     sum_dpi_upper = sum(dpi_d_upper)
-    
+
     dqc_d_lower = {}
     dqc_d_upper = {}
-    
+
     for class_c in unique_classes:
         soft_correct_deriv_lower = sum(
-            dpi_d_lower[i] for i in range(len(filtered_outcomes)) 
+            dpi_d_lower[i] for i in range(len(filtered_outcomes))
             if filtered_outcomes[i] == class_c
         )
         dqc_d_lower[class_c] = (soft_correct_deriv_lower / N) - (class_probs[class_c] / N) * sum_dpi_lower
-        
+
         soft_correct_deriv_upper = sum(
-            dpi_d_upper[i] for i in range(len(filtered_outcomes)) 
+            dpi_d_upper[i] for i in range(len(filtered_outcomes))
             if filtered_outcomes[i] == class_c
         )
         dqc_d_upper[class_c] = (soft_correct_deriv_upper / N) - (class_probs[class_c] / N) * sum_dpi_upper
@@ -140,87 +178,61 @@ def Soft_Gini_SGD(self, heros, feature_index,np, random, k=1, learning_rate=0.01
     # dGINI/d(bound) = -Σ (2 * qc * dqc/d(bound))
     
     d_gini_d_lower = -2 * sum(
-        class_probs[class_c] * dqc_d_lower[class_c] 
+        class_probs[class_c] * dqc_d_lower[class_c]
         for class_c in unique_classes
     )
-    
+
     d_gini_d_upper = -2 * sum(
-        class_probs[class_c] * dqc_d_upper[class_c] 
+        class_probs[class_c] * dqc_d_upper[class_c]
         for class_c in unique_classes
     )
 
-    effective_lr = learning_rate * (heros.env.feat_q_range[feature_index][1]- heros.env.feat_q_range[feature_index][0])
+    feat_min, feat_max = heros.env.feat_q_range[feature_index]
+    span = max(abs(feat_max - feat_min), 1.0)
+    step_scale = learning_rate * span
 
+    new_lower = rule_lower - step_scale * d_gini_d_lower
+    new_upper = rule_upper - step_scale * d_gini_d_upper
 
-    new_lower = rule_lower - effective_lr * d_gini_d_lower
-    new_upper = rule_upper - effective_lr * d_gini_d_upper
+    new_lower, new_upper = project_bounds(new_lower, new_upper)
 
-    
-    valid_instances = [instance_states[i] for i in valid_indices]
-
-    for instance in valid_instances:
-        if not new_lower < instance[feature_index] < new_upper:
-            #Repair range to include current instance's feature value
-            if abs(new_upper - instance[feature_index]) > abs(instance[feature_index] - new_lower): #instance value closer to low end
-                new_lower = instance[feature_index]
-            else:
-                new_upper = instance[feature_index]    
-    
-
+    if not interval_matches_any_instance(new_lower, new_upper):
+        new_lower, new_upper = rule_lower, rule_upper
+        if not interval_matches_any_instance(new_lower, new_upper):
+            feat_values = [
+                instance[feature_index]
+                for instance in instance_states
+                if instance[feature_index] is not None and not (isinstance(instance[feature_index], (float, int)) and np.isnan(instance[feature_index]))
+            ]
+            if feat_values:
+                anchor_value = min(feat_values, key=lambda value: abs(value - 0.5 * (rule_lower + rule_upper)))
+                width = max(1e-6, 0.01 * max(abs(feat_max - feat_min), 1.0))
+                new_lower = max(feat_min, anchor_value - width)
+                new_upper = min(feat_max, anchor_value + width)
 
     self.condition_values[position][0] = new_lower
     self.condition_values[position][1] = new_upper
-
     self.condition_values[position].sort()
 
-    return [new_lower, new_upper]
-
-
-    '''
-    print (
-        'new_lower:', rule_lower - learning_rate * d_gini_d_lower,
-        ' new_upper', rule_upper - learning_rate * d_gini_d_upper,
-        ' current_gini:', 1.0 - sum(qc ** 2 for qc in class_probs.values())
-    )
-    '''
+    current_gini = 1.0 - sum(qc ** 2 for qc in class_probs.values())
+    return {'new_lower': self.condition_values[position][0], 'new_upper': self.condition_values[position][1], 'current_gini': current_gini}
 
 
 def optimize_quantitative_range(self, instance_state, quant_feat_list,heros,random,np):
-    """ Mutate the value range of a specified quantitative feature in a rule.
-    """
+    """Mutate the value range of a specified quantitative feature in a rule."""
     changed = False
     while not changed and len(quant_feat_list) > 0:
-        feat = random.sample(quant_feat_list,1)[0]
+        feat = random.sample(quant_feat_list, 1)[0]
         quant_feat_list.remove(feat)
-        if instance_state[feat] != None:
+        if instance_state[feat] is not None:
             rule_position = self.condition_indexes.index(feat)
+            new_bounds = Soft_Gini_SGD(self, heros, feat, np, random)
 
-            new_bounds = Soft_Gini_SGD(self, heros, feat)
-
-            if random.random() > 0.5: #mutate low end
-                if random.random() > 0.5: #add to low end
-                    self.condition_values[rule_position][0] = new_bounds["new_lower"]
-
-            else: #mutate high end
-                if random.random() > 0.5: #add to high end
-                    self.condition_values[rule_position][1] = new_bounds["new_upper"]
-
-
-            #Repair range so low end specified first then high end.
-            self.condition_values[rule_position].sort()
-            #Ensure value range matches current instance's feature value
-            if not self.condition_values[rule_position][0] < instance_state[feat] < self.condition_values[rule_position][1]:
-                #Repair range to include current instance's feature value
-                if self.condition_values[rule_position][1] - instance_state[feat] > instance_state[feat] - self.condition_values[rule_position][0]: #instance value closer to low end
-                    self.condition_values[rule_position][0] = instance_state[feat]
-                else:
-                    self.condition_values[rule_position][1] = instance_state[feat]
-            # Check for changing boundaries to infinity
-            if self.condition_values[rule_position][0] < heros.env.feat_q_range[feat][0]: # if value range goes below that observed in training data, set low to negative infinity
-                self.condition_values[rule_position][0] = -np.inf
-            if self.condition_values[rule_position][1] > heros.env.feat_q_range[feat][1]: # if value range goes above that observed in training data, set high to positive infinity
-                self.condition_values[rule_position][1] = np.inf
-            changed = True
+            if new_bounds is not None:
+                self.condition_values[rule_position][0] = new_bounds["new_lower"]
+                self.condition_values[rule_position][1] = new_bounds["new_upper"]
+                self.condition_values[rule_position].sort()
+                changed = True
     return feat
 
 
