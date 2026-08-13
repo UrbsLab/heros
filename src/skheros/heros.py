@@ -197,7 +197,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             self.optimization_method = None
         else:
             normalized_method = str(optimization_method).lower()
-            if normalized_method not in ['soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd']:
+            if normalized_method not in ['soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split']:
                 raise Exception("'optimization_method' param must be None, 'soft_gini_sgd', 'multi_feature_gd', or 'multi_iter_gd'")
             self.optimization_method = normalized_method
         self.training_weights = []

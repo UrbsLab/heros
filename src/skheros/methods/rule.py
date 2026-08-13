@@ -117,7 +117,7 @@ class RULE:
                     return False  
         return True #rule matches instance
     
-    def rule_matches_instance(self, instance, np):
+    def rule_matches_instance(self, heros, instance, np):
         for feat_idx, bounds in zip(self.condition_indexes, self.condition_values):
             value = instance[feat_idx]
 
@@ -127,9 +127,15 @@ class RULE:
             if isinstance(value, (float, int)) and np.isnan(value):
                 return False
 
-            lower, upper = bounds
-            if not (lower <= value <= upper):
-                return False
+            is_categorical = heros.env.feat_types[feat_idx]
+
+            if is_categorical:
+                if bounds != value:
+                    return False
+            else:
+                lower, upper = bounds
+                if not (lower <= value <= upper):
+                    return False
 
         return True
 

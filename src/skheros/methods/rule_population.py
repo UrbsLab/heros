@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-from src.skheros.methods.zadia_project import Soft_Gini_SGD, delta_rule_mutation
+from src.skheros.methods.zadia_project import Soft_Gini_SGD, delta_rule_mutation, tree_split
 from src.skheros.methods.zadia_exp_v2 import multi_feature_GD
 from src.skheros.methods.zadia_experiment import multi_iter_GD
 
@@ -216,6 +216,9 @@ class RULE_POP:
             multi_feature_GD(offspring, heros, np)
         elif method == 'multi_iter_gd':
             multi_iter_GD(offspring, heros, random, np)
+        elif method == 'tree_split':
+            for feature in offspring.condition_indexes:
+                tree_split(offspring, heros, feature, np, random)
         else:
             raise ValueError(f"Unsupported optimization method: {method}")
 
