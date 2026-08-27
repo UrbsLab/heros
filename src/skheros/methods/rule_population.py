@@ -26,6 +26,7 @@ import numpy as np
 from src.skheros.methods.zadia_project import Soft_Gini_SGD, delta_rule_mutation, tree_split
 from src.skheros.methods.zadia_exp_v2 import multi_feature_GD
 from src.skheros.methods.zadia_experiment import multi_iter_GD
+from src.skheros.methods.zadia_memory import best_quantitative_split_with_memory
 
 
 class RULE_POP:
@@ -211,14 +212,17 @@ class RULE_POP:
 
         if method == 'soft_gini_sgd':
             for feature in offspring.condition_indexes:
-                Soft_Gini_SGD(offspring, heros, feature, np, random)
+                Soft_Gini_SGD(offspring, heros, feature, np)
         elif method == 'multi_feature_gd':
             multi_feature_GD(offspring, heros, np)
         elif method == 'multi_iter_gd':
             multi_iter_GD(offspring, heros, random, np)
         elif method == 'tree_split':
             for feature in offspring.condition_indexes:
-                tree_split(offspring, heros, feature, np, random)
+                tree_split(offspring, heros, feature, np)
+        elif method == 'mem_split':
+            for feature in offspring.condition_indexes:
+                best_quantitative_split_with_memory(offspring, heros, feature, np)
         else:
             raise ValueError(f"Unsupported optimization method: {method}")
 

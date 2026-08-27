@@ -300,7 +300,10 @@ class RULE:
             while mutations_remaining > 0:
                 # Select mutation option
                 possibility_list, quant_feat_list = self.get_mutate_possibilities(changed_features,mutations_remaining,heros)
-                probability_list = [value / sum(possibility_list) for value in possibility_list]
+                if sum(possibility_list) == 0:
+                    probability_list = [1/3, 1/3, 1/3]  # basically random choice
+                else:
+                    probability_list = [value / sum(possibility_list) for value in possibility_list]                
                 choice = random.choices(mutate_options, weights=probability_list, k=1)[0]
                 # Apply selected mutation option
                 if choice == 'G': #generalize a feature

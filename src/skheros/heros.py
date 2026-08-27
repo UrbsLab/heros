@@ -55,7 +55,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         :param alternate: Number of phase alternations between Phase I and Phase II (must be int >= 0)
         :param alternate_mode: Experimental parameter to specify the method for determining when to alternate between Phase I and Phase II (must be 'limit', 'converge', 'equal', or None)
         :param feedback: TBD
-        :param optimization_method: Optional optimizer selection for the rule mutation stage. Use None to disable this step, or one of 'soft_gini_sgd', 'multi_feature_gd', or 'multi_iter_gd'.
+        :param optimization_method: Optional optimizer selection for the rule mutation stage. Use None to disable this step, or one of 'soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split', or 'mem_split'
    
         """
         # Basic run parameter checks
@@ -197,8 +197,8 @@ class HEROS(BaseEstimator, TransformerMixin):
             self.optimization_method = None
         else:
             normalized_method = str(optimization_method).lower()
-            if normalized_method not in ['soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split']:
-                raise Exception("'optimization_method' param must be None, 'soft_gini_sgd', 'multi_feature_gd', or 'multi_iter_gd'")
+            if normalized_method not in ['soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split',"mem_split"]:
+                raise Exception("'optimization_method' param must be None, 'soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split', or 'mem_split'")
             self.optimization_method = normalized_method
         self.training_weights = []
         self.phase_one_limit = 5000

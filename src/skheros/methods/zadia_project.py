@@ -3,7 +3,17 @@ import copy
 import matplotlib.pyplot as plt
 
 
-def update_soft_gini(self, instance_state, outcome_state, feature_index, k=1, decay=0.01):
+def update_soft_gini(self, instance_state, outcome_state, feature_index, k=1):
+    """
+    Calculate derivatives of gini with respect to lower and upper bounds.
+    
+    :param instance_state: Feature values for the current training instance
+    :param outcome_state: Observed class label for the current instance
+    :param feature_index: Index of the quantitative feature being evaluated
+    :param k: Sigmoid steepness
+    :return: None
+    """
+
     def sigmoid(x):
         return 1 / (1 + math.exp(-x))
 
@@ -22,14 +32,20 @@ def update_soft_gini(self, instance_state, outcome_state, feature_index, k=1, de
     self.soft_F[feature_index] += p * (outcome_state == self.action)
 
 
-def Soft_Gini_SGD(self, heros, feature_index, np, random, k=1, learning_rate=0.01):
+def Soft_Gini_SGD(self, heros, feature_index, np, k=1, learning_rate=0.01):
     """
-    Calculate derivatives of gini with respect to lower and upper bounds.
+    Take one gradient-descent step on a quantitative rule interval
+
+    Matching instances receive soft membership weights; the method then
+    differentiates their Gini impurity with respect to both interval bounds
     
-    :param feature_index: The feature index to optimize
+    :param self: Rule whose condition is being optimized
+    :param heros: HEROS object containing training data and feature ranges
+    :param feature_index: Index of the quantitative feature to optimize
+    :param np: numpy
     :param k: Sigmoid steepness parameter
-    :param learning_rate: The learning rate for gradient descent
-    :return: Dictionary with updated lower and upper bounds
+    :param learning_rate: gradient-descent step size
+    :return: Dictionary containing updated values
     """
 
     def sigmoid(x):
@@ -89,7 +105,8 @@ def Soft_Gini_SGD(self, heros, feature_index, np, random, k=1, learning_rate=0.0
     def interval_matches_any_instance(lower, upper):
         for instance in instance_states:
             value = instance[feature_index]
-
+            if value is None:
+                continue
             if lower <= value <= upper:
                 return True
         return False
@@ -191,8 +208,7 @@ def Soft_Gini_SGD(self, heros, feature_index, np, random, k=1, learning_rate=0.0
 
     new_lower, new_upper = project_bounds(new_lower, new_upper)
 
-    #add output
-    #add comments
+    # Keep every proposed interval connected to at least one observed value.
     if not interval_matches_any_instance(new_lower, new_upper):
         new_lower, new_upper = rule_lower, rule_upper
         if not interval_matches_any_instance(new_lower, new_upper):
@@ -216,7 +232,20 @@ def Soft_Gini_SGD(self, heros, feature_index, np, random, k=1, learning_rate=0.0
 
 
 def optimize_quantitative_range(self, instance_state, quant_feat_list,heros,random,np):
-    """Mutate the value range of a specified quantitative feature in a rule."""
+    """
+    Optimize one available quantitative condition using soft Gini
+
+    Features are sampled without replacement until a non-missing feature can
+    be optimized. The supplied candidate list is mutated as features are tried.
+    
+    :param self: Rule whose condition is updated
+    :param instance_state: Feature values for the instance being processed
+    :param quant_feat_list: Mutable list of candidate feature indexes
+    :param heros: HEROS object containing training data and feature ranges
+    :param random: Random module
+    :param np: numpy
+    :return: The selected feature index after optimization
+    """
     changed = False
     while not changed and len(quant_feat_list) > 0:
         feat = random.sample(quant_feat_list, 1)[0]
@@ -233,9 +262,20 @@ def optimize_quantitative_range(self, instance_state, quant_feat_list,heros,rand
     return feat
 
 
-def delta_rule_mutation(self,instance_state, outcome_state, quant_feat_list, heros, random, np, lr=0.01):
+def delta_rule_mutation(self,instance_state, outcome_state, quant_feat_list, random, lr=0.01):
     """
+    Mutate one quantitative interval based on one labeled instance
 
+    Correct matches contract the nearer boundary toward the instance, while
+    incorrect matches move that boundary away.
+
+    :param self: Rule whose condition is updated.
+    :param instance_state: Feature values for the current instance
+    :param outcome_state: Observed class label for the current instance
+    :param quant_feat_list: Mutable list of candidate feature indexes
+    :param random: Random module 
+    :param lr: Mutation step multiplier
+    :return: The selected feature index after mutation
     """
     changed = False
     while not changed and len(quant_feat_list) > 0:
@@ -254,73 +294,34 @@ def delta_rule_mutation(self,instance_state, outcome_state, quant_feat_list, her
             dist_upper = upper - x
             
             if correct:
-                # contract slightly toward this instance 
+                # Correct matches tighten the interval around the instance.
                 if dist_lower < dist_upper:
                     lower += lr * dist_lower * 0.1  # nudge lower up slightly, staying below x
                 else:
                     upper -= lr * dist_upper * 0.1
             else:
-                # this instance is incorrectly matched — push the nearer boundary away from it
+                # Incorrect matches push the nearer boundary away from the instance.
                 if dist_lower < dist_upper:
                     lower -= lr * (1 - dist_lower)  # push lower boundary up to exclude x
                 else:
                     upper += lr * (1 - dist_upper)          
             
-
-
             self.condition_values[rule_position] = [lower, upper]   
-
             self.condition_values[rule_position].sort()
 
-            '''
-            #Ensure value range matches current instance's feature value
-            if not self.condition_values[rule_position][0] < instance_state[feat] < self.condition_values[rule_position][1]:
-                #Repair range to include current instance's feature value
-                if self.condition_values[rule_position][1] - instance_state[feat] > instance_state[feat] - self.condition_values[rule_position][0]: #instance value closer to low end
-                    self.condition_values[rule_position][0] = instance_state[feat]
-                else:
-                    self.condition_values[rule_position][1] = instance_state[feat]
-            # Check for changing boundaries to infinity
-            if self.condition_values[rule_position][0] < heros.env.feat_q_range[feat][0]: # if value range goes below that observed in training data, set low to negative infinity
-                self.condition_values[rule_position][0] = -np.inf
-            if self.condition_values[rule_position][1] > heros.env.feat_q_range[feat][1]: # if value range goes above that observed in training data, set high to positive infinity
-                self.condition_values[rule_position][1] = np.inf
-            '''
             changed = True       
 
     return feat
 
 
-def tree_split(self, heros, feature_index, np, random, k=1, learning_rate=0.01):
+def tree_split(self, heros, feature_index, np):
     """
-    Find the best decision-tree-style Gini split for feature_index.
+    Find and apply the best binary Gini split for a rule feature.
 
-
-    Parameters
-    ----------
-    self :LCS rule/classifier object.
-
-    heros :environment containing train_data and feature ranges.
-
-    feature_index :Quantitative feature to split.
-
-    np :NumPy module, retained from original interface.
-
-    random : Retained from original interface.
-
-    k : Retained from original interface; not used.
-
-    learning_rate :
-        Retained from original interface; not used.
-
-    Returns
-    -------
-    dict
-        {
-            'new_lower': updated lower bound,
-            'new_upper': updated upper bound,
-            'current_gini': Gini impurity of retained rule instances
-        }
+    :param heros: HEROS object containing training data
+    :param feature_index: Quantitative feature whose threshold is being modified
+    :param np: numpy
+    :return: Dictionary with updated values
     """
 
     if feature_index in heros.cat_feature_indexes:
@@ -336,58 +337,31 @@ def tree_split(self, heros, feature_index, np, random, k=1, learning_rate=0.01):
 
         return 1.0 - np.sum(probabilities ** 2)
 
-    # Feature must already have a quantitative condition in the rule.
+    # Feature must already have a quantitative condition in the rule
     if feature_index not in self.condition_indexes:
-        return {
-            'new_lower': None,
-            'new_upper': None,
-            'current_gini': 1.0
-        }
+        return { 'new_lower': None, 'new_upper': None, 'current_gini': 1.0}
 
     position = self.condition_indexes.index(feature_index)
 
-    # Current bounds are retained as fallback.
     rule_lower = float(self.condition_values[position][0])
     rule_upper = float(self.condition_values[position][1])
 
-    # Use the SAME training-data inputs as the original function.
     train_data = heros.env.train_data
     instance_states = train_data[0]
     outcomes = train_data[1]
 
-    # Find instances that match the existing rule, BUT exclude feature_index from the matching calculation.
-    #
-    # This is important because feature_index is the feature whose threshold we are currently trying to discover.
-    #
-    # All other rule conditions remain fixed/immutable.
+    # Hold every other condition fixed while searching for this feature's
+    # threshold. Otherwise the candidate split would change its own sample.
     valid_indices = []
 
     for i, instance in enumerate(instance_states):
 
         matches = True
 
-        '''
-        what i need to do:
-
-        for each instance:
-            for each feature speciifed in the rule:
-                is the current feature the one we're optimizing?
-                if yes:
-                    skip to the next feature
-                if no:
-                    is the feature catergorical or quantitative:
-                    if catergotrical:
-                        if the rule's value and the instances value are not equal:
-                            matches = false
-                    else:
-                        if the instances value is not in the rule's bounds
-                            matches = false
-        '''
-
         for i in range(len(self.condition_indexes)):
             feat = self.condition_indexes[i]
             
-            # Do not apply the current condition for the feature that we are trying to split.
+            # Do not apply the current condition for the feature that we are trying to split
             if feat == feature_index:
                 continue
 
@@ -425,15 +399,9 @@ def tree_split(self, heros, feature_index, np, random, k=1, learning_rate=0.01):
 
     # No instances matched the parent rule.
     if len(valid_indices) == 0:
-        return {
-            'new_lower': rule_lower,
-            'new_upper': rule_upper,
-            'current_gini': 1.0
-        }
+        return { 'new_lower': rule_lower, 'new_upper': rule_upper, 'current_gini': 1.0 }
 
-    # Pull out feature values and outcomes for the matched training instances.
-    #
-    # These are the observations on which the decision-tree-style split is evaluated.
+    # Pull out feature values and outcomes for the matched training instances
     feature_values = []
     filtered_outcomes = []
 
@@ -456,38 +424,30 @@ def tree_split(self, heros, feature_index, np, random, k=1, learning_rate=0.01):
     feature_values = np.asarray(feature_values, dtype=float)
     filtered_outcomes = np.asarray(filtered_outcomes)
 
-    # Need at least two distinct feature values to split.
+    # Need at least two distinct feature values to split
     if len(feature_values) == 0:
-        return {
-            'new_lower': rule_lower,
-            'new_upper': rule_upper,
-            'current_gini': 1.0
-        }
+        return { 'new_lower': rule_lower, 'new_upper': rule_upper, 'current_gini': 1.0 }
 
     unique_values = np.unique(feature_values)
 
     if len(unique_values) < 2:
         current_gini = gini_impurity(filtered_outcomes)
 
-        return {
-            'new_lower': rule_lower,
-            'new_upper': rule_upper,
-            'current_gini': current_gini
-        }
+        return { 'new_lower': rule_lower, 'new_upper': rule_upper, 'current_gini': current_gini }
 
-    # Sort feature values and corresponding outcomes together.
+    # Sort feature values and corresponding outcomes together
     order = np.argsort(feature_values)
 
     sorted_values = feature_values[order]
     sorted_outcomes = filtered_outcomes[order]
 
-    # Generate decision-tree-style candidate thresholds.
-    #
-    # Thresholds occur between consecutive DISTINCT observed values.
+
+
+    # Generate decision-tree-style candidate thresholds
     candidate_thresholds = []
 
+    
     for i in range(len(sorted_values) - 1):
-
         left_value = sorted_values[i]
         right_value = sorted_values[i + 1]
 
@@ -497,8 +457,12 @@ def tree_split(self, heros, feature_index, np, random, k=1, learning_rate=0.01):
         threshold = (left_value + right_value) / 2.0
 
         candidate_thresholds.append(threshold)
+    
 
-    # Search for the threshold with the BEST weighted Gini.
+    #candidate_thresholds = list(np.quantile(sorted_values, [.1,.2, .3, .4, .5, .6,.7, .8,.9]))
+    
+
+    # Choose the threshold minimizing the weighted impurity of both children.
     best_threshold = None
     best_weighted_gini = np.inf
 
@@ -512,7 +476,7 @@ def tree_split(self, heros, feature_index, np, random, k=1, learning_rate=0.01):
 
         # Left child:
         #     feature <= threshold
-        #
+        
         # Right child:
         #     feature > threshold
         left_mask = sorted_values <= threshold
@@ -533,12 +497,9 @@ def tree_split(self, heros, feature_index, np, random, k=1, learning_rate=0.01):
         total_count = left_count + right_count
 
         # Decision-tree weighted child impurity
-        weighted_gini = (
-            (left_count / total_count) * left_gini
-            + (right_count / total_count) * right_gini
-        )
+        weighted_gini = ( (left_count / total_count) * left_gini + (right_count / total_count) * right_gini )
 
-        # retain the threshold with minimum weighted Gini.
+        # retain the threshold with minimum weighted Gini
         if weighted_gini < best_weighted_gini:
 
             best_weighted_gini = weighted_gini
@@ -550,27 +511,13 @@ def tree_split(self, heros, feature_index, np, random, k=1, learning_rate=0.01):
             best_left_count = left_count
             best_right_count = right_count
 
-    # No valid split found.
+    # No valid split found
     if best_threshold is None:
         current_gini = gini_impurity(filtered_outcomes)
+        return { 'new_lower': rule_lower, 'new_upper': rule_upper, 'current_gini': current_gini }
 
-        return {
-            'new_lower': rule_lower,
-            'new_upper': rule_upper,
-            'current_gini': current_gini
-        }
-
-    # ------------------------------------------------------------
-    # OPTION B:
-    #
-    # The threshold was chosen using BOTH children.
-    #
-    # Now retain only ONE side as the specialized LCS rule.
-    #
-    # If left and right have different Gini values, keep the purer side.
-    #
-    # If they are exactly tied, keep the side with more instances.
-    # ------------------------------------------------------------
+    # The threshold uses both children, but the rule keeps only the purer
+    # side. Equal impurity is resolved in favor of greater training coverage.
     if best_left_gini < best_right_gini:
 
         new_lower = -np.inf
@@ -586,7 +533,6 @@ def tree_split(self, heros, feature_index, np, random, k=1, learning_rate=0.01):
         current_gini = float(best_right_gini)
 
     else:
-
         # Equal Gini -> retain greater coverage.
         if best_left_count >= best_right_count:
 
@@ -596,25 +542,18 @@ def tree_split(self, heros, feature_index, np, random, k=1, learning_rate=0.01):
             current_gini = float(best_left_gini)
 
         else:
-
             new_lower = float(best_threshold)
             new_upper = np.inf
 
             current_gini = float(best_right_gini)
 
     # Update the rule.
-    #
-    # This intentionally stores +/- infinity instead of projecting
-    # the condition into heros.env.feat_q_range.
+    # This intentionally stores +/- infinity instead of projecting the condition into heros.env.feat_q_range.
     self.condition_values[position][0] = new_lower
     self.condition_values[position][1] = new_upper
-
-    # Ensure [low, high] ordering.
     self.condition_values[position].sort()
 
-    # Return exactly the same output fields as the original method.
-    return {
-        'new_lower': self.condition_values[position][0],
+    return {'new_lower': self.condition_values[position][0],
         'new_upper': self.condition_values[position][1],
         'current_gini': current_gini
     }

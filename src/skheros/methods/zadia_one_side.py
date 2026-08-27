@@ -1,6 +1,9 @@
 import math
 
 def sigmoid(x):
+    """
+    Return a numerically stable sigmoid for 'x'
+    """
     if x >= 0:
         z = math.exp(-x)
         return 1 / (1 + z)
@@ -9,13 +12,27 @@ def sigmoid(x):
         return z / (1 + z)
 
 def sigmoid_derivative(x):
+    """
+    Return the derivative of the sigmoid at 'x'
+    """
     s = sigmoid(x)
     return s * (1 - s)
 
 
+def lower_sgd(self, heros, feature_index, np, k=1, learning_rate=0.01):
+    """
+    Optimize the lower bound of a one-sided [lower, inf] condition
+    Not currently working
 
-def lower_sgd(self, heros, feature_index, np, random, k=1, learning_rate=0.01):
-    #CODE FROM HERE IS FOR [LOWER, NP.INF] THRESHOLD
+
+    :param self: Rule containing the condition to optimize
+    :param heros: HEROS object containing training data and feature ranges
+    :param feature_index: Index whose lower bound is updated
+    :param np: numpy
+    :param k: Sigmoid steepness parameter.
+    :param learning_rate: Base gradient-descent step size
+    :return: Proposed lower bound as a float, or a default value dictionary when the feature is unavailable or has no matching instances
+    """
 
     if feature_index not in self.condition_indexes:
         return {'new_lower': None, 'new_upper': None, 'current_gini': 1.0}
@@ -109,8 +126,19 @@ def lower_sgd(self, heros, feature_index, np, random, k=1, learning_rate=0.01):
     return new_lower
 
 
-def upper_sgd(self, heros, feature_index, np, random, k=1, learning_rate=0.01):
-    #CODE FROM HERE IS FOR [-NP.INF, UPPER] THRESHOLD
+def upper_sgd(self, heros, feature_index, np, k=1, learning_rate=0.01):
+    """
+    Optimize the upper bound of a one-sided [-inf, upper] condition
+    Not currently working
+
+    :param self: Rule containing the condition to optimize
+    :param heros: HEROS object containing training data and feature ranges
+    :param feature_index: Index whose upper bound is updated
+    :param np: numpy
+    :param k: Sigmoid steepness parameter
+    :param learning_rate: Base gradient-descent step size.
+    :return: Proposed upper bound as a float, or a default value dictionary when the feature is unavailable or has no matching instances
+    """
 
     if feature_index not in self.condition_indexes:
         return {'new_lower': None, 'new_upper': None, 'current_gini': 1.0}
@@ -206,12 +234,21 @@ def upper_sgd(self, heros, feature_index, np, random, k=1, learning_rate=0.01):
 
 def one_side_sgd(self, heros, feature_index, np, random, k=1, learning_rate=0.01):
     """
-    Calculate derivatives of gini with respect to either the lower or upper bound
+    Choose and apply a gradient update for one side of an interval
+
+    One side is optimized at random, the result is projected into the feature
+    range, and an observed value is used as a fallback if coverage is lost
     
-    :param feature_index: The feature index to optimize
+    Not currently working
+
+    :param self: Rule whose condition is updated in place
+    :param heros: HEROS object containing training data and feature ranges
+    :param feature_index: Index of the quantitative feature to optimize
+    :param np: numpy
+    :param random: Random module 
     :param k: Sigmoid steepness parameter
-    :param learning_rate: The learning rate for gradient descent
-    :return: Dictionary with updated lower and upper bounds
+    :param learning_rate: Base step size 
+    :return: Dictionary containing the updated values
     """
 
     def project_bounds(lower, upper):
@@ -264,6 +301,7 @@ def one_side_sgd(self, heros, feature_index, np, random, k=1, learning_rate=0.01
                 return True
         return False
 
+    # Optimize exactly one side, then restore a valid bounded interval.
     if random.random() < 0.5:
         new_lower = lower_sgd(self, heros, feature_index, np, random, k=1, learning_rate=0.01)
         new_upper = np.inf 
@@ -273,6 +311,7 @@ def one_side_sgd(self, heros, feature_index, np, random, k=1, learning_rate=0.01
 
     new_lower, new_upper = project_bounds(new_lower, new_upper)
 
+    # Avoid producing a rule that covers no observed feature value.
     if not interval_matches_any_instance(new_lower, new_upper):
         new_lower, new_upper = rule_lower, rule_upper
         if not interval_matches_any_instance(new_lower, new_upper):

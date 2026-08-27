@@ -142,16 +142,15 @@ def main(argv):
         print('Instance ID coulmn not available')
     print(train_X.columns)
     train_X = train_X.drop(outcome_label, axis=1)
-    feature_names = train_X.columns # 6-bit multiplexer feature names are ['A_0','A_1','R_0', 'R_1', 'R_2','R_3']
-    cat_feat_indexes = list(range(train_X.shape[1])) #assumes all feature are categorical so provide indexes 0-5 in this list for 6-bit multiplexer dataset e.g. [0,1,2,3,4,5]
-    train_X = train_X.values
+    feature_names = train_X.columns 
+    cat_feat_indexes = [0,1,2,3] 
     train_y = train_df[outcome_label].values #outcome values
     try:
         row_id = train_df[instanceID_label].values #instance id values
     except:
         row_id = None
     #Load expert knowledge scores
-    score_path_name = ekfolder+'/'+str(data_name)+'_MultiSURF_Scores.csv' #No need to change
+    score_path_name = ekfolder+'/'+str(data_name)+'_MultiSURF_Scores.csv' 
     loaded_data = pd.read_csv(score_path_name)
     ek = loaded_data['Score'].tolist()
 

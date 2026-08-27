@@ -3,7 +3,17 @@ import matplotlib.pyplot as plt
 
 
 def multi_feature_GD(self, heros, np, k=1, learning_rate=0.01):
-    #Performs gradient descent for all of a rule's features simultaneously
+
+    """
+    Update all quantitative rule bounds from one shared gradient pass
+    
+    :param self: Rule whose quantitative conditions are being optimized
+    :param heros: HEROS object containing training data and feature ranges
+    :param np: numpy
+    :param k: Sigmoid steepness parameter.
+    :param learning_rate:  gradient-descent step size
+    :return: None
+    """
 
     def sigmoid(x):
         if x >= 0:
@@ -67,7 +77,7 @@ def multi_feature_GD(self, heros, np, k=1, learning_rate=0.01):
         return
 
     
-    # Class probabilities
+    # Convert weighted class counts into normalized soft class probabilities.
     unique_classes = set(filtered_outcomes)
 
     class_probs = {}
