@@ -272,14 +272,20 @@ Most recently, in 2024, we released [Survival-LCS](https://github.com/UrbsLab/su
 ## Citing HEROS
 If you use HEROS in a scientific publication, cite the following paper(s):
 
-1. Gabe Lipschutz-Villa, Harsh Bandhey, Khoi Dinh, Michael Heider, Malek Kamoun, Ryan Urbanowicz. 2026. Phase-Alternation and Tree-Initialization to Facilitate Interpretable Rule-based Machine Learning. GECCO '26: Proceedings of the Genetic and Evolutionary Computation Conference. (In Press) 
+1. Gabe Lipschutz-Villa, Harsh Bandhey, Khoi Dinh, Michael Heider, Malek Kamoun, Ryan Urbanowicz. (2026) [Phase-Alternation and Tree-Initialization to Facilitate Interpretable Rule-based Machine Learning](https://dl.acm.org/doi/abs/10.1145/3795095.3805127). In Proceedings of the Genetic and Evolutionary Computation Conference. 300-309. 
 
 BibTeX entry:
 ```bibtex
-Not Yet Available
+@inproceedings{lipschutz2026phase,
+  title={Phase-Alternation and Tree-Initialization to Facilitate Interpretable Rule-based Machine Learning},
+  author={Lipschutz-Villa, Gabriel and Bandhey, Harsh and Dinh, Khoi and Heider, Michael and Kamoun, Malek and Urbanowicz, Ryan},
+  booktitle={Proceedings of the Genetic and Evolutionary Computation Conference},
+  pages={300--309},
+  year={2026}
+}
 ```
 
-2. Gabe Lipschutz-Villa, Harsh Bandhey, Ruonan Yin, Malek Kamoun, Ryan Urbanowicz. 2025. [Rule-based Machine Learning: Separating Rule and Rule-Set Pareto-Optimization for Interpretable Noise-Agnostic Modeling](https://dl.acm.org/doi/10.1145/3712256.3726461) GECCO '25: Proceedings of the Genetic and Evolutionary Computation Conference. 407-415. 
+2. Gabe Lipschutz-Villa, Harsh Bandhey, Ruonan Yin, Malek Kamoun, Ryan Urbanowicz. (2025) [Rule-based Machine Learning: Separating Rule and Rule-Set Pareto-Optimization for Interpretable Noise-Agnostic Modeling](https://dl.acm.org/doi/10.1145/3712256.3726461) In Proceedings of the Genetic and Evolutionary Computation Conference. 407-415.
 
 BibTeX entry:
 ```bibtex
@@ -292,7 +298,20 @@ BibTeX entry:
 }
 ```
 
+### Other Relevant HEROS Publications
 
+1. Harsh Bandhey, Gabe Lipschutz-Villa, Khoi Dinh, Malek Kamoun, Ryan Urbanowicz. (2026) [Audience-Customized Translation of Rule-Based Evidence with Large Language Models Across Multiplexer Benchmarks](https://dl.acm.org/doi/abs/10.1145/3795101.3814722). In Proceedings of the Genetic and Evolutionary Computation Conference Companion. 1175-1183. 
+
+BibTeX entry:
+```bibtex
+@inproceedings{bandhey2026audience,
+  title={Audience-Customized Translation of Rule-Based Evidence with Large Language Models Across Multiplexer Benchmarks},
+  author={Bandhey, Harsh and Lipschutz-Villa, Gabriel and Dinh, Khoi and Kamoun, Malek and Urbanowicz, Ryan},
+  booktitle={Proceedings of the Genetic and Evolutionary Computation Conference Companion},
+  pages={1175--1183},
+  year={2026}
+}
+```
 
 ***
 <a id="item-eight"></a>
