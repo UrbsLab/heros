@@ -560,6 +560,9 @@ class HEROS(BaseEstimator, TransformerMixin):
                         models_found = self.model_population.generate_offspring(self.model_iteration,parent_list,random,self)
                         if not models_found:
                             try_catch += 1
+                    # DUMMY TESTING LINE: add 5 BioHEL-inspired models to offspring pop
+                    for i in range(5):
+                        self.model_population.generate_offspring_biohel(random,self)
                     # Add Offspring Models to Population
                     self.model_population.add_offspring_into_pop()
                     #Apply NSGAII-like fast non dominated sorting of models into ranked fronts of models

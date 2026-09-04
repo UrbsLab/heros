@@ -339,6 +339,8 @@ class MODEL_POP:
         else:
             print("Specified model initialization method not available.")
 
+        new_model.gen_method = "init_model"
+
 
     def model_exists(self, new_model):
         """ Identifies if an identical set already exists in the population. Relies on the unique 'ID' of rules within the rule set. """
@@ -366,6 +368,8 @@ class MODEL_POP:
             offspring_3 = MODEL()
             offspring_3.copy_parent(parent_list[0],iteration)
             offspring_3.merge(parent_list[1])
+            # NEW: instance variable for model saying how it was created
+            offspring_3.gen_method = "merge"
             # If model already exists, generate a random one with a larger rule-set size range
             try_counter = 0
             if self.archive_discovered_models:
@@ -387,6 +391,7 @@ class MODEL_POP:
                     else: 
                         print("Specified model initialization method not available.")
                     try_counter += 1
+                    offspring_3.gen_method = "merge_replaced"
             else: # no archiving
                 while self.model_exists(offspring_3) and try_counter < random_gen_tries: 
                     rules_in_model = random.randint(random_gen_rule_min,int(len(heros.rule_population.pop_set)))
@@ -406,6 +411,7 @@ class MODEL_POP:
                     else: 
                         print("Specified model initialization method not available.")
                     try_counter += 1
+                    offspring_3.gen_method = "merge_replaced"
             # Evalute model and update model parameters
             if self.archive_discovered_models:
                 if not self.list_exists(offspring_3.rule_IDs, self.explored_models):
@@ -431,42 +437,44 @@ class MODEL_POP:
         else:
             offspring_1.mutation(random,heros)
             offspring_2.mutation(random,heros)
-        # Replacing offspring models with models from the model initialization method (Offspring 1)
-        if random.random() < heros.init_model_prob:
-            rules_in_model = random.randint(random_gen_rule_min,int(len(heros.rule_population.pop_set)))
-            if heros.model_pop_init == "random":
-                offspring_1.initialize_randomly(rules_in_model,heros)
-            elif heros.model_pop_init == "target_acc":
-                if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
-                    offspring_1.initialize_target(rules_in_model,1.0, heros)
-                else:
-                    target = random.uniform(0.55,1.0)
-                    offspring_1.initialize_target(rules_in_model,target, heros)
-            elif heros.model_pop_init == "biohel":
-                pool = copy.copy(heros.rule_population.pop_set)
-                eligible_rules = [rule for rule in pool if rule.accuracy > 0.5]
+        offspring_1.gen_method = "evol"
+        offspring_2.gen_method = "evol"
+        # # Replacing offspring models with models from the model initialization method (Offspring 1)
+        # if random.random() < heros.init_model_prob:
+        #     rules_in_model = random.randint(random_gen_rule_min,int(len(heros.rule_population.pop_set)))
+        #     if heros.model_pop_init == "random":
+        #         offspring_1.initialize_randomly(rules_in_model,heros)
+        #     elif heros.model_pop_init == "target_acc":
+        #         if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
+        #             offspring_1.initialize_target(rules_in_model,1.0, heros)
+        #         else:
+        #             target = random.uniform(0.55,1.0)
+        #             offspring_1.initialize_target(rules_in_model,target, heros)
+        #     elif heros.model_pop_init == "biohel":
+        #         pool = copy.copy(heros.rule_population.pop_set)
+        #         eligible_rules = [rule for rule in pool if rule.accuracy > 0.5]
                             
-                offspring_1.initialize_biohel(eligible_rules, rules_in_model, heros)
-            else: 
-                print("Specified model initialization method not available.")
-        # Replacing offspring models with models from the model initialization method (Offspring 2)
-        if random.random() < heros.init_model_prob:
-            rules_in_model = random.randint(random_gen_rule_min,int(len(heros.rule_population.pop_set)))
-            if heros.model_pop_init == "random":
-                offspring_2.initialize_randomly(rules_in_model,heros)
-            elif heros.model_pop_init == "target_acc":
-                if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
-                    offspring_2.initialize_target(rules_in_model,1.0, heros)
-                else:
-                    target = random.uniform(0.55,1.0)
-                    offspring_2.initialize_target(rules_in_model,target, heros)
-            elif heros.model_pop_init == "biohel":
-                pool = copy.copy(heros.rule_population.pop_set)
-                eligible_rules = [rule for rule in pool if rule.accuracy > 0.5]
+        #         offspring_1.initialize_biohel(eligible_rules, rules_in_model, heros)
+        #     else: 
+        #         print("Specified model initialization method not available.")
+        # # Replacing offspring models with models from the model initialization method (Offspring 2)
+        # if random.random() < heros.init_model_prob:
+        #     rules_in_model = random.randint(random_gen_rule_min,int(len(heros.rule_population.pop_set)))
+        #     if heros.model_pop_init == "random":
+        #         offspring_2.initialize_randomly(rules_in_model,heros)
+        #     elif heros.model_pop_init == "target_acc":
+        #         if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
+        #             offspring_2.initialize_target(rules_in_model,1.0, heros)
+        #         else:
+        #             target = random.uniform(0.55,1.0)
+        #             offspring_2.initialize_target(rules_in_model,target, heros)
+        #     elif heros.model_pop_init == "biohel":
+        #         pool = copy.copy(heros.rule_population.pop_set)
+        #         eligible_rules = [rule for rule in pool if rule.accuracy > 0.5]
                                     
-                offspring_2.initialize_biohel(eligible_rules, rules_in_model, heros)
-            else: 
-                print("Specified model initialization method not available.")
+        #         offspring_2.initialize_biohel(eligible_rules, rules_in_model, heros)
+        #     else: 
+        #         print("Specified model initialization method not available.")
         # Offspring 1 Checks -----------------
         #Check for Empty Model
         offspring_1_empty = False
@@ -494,6 +502,7 @@ class MODEL_POP:
                     print("Specified model initialization method not available.")
                 try_counter += 1
                 offspring_1_empty = False
+                offspring_1.gen_method = "evol_replaced"
         else: #no archiving
             while offspring_1_empty or (self.model_exists(offspring_1) and try_counter < random_gen_tries):
                 rules_in_model = random.randint(random_gen_rule_min,int(len(heros.rule_population.pop_set)))
@@ -514,6 +523,7 @@ class MODEL_POP:
                     print("Specified model initialization method not available.")
                 try_counter += 1
                 offspring_1_empty = False
+                offspring_1.gen_method = "evol_replaced"
         # Evalute model and update model parameters
         if self.archive_discovered_models:
             if not self.list_exists(offspring_1.rule_IDs, self.explored_models):
@@ -556,6 +566,7 @@ class MODEL_POP:
                     print("Specified model initialization method not available.")
                 try_counter += 1
                 offspring_2_empty = False
+                offspring_2.gen_method = "evol_replaced"
         else: #no archiving
             while offspring_2_empty or (self.model_exists(offspring_2) and try_counter < random_gen_tries): 
                 rules_in_model = random.randint(random_gen_rule_min,int(len(heros.rule_population.pop_set)))
@@ -576,6 +587,7 @@ class MODEL_POP:
                     print("Specified model initialization method not available.")
                 try_counter += 1
                 offspring_2_empty = False
+                offspring_2.gen_method = "evol_replaced"
         # Evalute model and update model parameters
         if self.archive_discovered_models:
             #if not self.model_exists(offspring_2):
@@ -594,6 +606,89 @@ class MODEL_POP:
                 #self.add_new_explored_model(offspring_2.rule_IDs, self.explored_models)
                 new_model_count += 1
             return new_model_count > 0
+
+    # DUMMY TESTING METHOD: generate offspring using BioHEL-inspired strategy
+    def generate_offspring_biohel(self,random,heros):
+        random_gen_tries = 2 #Hard coded number of random model generation attempts
+        random_gen_rule_min = 5 #Hard coded minimum number of rules in a randomly generated model
+        if len(heros.rule_population.pop_set) < random_gen_rule_min: #Catches potential error if rule population size ends up to be very small after rule compaction.
+            random_gen_rule_min = 1
+
+        rules_in_model = random.randint(random_gen_rule_min,int(len(heros.rule_population.pop_set)))
+
+        pool = copy.copy(heros.rule_population.pop_set)
+        eligible_rules = [rule for rule in pool if rule.accuracy > 0.5]
+                                    
+        offspring_1 = MODEL()
+        offspring_1.initialize_biohel(eligible_rules, rules_in_model, heros)
+
+        # NEW: instance variable for model saying how it was created
+        offspring_1.gen_method = "biohel_offspring"
+
+        # Offspring 1 Checks -----------------
+        #Check for Empty Model
+        offspring_1_empty = False
+        if len(offspring_1.rule_set) == 0:
+            offspring_1_empty = True
+        # If model is empty or already exists, generate a random one with a larger rule-set size range
+        try_counter = 0
+        if self.archive_discovered_models:
+            while offspring_1_empty or (self.list_exists(offspring_1.rule_IDs, self.explored_models) and try_counter < random_gen_tries): 
+                rules_in_model = random.randint(random_gen_rule_min,int(len(heros.rule_population.pop_set)))
+                if heros.model_pop_init == "random":
+                    offspring_1.initialize_randomly(rules_in_model,heros)
+                elif heros.model_pop_init == "target_acc":
+                    if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
+                        offspring_1.initialize_target(rules_in_model,1.0, heros)
+                    else:
+                        target = random.uniform(0.55,1.0)
+                        offspring_1.initialize_target(rules_in_model,target, heros)
+                elif heros.model_pop_init == "biohel":
+                    pool = copy.copy(heros.rule_population.pop_set)
+                    eligible_rules = [rule for rule in pool if rule.accuracy > 0.5]
+                        
+                    offspring_1.initialize_biohel(eligible_rules, rules_in_model, heros)
+                else: 
+                    print("Specified model initialization method not available.")
+                try_counter += 1
+                offspring_1_empty = False
+                offspring_1.gen_method = "biohel_offspring_replaced"
+        else: #no archiving
+            while offspring_1_empty or (self.model_exists(offspring_1) and try_counter < random_gen_tries):
+                rules_in_model = random.randint(random_gen_rule_min,int(len(heros.rule_population.pop_set)))
+                if heros.model_pop_init == "random":
+                    offspring_1.initialize_randomly(rules_in_model,heros)
+                elif heros.model_pop_init == "target_acc":
+                    if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
+                        offspring_1.initialize_target(rules_in_model,1.0, heros)
+                    else:
+                        target = random.uniform(0.55,1.0)
+                        offspring_1.initialize_target(rules_in_model,target, heros)
+                elif heros.model_pop_init == "biohel":
+                    pool = copy.copy(heros.rule_population.pop_set)
+                    eligible_rules = [rule for rule in pool if rule.accuracy > 0.5]
+                                        
+                    offspring_1.initialize_biohel(eligible_rules, rules_in_model, heros)
+                else: 
+                    print("Specified model initialization method not available.")
+                try_counter += 1
+                offspring_1_empty = False
+                offspring_1.gen_method = "biohel_offspring_replaced"
+        # Evalute model and update model parameters
+        if self.archive_discovered_models:
+            if not self.list_exists(offspring_1.rule_IDs, self.explored_models):
+                offspring_1.evaluate_model_class(heros)
+                #Add model to offspring population
+                self.offspring_pop.append(offspring_1) #add to model population
+                self.add_new_explored_model(offspring_1.rule_IDs, self.explored_models)
+                # new_model_count += 1
+        else: # no archiving
+            if not self.model_exists(offspring_1):
+                offspring_1.evaluate_model_class(heros)
+                #Add model to offspring population
+                self.offspring_pop.append(offspring_1) #add to model population
+                #self.add_new_explored_model(offspring_1.rule_IDs, self.explored_models)
+                # new_model_count += 1
 
 
     def add_offspring_into_pop(self):
