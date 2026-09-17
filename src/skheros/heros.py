@@ -552,7 +552,7 @@ class HEROS(BaseEstimator, TransformerMixin):
                 iter = 0 
                 count = 0
                 best_model_high_target_acc_count = 0
-                initial_learning_rate = 0.03
+                initial_learning_rate = 0.05
                 decay_rate = 0.01
                 # RUN MODEL-LEARNING TRAINING ITERATIONS **************************************************************
                 while continue_phase_two:
