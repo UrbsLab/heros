@@ -263,41 +263,113 @@ class MODEL_POP:
                         fail_count += 1
 
         elif model_pop_init == 'target_acc':
-            # Paramters for 'target_acc' init
-            if heros.nu > 1:
-                target_list = [1.0] * int(heros.model_pop_size/5.0)
-            else:
+            if heros.adaptive_nu:
+                # Starting with high nu models; for now, half of initialized models will use high nu
+                # ... since self.high_nu_weight is initialized to 0.5
+                target_list = [1.0] * int((heros.model_pop_size/5.0) * heros.high_nu_weight)
+                target_list_counter = 0
+                while len(self.pop_set) < int(heros.model_pop_size * heros.high_nu_weight) and fail_count < failed_attempts_max:
+                    new_model = MODEL()
+                    rules_in_model = random.randint(min_rules,max_rules)
+                    new_model.initialize_target(rules_in_model, target_list[target_list_counter], heros)
+                    new_model.model_target_acc = 1.0 # target_acc used for this model
+                    if target_list_counter > int((heros.model_pop_size/5.0) * heros.high_nu_weight) - 2:
+                        target_list_counter = 0
+                    else:
+                        target_list_counter += 1
+                    #Check if model already in population, and add to population
+                    if self.archive_discovered_models:
+                        if not self.list_exists(new_model.rule_IDs, self.explored_models):
+                            # Evalute model and update model parameters
+                            new_model.evaluate_model_class(heros)
+                            # new_model.model_nu = "high" # instance variable defining whether model was made with "high nu" approach or normal approach
+                            #Add model to population
+                            self.pop_set.append(new_model) #add to model population
+                            self.add_new_explored_model(new_model.rule_IDs, self.explored_models)
+                        else:
+                            fail_count += 1
+                    else: #No model archiving
+                        if not self.model_exists(new_model):
+                            # Evalute model and update model parameters
+                            new_model.evaluate_model_class(heros)
+                            # new_model.model_nu = "high"
+                            #Add model to population
+                            self.pop_set.append(new_model) #add to model population
+                            #self.add_new_explored_model(new_model.rule_IDs, self.explored_models)
+                        else:
+                            fail_count += 1
+
+                # Now, nu=1 models
                 min_accuracy = 0.55
-                target_list = np.linspace(min_accuracy,1.0,int(heros.model_pop_size/5.0)).tolist() #aim for 5 bins to be initialized for each target accuracy
+                target_list = np.linspace(min_accuracy, 1.0, int((heros.model_pop_size/5.0) * (1 - heros.high_nu_weight))).tolist() #aim for 5 bins to be initialized for each target accuracy
                 target_list.reverse() #start by creating a model with maximally accurate rules
-            target_list_counter = 0
-            while len(self.pop_set) < heros.model_pop_size and fail_count < failed_attempts_max:
-                new_model = MODEL()
-                rules_in_model = random.randint(min_rules,max_rules)
-                new_model.initialize_target(rules_in_model, target_list[target_list_counter], heros)
-                if target_list_counter > int(heros.model_pop_size/5.0) - 2:
-                    target_list_counter = 0
+                target_list_counter = 0
+                while len(self.pop_set) < heros.model_pop_size and fail_count < failed_attempts_max: # this subset of models continues until model_pop_size is reached
+                    new_model = MODEL()
+                    rules_in_model = random.randint(min_rules,max_rules)
+                    new_model.initialize_target(rules_in_model, target_list[target_list_counter], heros)
+                    new_model.model_target_acc = target_list[target_list_counter] # target_acc used for this model
+                    if target_list_counter > int((heros.model_pop_size/5.0) * (1 - heros.high_nu_weight)) - 2:
+                        target_list_counter = 0
+                    else:
+                        target_list_counter += 1
+                    #Check if model already in population, and add to population
+                    if self.archive_discovered_models:
+                        if not self.list_exists(new_model.rule_IDs, self.explored_models):
+                            # Evalute model and update model parameters
+                            new_model.evaluate_model_class(heros)
+                            # new_model.model_nu = "normal"
+                            #Add model to population
+                            self.pop_set.append(new_model) #add to model population
+                            self.add_new_explored_model(new_model.rule_IDs, self.explored_models)
+                        else:
+                            fail_count += 1
+                    else: #No model archiving
+                        if not self.model_exists(new_model):
+                            # Evalute model and update model parameters
+                            new_model.evaluate_model_class(heros)
+                            # new_model.model_nu = "normal"
+                            #Add model to population
+                            self.pop_set.append(new_model) #add to model population
+                            #self.add_new_explored_model(new_model.rule_IDs, self.explored_models)
+                        else:
+                            fail_count += 1
+            else:
+                # Paramters for 'target_acc' init
+                if heros.nu > 1:
+                    target_list = [1.0] * int(heros.model_pop_size/5.0)
                 else:
-                    target_list_counter += 1
-                #Check if model already in population, and add to population
-                if self.archive_discovered_models:
-                    if not self.list_exists(new_model.rule_IDs, self.explored_models):
-                        # Evalute model and update model parameters
-                        new_model.evaluate_model_class(heros)
-                        #Add model to population
-                        self.pop_set.append(new_model) #add to model population
-                        self.add_new_explored_model(new_model.rule_IDs, self.explored_models)
+                    min_accuracy = 0.55
+                    target_list = np.linspace(min_accuracy,1.0,int(heros.model_pop_size/5.0)).tolist() #aim for 5 bins to be initialized for each target accuracy
+                    target_list.reverse() #start by creating a model with maximally accurate rules
+                target_list_counter = 0
+                while len(self.pop_set) < heros.model_pop_size and fail_count < failed_attempts_max:
+                    new_model = MODEL()
+                    rules_in_model = random.randint(min_rules,max_rules)
+                    new_model.initialize_target(rules_in_model, target_list[target_list_counter], heros)
+                    if target_list_counter > int(heros.model_pop_size/5.0) - 2:
+                        target_list_counter = 0
                     else:
-                        fail_count += 1
-                else: #No model archiving
-                    if not self.model_exists(new_model):
-                        # Evalute model and update model parameters
-                        new_model.evaluate_model_class(heros)
-                        #Add model to population
-                        self.pop_set.append(new_model) #add to model population
-                        #self.add_new_explored_model(new_model.rule_IDs, self.explored_models)
-                    else:
-                        fail_count += 1
+                        target_list_counter += 1
+                    #Check if model already in population, and add to population
+                    if self.archive_discovered_models:
+                        if not self.list_exists(new_model.rule_IDs, self.explored_models):
+                            # Evalute model and update model parameters
+                            new_model.evaluate_model_class(heros)
+                            #Add model to population
+                            self.pop_set.append(new_model) #add to model population
+                            self.add_new_explored_model(new_model.rule_IDs, self.explored_models)
+                        else:
+                            fail_count += 1
+                    else: #No model archiving
+                        if not self.model_exists(new_model):
+                            # Evalute model and update model parameters
+                            new_model.evaluate_model_class(heros)
+                            #Add model to population
+                            self.pop_set.append(new_model) #add to model population
+                            #self.add_new_explored_model(new_model.rule_IDs, self.explored_models)
+                        else:
+                            fail_count += 1
         else:
             print("Specified model initialization method not available.")
 
@@ -324,10 +396,25 @@ class MODEL_POP:
         offspring_2 = MODEL()
         offspring_1.copy_parent(parent_list[0],iteration)
         offspring_2.copy_parent(parent_list[1],iteration)
+        if heros.adaptive_nu: # inherit model_target_acc from parent
+            offspring_1.model_target_acc = parent_list[0].model_target_acc
+            offspring_2.model_target_acc = parent_list[1].model_target_acc
         if random.random() < heros.merge_prob: #Generate a single novel model that is the combination of the two parent models (yielding 3 total models created during this mating)
             offspring_3 = MODEL()
             offspring_3.copy_parent(parent_list[0],iteration)
             offspring_3.merge(parent_list[1])
+            # if heros.adaptive_nu:
+            #     if parent_list[0].model_nu == "high" and parent_list[1].model_nu == "high": # if both parents have self.model_nu = "high", offspring_3 has self.model_nu = "high"
+            #         offspring_3.model_nu = "high"
+            #     elif parent_list[0].model_nu == "normal" and parent_list[1].model_nu == "normal": # if both parents have self.model_nu = "normal", offspring_3 has self.model_nu = "normal"
+            #         offspring_3.model_nu = "normal"
+            #     else: # otherwise, offspring_3 has self.model_nu = "combo" b/c one parent has "high" and one has "normal"
+            #         offspring_3.model_nu = "combo"
+            if heros.adaptive_nu:
+                if parent_list[0].model_target_acc == 1.0 and parent_list[1].model_target_acc == 1.0: # if both parents have self.model_target_acc = 1.0, offspring_3 has self.model_target_acc = 1.0
+                    offspring_3.model_target_acc = 1.0
+                else: # otherwise, model_target_acc is an average of the 2 parents
+                    offspring_3.model_target_acc = (parent_list[0].model_target_acc + parent_list[1].model_target_acc) / 2
             # If model already exists, generate a random one with a larger rule-set size range
             try_counter = 0
             if self.archive_discovered_models:
@@ -336,11 +423,22 @@ class MODEL_POP:
                     if heros.model_pop_init == "random":
                         offspring_3.initialize_randomly(rules_in_model,heros)
                     elif heros.model_pop_init == "target_acc":
-                        if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
-                            offspring_3.initialize_target(rules_in_model,1.0, heros)
+                        if heros.adaptive_nu:
+                            if random.random() < heros.high_nu_weight: # probabilistic approach to determine whether replacement model will be a 'nu > 1' model
+                                offspring_3.initialize_target(rules_in_model,1.0, heros) #Pressure to be highly accurate - revert to using random init
+                                # offspring_3.model_nu = "high"
+                                offspring_3.model_target_acc = 1.0
+                            else:
+                                target = random.uniform(0.55,1.0)
+                                offspring_3.initialize_target(rules_in_model,target, heros)
+                                # offspring_3.model_nu = "normal"
+                                offspring_3.model_target_acc = target
                         else:
-                            target = random.uniform(0.55,1.0)
-                            offspring_3.initialize_target(rules_in_model,target, heros)
+                            if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
+                                offspring_3.initialize_target(rules_in_model,1.0, heros)
+                            else:
+                                target = random.uniform(0.55,1.0)
+                                offspring_3.initialize_target(rules_in_model,target, heros)
                     else: 
                         print("Specified model initialization method not available.")
                     try_counter += 1
@@ -350,11 +448,22 @@ class MODEL_POP:
                     if heros.model_pop_init == "random":
                         offspring_3.initialize_randomly(rules_in_model,heros)
                     elif heros.model_pop_init == "target_acc":
-                        if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
-                            offspring_3.initialize_target(rules_in_model,1.0, heros)
+                        if heros.adaptive_nu:
+                            if random.random() < heros.high_nu_weight: # probabilistic approach to determine whether replacement model will be a 'nu > 1' model
+                                offspring_3.initialize_target(rules_in_model,1.0, heros) #Pressure to be highly accurate - revert to using random init
+                                # offspring_3.model_nu = "high"
+                                offspring_3.model_target_acc = 1.0
+                            else:
+                                target = random.uniform(0.55,1.0)
+                                offspring_3.initialize_target(rules_in_model,target, heros)
+                                # offspring_3.model_nu = "normal"
+                                offspring_3.model_target_acc = target
                         else:
-                            target = random.uniform(0.55,1.0)
-                            offspring_3.initialize_target(rules_in_model,target, heros)
+                            if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
+                                offspring_3.initialize_target(rules_in_model,1.0, heros)
+                            else:
+                                target = random.uniform(0.55,1.0)
+                                offspring_3.initialize_target(rules_in_model,target, heros)
                     else: 
                         print("Specified model initialization method not available.")
                     try_counter += 1
@@ -373,16 +482,38 @@ class MODEL_POP:
                     self.offspring_pop.append(offspring_3) #add to model population
                     #self.add_new_explored_model(offspring_3.rule_IDs, self.explored_models)
                     new_model_count += 1
+        if heros.adaptive_nu: # To see if offspring 1/2 change after crossover/mutation
+            offspring_1_originalIDs = offspring_1.rule_IDs.copy()
+            offspring_2_originalIDs = offspring_2.rule_IDs.copy()
         # Crossover
         if random.random() < heros.cross_prob:
             offspring_1.uniform_crossover(offspring_2,random)
+
+            if heros.adaptive_nu: # if crossover changes a rule set, make its model_target_acc the average of the two initial parents
+                if offspring_1.rule_IDs != offspring_1_originalIDs:
+                    offspring_1.model_target_acc = (parent_list[0].model_target_acc + parent_list[1].model_target_acc) / 2
+                if offspring_2.rule_IDs != offspring_2_originalIDs:
+                    offspring_2.model_target_acc = (parent_list[0].model_target_acc + parent_list[1].model_target_acc) / 2
         # Mutation - check for duplicate rules
-        if heros.nu > 1:
-            offspring_1.mutation_acc_pressure(random,heros)
-            offspring_2.mutation_acc_pressure(random,heros)
+        if heros.adaptive_nu:
+            if random.random() < heros.high_nu_weight: # probabilistic approach to determine whether nu > 1 strategy is used
+                offspring_1.mutation_acc_pressure(random,heros)
+                offspring_2.mutation_acc_pressure(random,heros)
+            else:
+                offspring_1.mutation(random,heros)
+                offspring_2.mutation(random,heros)
+
+                if offspring_1.rule_IDs != offspring_1_originalIDs:
+                    offspring_1.model_target_acc = np.nan # unclear after mutation without any accuracy pressure
+                if offspring_2.rule_IDs != offspring_2_originalIDs:
+                    offspring_2.model_target_acc = np.nan # unclear after mutation without any accuracy pressure
         else:
-            offspring_1.mutation(random,heros)
-            offspring_2.mutation(random,heros)
+            if heros.nu > 1:
+                offspring_1.mutation_acc_pressure(random,heros)
+                offspring_2.mutation_acc_pressure(random,heros)
+            else:
+                offspring_1.mutation(random,heros)
+                offspring_2.mutation(random,heros)
         # Offspring 1 Checks -----------------
         #Check for Empty Model
         offspring_1_empty = False
@@ -396,11 +527,20 @@ class MODEL_POP:
                 if heros.model_pop_init == "random":
                     offspring_1.initialize_randomly(rules_in_model,heros)
                 elif heros.model_pop_init == "target_acc":
-                    if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
-                        offspring_1.initialize_target(rules_in_model,1.0, heros)
+                    if heros.adaptive_nu:
+                        if random.random() < heros.high_nu_weight:
+                            offspring_1.initialize_target(rules_in_model,1.0, heros)
+                            offspring_1.model_target_acc = 1.0
+                        else:
+                            target = random.uniform(0.55,1.0)
+                            offspring_1.initialize_target(rules_in_model,target, heros)
+                            offspring_1.model_target_acc = target
                     else:
-                        target = random.uniform(0.55,1.0)
-                        offspring_1.initialize_target(rules_in_model,target, heros)
+                        if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
+                            offspring_1.initialize_target(rules_in_model,1.0, heros)
+                        else:
+                            target = random.uniform(0.55,1.0)
+                            offspring_1.initialize_target(rules_in_model,target, heros)
                 else: 
                     print("Specified model initialization method not available.")
                 try_counter += 1
@@ -411,11 +551,20 @@ class MODEL_POP:
                 if heros.model_pop_init == "random":
                     offspring_1.initialize_randomly(rules_in_model,heros)
                 elif heros.model_pop_init == "target_acc":
-                    if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
-                        offspring_1.initialize_target(rules_in_model,1.0, heros)
+                    if heros.adaptive_nu:
+                        if random.random() < heros.high_nu_weight:
+                            offspring_1.initialize_target(rules_in_model,1.0, heros)
+                            offspring_1.model_target_acc = 1.0
+                        else:
+                            target = random.uniform(0.55,1.0)
+                            offspring_1.initialize_target(rules_in_model,target, heros)
+                            offspring_1.model_target_acc = target
                     else:
-                        target = random.uniform(0.55,1.0)
-                        offspring_1.initialize_target(rules_in_model,target, heros)
+                        if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
+                            offspring_1.initialize_target(rules_in_model,1.0, heros)
+                        else:
+                            target = random.uniform(0.55,1.0)
+                            offspring_1.initialize_target(rules_in_model,target, heros)
                 else: 
                     print("Specified model initialization method not available.")
                 try_counter += 1
@@ -448,11 +597,20 @@ class MODEL_POP:
                 if heros.model_pop_init == "random":
                     offspring_2.initialize_randomly(rules_in_model,heros)
                 elif heros.model_pop_init == "target_acc":
-                    if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
-                        offspring_2.initialize_target(rules_in_model,1.0, heros)
+                    if heros.adaptive_nu:
+                        if random.random() < heros.high_nu_weight:
+                            offspring_2.initialize_target(rules_in_model,1.0, heros)
+                            offspring_2.model_target_acc = 1.0
+                        else:
+                            target = random.uniform(0.55,1.0)
+                            offspring_2.initialize_target(rules_in_model,target, heros)
+                            offspring_2.model_target_acc = target
                     else:
-                        target = random.uniform(0.55,1.0)
-                        offspring_2.initialize_target(rules_in_model,target, heros)
+                        if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
+                            offspring_2.initialize_target(rules_in_model,1.0, heros)
+                        else:
+                            target = random.uniform(0.55,1.0)
+                            offspring_2.initialize_target(rules_in_model,target, heros)
                 else: 
                     print("Specified model initialization method not available.")
                 try_counter += 1
@@ -463,11 +621,20 @@ class MODEL_POP:
                 if heros.model_pop_init == "random":
                     offspring_2.initialize_randomly(rules_in_model,heros)
                 elif heros.model_pop_init == "target_acc":
-                    if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
-                        offspring_2.initialize_target(rules_in_model,1.0, heros)
+                    if heros.adaptive_nu:
+                        if random.random() < heros.high_nu_weight:
+                            offspring_2.initialize_target(rules_in_model,1.0, heros)
+                            offspring_2.model_target_acc = 1.0
+                        else:
+                            target = random.uniform(0.55,1.0)
+                            offspring_2.initialize_target(rules_in_model,target, heros)
+                            offspring_2.model_target_acc = target
                     else:
-                        target = random.uniform(0.55,1.0)
-                        offspring_2.initialize_target(rules_in_model,target, heros)
+                        if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
+                            offspring_2.initialize_target(rules_in_model,1.0, heros)
+                        else:
+                            target = random.uniform(0.55,1.0)
+                            offspring_2.initialize_target(rules_in_model,target, heros)
                 else: 
                     print("Specified model initialization method not available.")
                 try_counter += 1

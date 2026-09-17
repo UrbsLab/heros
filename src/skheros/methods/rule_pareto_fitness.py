@@ -86,14 +86,26 @@ class RULE_PARETO:
             return 0.0
         ## Special Case 5: POINT ON FRONT - Point is on the front (returns optimal fitness when nu=1, and slightly penalized fitness for less accurate front points when nu>1)
         elif (candidate_metric_1,candidate_metric_2) in self.rule_front: # Rules on the front return an ideal fitness
-            if heros.nu > 1: # Apply pressure to maximize model accuracy 
+            if heros.adaptive_nu:
                 if candidate_metric_1 == self.metric_limits[0]:
-                    return 1.0
+                    fitness_nu10 = 1.0
                 else:
                     fitness_adjustment = front_penalty_scalar + ((candidate_metric_1/self.metric_limits[0])*(1.0-front_penalty_scalar))
-                    return fitness_adjustment * pow(candidate_metric_1 , heros.nu)
-            else: 
-                return 1.0
+                    fitness_nu10 = fitness_adjustment * pow(candidate_metric_1, 10)
+
+                fitness_nu1 = 1.0
+
+                # return a weighted avg. of fitness assuming nu=1 and nu=10
+                return (fitness_nu10 * heros.high_nu_weight) + (fitness_nu1 * (1-heros.high_nu_weight))
+            else:
+                if heros.nu > 1: # Apply pressure to maximize model accuracy 
+                    if candidate_metric_1 == self.metric_limits[0]:
+                        return 1.0
+                    else:
+                        fitness_adjustment = front_penalty_scalar + ((candidate_metric_1/self.metric_limits[0])*(1.0-front_penalty_scalar))
+                        return fitness_adjustment * pow(candidate_metric_1 , heros.nu)
+                else: 
+                    return 1.0
         ## Special Case 6: MAXIMUM USEFUL ACCURACY - Point has maximum metric 1 (i.e. useful accuracy) i.e. on the front edge (dotted line), but not on the front itself.
         elif candidate_metric_1 == self.metric_limits[0]:
             fitness_adjustment = front_penalty_scalar + ((candidate_metric_2/self.metric_limits[1])*(1.0-front_penalty_scalar))
@@ -102,10 +114,16 @@ class RULE_PARETO:
         ## Special Case 7: MAXIMUM USEFUL COVERAGE - Point has maximum metric 2 (i.e. useful coverage) i.e. on the other front edge (dotted line), but not on the front itself. 
         elif candidate_metric_2 == self.metric_limits[1]:
             fitness_adjustment = front_penalty_scalar + ((candidate_metric_1/self.metric_limits[0])*(1.0-front_penalty_scalar))
-            if heros.nu > 1: # Apply pressure to maximize model accuracy 
-                return fitness_adjustment * pow(candidate_metric_1 , heros.nu)
+            if heros.adaptive_nu:
+                fitness_nu10 = fitness_adjustment * pow(candidate_metric_1, 10)
+                fitness_nu1 = fitness_adjustment
+                # return a weighted avg. of fitness assuming nu=1 and nu=10
+                return (fitness_nu10 * heros.high_nu_weight) + (fitness_nu1 * (1-heros.high_nu_weight))
             else:
-                return fitness_adjustment
+                if heros.nu > 1: # Apply pressure to maximize model accuracy 
+                    return fitness_adjustment * pow(candidate_metric_1 , heros.nu)
+                else:
+                    return fitness_adjustment
 
         ### TYPICAL CASE HANDLING ----------------------------------------------------------------------------------------------------------------------------------------------
         ## All other points have fitness calculated based on the distance from the point to the nearest point on the pareto front (or front edge)
@@ -134,12 +152,25 @@ class RULE_PARETO:
                 pareto_fitness = (1 - min_distance) * fitness_adjustment
             else:
                 pareto_fitness = 1 - min_distance #original
-                if heros.nu > 1:
+                if heros.adaptive_nu:
                     fitness_adjustment = front_penalty_scalar + ((candidate_metric_1/self.metric_limits[0])*(1.0-front_penalty_scalar))
-                    pareto_fitness = pareto_fitness * fitness_adjustment
-            if heros.nu > 1: # Apply pressure to maximize rule accuracy
-                pareto_fitness = pareto_fitness * pow(candidate_metric_1 , heros.nu)
-            return pareto_fitness
+                    pareto_fitness_nu10 = pareto_fitness * fitness_adjustment
+                else:
+                    if heros.nu > 1:
+                        fitness_adjustment = front_penalty_scalar + ((candidate_metric_1/self.metric_limits[0])*(1.0-front_penalty_scalar))
+                        pareto_fitness = pareto_fitness * fitness_adjustment
+            if heros.adaptive_nu:
+                # if pareto_fitness_nu10 doesn't exist yet, create it and set it equal to pareto_fitness
+                if 'pareto_fitness_nu10' not in locals():
+                    pareto_fitness_nu10 = pareto_fitness
+                    
+                pareto_fitness_nu10 = pareto_fitness_nu10 * pow(candidate_metric_1, 10)
+                # return a weighted avg. of fitness assuming nu=1 and nu=10
+                return (pareto_fitness_nu10 * heros.high_nu_weight) + (pareto_fitness * (1-heros.high_nu_weight))
+            else:
+                if heros.nu > 1: # Apply pressure to maximize rule accuracy
+                    pareto_fitness = pareto_fitness * pow(candidate_metric_1 , heros.nu)
+                return pareto_fitness
         
         
     def point_to_segment_distance(self, point, segment_start, segment_end):

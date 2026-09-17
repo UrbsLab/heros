@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import collections.abc
 from sklearn.metrics import balanced_accuracy_score
+from sklearn.model_selection import train_test_split
 from sklearn.base import BaseEstimator, TransformerMixin
 from .methods.time_tracking import TIME_TRACK
 from .methods.data_mange import DATA_MANAGE
@@ -19,7 +20,7 @@ from .methods.model_prediction import MODEL_PREDICTION
 #import inspect #temporary testing
 
 class HEROS(BaseEstimator, TransformerMixin):
-    def __init__(self,outcome_type='class',iterations=100000,pop_size=1000,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,fitness_function='pareto',
+    def __init__(self,outcome_type='class',iterations=100000,pop_size=1000,cross_prob=0.8,mut_prob=0.04,nu=1,adaptive_nu=False,beta=0.2,theta_sel=0.5,fitness_function='pareto',
                  subsumption='both',rsl=0,feat_track=None,model_iterations=500,model_pop_size=100, model_pop_init = 'target_acc', new_gen=1.0,merge_prob=0.1,
                  rule_pop_init=None,compaction='sub',track_performance=0,model_tracking=False,stored_rule_iterations=None,stored_model_iterations=None,random_state=None,
                  verbose=False,alternate=5,alternate_mode='equal',feedback=False):
@@ -33,6 +34,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         :param cross_prob: The probability of applying crossover in rule discovery with the genetic algorithm. (Must be float from 0 - 1)
         :param mut_prob: The probability of mutating a position within an offspring rule. (Must be float from 0 - 1)
         :param nu: Power parameter used to determine the importance of high rule-accuracy when calculating fitness. (must be non-negative)
+        :param adaptive_nu: Boolean indicating whether value of nu will adapt according to the needs of the problem
         :param beta: Learning parameter - used in calculating average match set size (must be float from 0 - 1) 
         :param theta_sel: The fraction of the correct set to be included in tournament selection (must be float from 0 - 1)
         :param fitness_function: The fitness function used to globally evaluate rules (must be 'accuracy' or 'pareto') 
@@ -77,6 +79,13 @@ class HEROS(BaseEstimator, TransformerMixin):
             raise Exception("'nu' param must be an int or float")
         if nu < 0:
             raise Exception("'nu' param must be > 0")
+
+        if adaptive_nu == 'True' or adaptive_nu == True:
+            adaptive_nu = True
+        if adaptive_nu == 'False' or adaptive_nu == False:
+            adaptive_nu = False
+        if not self.check_is_bool(adaptive_nu):
+            raise Exception("'adaptive_nu' param must be a boolean, i.e. True or False")
 
         if not self.check_is_float(beta) or beta < 0 or beta > 1:
             raise Exception("'beta' param must be float from 0 - 1")
@@ -147,6 +156,9 @@ class HEROS(BaseEstimator, TransformerMixin):
         self.cross_prob = float(cross_prob)
         self.mut_prob = float(mut_prob)
         self.nu = float(nu)
+        self.adaptive_nu = adaptive_nu
+        if self.adaptive_nu: # if this mode is on, initialize weight given to high nu approach
+            self.high_nu_weight = 0.5
         self.beta = float(beta)
         self.theta_sel = float(theta_sel)
         self.fitness_function = str(fitness_function)
@@ -331,6 +343,9 @@ class HEROS(BaseEstimator, TransformerMixin):
         np.random.seed(self.random_state)
         # Data Preparation
         X, y, row_id, cat_feat_indexes, pop_df, ek = self.check_inputs(X, y, row_id, cat_feat_indexes, pop_df, ek) #check loaded data
+        if self.adaptive_nu: # split initial training set into a train and val set, with the val set evaluating model performance in order to adjust high_nu_weight
+            X, X_val, y, y_val = train_test_split(X, y, test_size=0.2, random_state=self.random_state, stratify=y)
+            self.X_val, self.y_val = X_val, y_val # saving for later use in other methods
         self.env = DATA_MANAGE(X, y, row_id, cat_feat_indexes, ek, self) #initialize the data environment; data formatting, summary statistics, and expert knowledge preparation
        
         # Initialize Objects
@@ -536,6 +551,9 @@ class HEROS(BaseEstimator, TransformerMixin):
                 models = []
                 iter = 0 
                 count = 0
+                best_model_high_target_acc_count = 0
+                initial_learning_rate = 0.03
+                decay_rate = 0.01
                 # RUN MODEL-LEARNING TRAINING ITERATIONS **************************************************************
                 while continue_phase_two:
                     #Apply NSGAII-like fast non dominated sorting of models into ranked fronts of models
@@ -574,11 +592,29 @@ class HEROS(BaseEstimator, TransformerMixin):
                         self.model_population.identify_models_on_front() #For evaluating all models on the front.
                         self.model_population.archive_model_pop(self.model_iteration+1)
                         self.timer.archive_model_pop(self.model_iteration+1)
-                    #Next Iteration
-                    self.model_iteration += 1
                     #Sort the model population first by accuracy and then by number of rules in model.
                     self.model_population.sort_model_pop()
                     self.model_population.identify_models_on_front() #For evaluating all models on the front.
+                    if self.adaptive_nu:
+                        best_model_index = self.auto_select_top_model(self.X_val, self.y_val) # getting model that performed best on val set
+                        if self.model_population.pop_set[best_model_index].model_target_acc == 1.0:
+                            best_model_high_target_acc_count += 1
+
+                        if self.model_iteration % 5 == 4: # update high_nu_weight every 5 iterations (model_iteration starts at 0)
+                            learning_rate = initial_learning_rate * np.exp(-decay_rate * self.model_iteration)
+                            high_nu_weight_updated = False
+
+                            if best_model_high_target_acc_count >= 4: # if at least 4/5 iterations had the best model have a model_target_acc == 1, increase high_nu_weight
+                                self.high_nu_weight += learning_rate
+                                high_nu_weight_updated = True
+                            elif best_model_high_target_acc_count <= 1: # if at least 4/5 iterations had the best model have a model_target_acc != 1, decrease high_nu_weight
+                                self.high_nu_weight -= learning_rate
+                                high_nu_weight_updated = True
+
+                            self.high_nu_weight = np.clip(self.high_nu_weight, 0.0, 1.0) # make sure it doesn't pass 0 or 1
+                            best_model_high_target_acc_count = 0 # reset every 5 model iterations
+                            if high_nu_weight_updated:
+                                self.rule_population.global_fitness_update(self) # if high_nu_weight is updated, update the fitness of all rules in the rule pop. accordingly
                     models = set(filter(lambda m: m.model_on_front == 1,self.model_population.pop_set))
                     if models == models_prev:
                         iter += 1
@@ -587,6 +623,8 @@ class HEROS(BaseEstimator, TransformerMixin):
                     #print(iter)
                     count += 1
                     models_prev = models
+                    #Next Iteration
+                    self.model_iteration += 1
 
 
                     # STOP CRITERIA CHECK 
@@ -1170,6 +1208,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             file.write(f"cross_prob: {self.cross_prob}\n")
             file.write(f"mut_prob: {self.mut_prob}\n")
             file.write(f"nu: {self.nu}\n")
+            file.write(f"adaptive_nu: {self.adaptive_nu}\n")
             file.write(f"beta: {self.beta}\n")
             file.write(f"theta_sel: {self.theta_sel}\n")
             file.write(f"fitness_function: {self.fitness_function}\n")

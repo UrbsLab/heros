@@ -567,12 +567,18 @@ class RULE:
             self.useful_coverage = 0.0
         # Calculate fitness *********************************
         if heros.fitness_function == 'accuracy':
-            self.fitness = pow(self.accuracy, heros.nu)
+            if heros.adaptive_nu:
+                self.fitness = (heros.high_nu_weight * pow(self.accuracy, 10)) + ((1-heros.high_nu_weight) * pow(self.accuracy, 1))
+            else:
+                self.fitness = pow(self.accuracy, heros.nu)
         elif heros.fitness_function == 'pareto':
             # Calculate and update the rule fitness
             self.fitness = heros.rule_pareto.get_pareto_fitness(self.useful_accuracy,self.useful_coverage, False,heros)
             if self.fitness is None: #Pareto front only has (0,0) for useful_accuracy and useful_coverage
-                self.fitness = pow(self.accuracy, heros.nu)
+                if heros.adaptive_nu:
+                    self.fitness = (heros.high_nu_weight * pow(self.accuracy, 10)) + ((1-heros.high_nu_weight) * pow(self.accuracy, 1))
+                else:
+                    self.fitness = pow(self.accuracy, heros.nu)
             #print(self.show_rule())
 
     def complete_rule_evaluation_class(self,heros,random,target_instance_outcome):
@@ -621,14 +627,20 @@ class RULE:
             self.useful_coverage = 0.0
         # Calculate fitness *********************************
         if heros.fitness_function == 'accuracy':
-            self.fitness = pow(self.accuracy, heros.nu)
+            if heros.adaptive_nu:
+                self.fitness = (heros.high_nu_weight * pow(self.accuracy, 10)) + ((1-heros.high_nu_weight) * pow(self.accuracy, 1))
+            else:
+                self.fitness = pow(self.accuracy, heros.nu)
         elif heros.fitness_function == 'pareto':
             # Check if new rule updates the rule pareto front
             front_updated = heros.rule_pareto.update_front(self.useful_accuracy,self.useful_coverage,['max','max']) 
             # Calculate and update the rule fitness
             self.fitness = heros.rule_pareto.get_pareto_fitness(self.useful_accuracy,self.useful_coverage, False,heros)
             if self.fitness is None: #Pareto front only has (0,0) for useful_accuracy and useful_coverage
-                self.fitness = pow(self.accuracy, heros.nu)
+                if heros.adaptive_nu:
+                    self.fitness = (heros.high_nu_weight * pow(self.accuracy, 10)) + ((1-heros.high_nu_weight) * pow(self.accuracy, 1))
+                else:
+                    self.fitness = pow(self.accuracy, heros.nu)
             if front_updated: #all rule-fitnesses will be re-calculated externally
                 #self.encoding = self.encode_rule_binary(heros.env.num_feat)
                 return True
@@ -686,14 +698,20 @@ class RULE:
                 self.useful_coverage = 0.0
         # Calculate fitness *********************************
         if heros.fitness_function == 'accuracy' or heros.nu > 1:
-            self.fitness = pow(self.useful_accuracy, heros.nu)
+            if heros.adaptive_nu:
+                self.fitness = (heros.high_nu_weight * pow(self.accuracy, 10)) + ((1-heros.high_nu_weight) * pow(self.accuracy, 1))
+            else:
+                self.fitness = pow(self.useful_accuracy, heros.nu)
         elif heros.fitness_function == 'pareto':
             # Check if new rule updates the rule pareto front
             front_updated = heros.rule_pareto.update_front(self.useful_accuracy,self.useful_coverage,['max','max']) 
             # Calculate and update the rule fitness
             self.fitness = heros.rule_pareto.get_pareto_fitness(self.useful_accuracy,self.useful_coverage, False,heros)
             if self.fitness is None: #Pareto front only has (0,0) for useful_accuracy and useful_coverage
-                self.fitness = pow(self.useful_accuracy, heros.nu)
+                if heros.adaptive_nu:
+                    self.fitness = (heros.high_nu_weight * pow(self.accuracy, 10)) + ((1-heros.high_nu_weight) * pow(self.accuracy, 1))
+                else:
+                    self.fitness = pow(self.useful_accuracy, heros.nu)
             if front_updated: #all rule-fitnesses will be re-calculated externally
                 return True
         else:
@@ -716,7 +734,10 @@ class RULE:
         """ Updates the rule fitness as a result of an update to the pareto front."""
         self.fitness = heros.rule_pareto.get_pareto_fitness(self.useful_accuracy,self.useful_coverage, False,heros)
         if self.fitness is None: #Pareto front only has (0,0) for useful_accuracy and useful_coverage
-            self.fitness = pow(self.accuracy, heros.nu)
+            if heros.adaptive_nu:
+                self.fitness = (heros.high_nu_weight * pow(self.accuracy, 10)) + ((1-heros.high_nu_weight) * pow(self.accuracy, 1))
+            else:
+                self.fitness = pow(self.accuracy, heros.nu)
 
 
     def subsumes(self,other_rule,heros):
