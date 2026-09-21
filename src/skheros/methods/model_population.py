@@ -273,6 +273,7 @@ class MODEL_POP:
                     rules_in_model = random.randint(min_rules,max_rules)
                     new_model.initialize_target(rules_in_model, target_list[target_list_counter], heros)
                     new_model.model_target_acc = 1.0 # target_acc used for this model
+                    new_model.has_targetacc1_ancestor = True # variable to keep track of whether a model's "family tree" has "target_acc=1 DNA" for model deletion if we find out the data is a noisier dataset and doesn't suit target_acc=1
                     if target_list_counter > int((heros.model_pop_size/5.0) * heros.high_nu_weight) - 2:
                         target_list_counter = 0
                     else:
@@ -309,6 +310,10 @@ class MODEL_POP:
                     rules_in_model = random.randint(min_rules,max_rules)
                     new_model.initialize_target(rules_in_model, target_list[target_list_counter], heros)
                     new_model.model_target_acc = target_list[target_list_counter] # target_acc used for this model
+                    if new_model.model_target_acc == 1.0:
+                        new_model.has_targetacc1_ancestor = True # variable to keep track of whether a model's "family tree" has "target_acc=1 DNA" for model deletion if we find out the data is a noisier dataset and doesn't suit target_acc=1
+                    else:
+                        new_model.has_targetacc1_ancestor = False
                     if target_list_counter > int((heros.model_pop_size/5.0) * (1 - heros.high_nu_weight)) - 2:
                         target_list_counter = 0
                     else:
@@ -396,9 +401,12 @@ class MODEL_POP:
         offspring_2 = MODEL()
         offspring_1.copy_parent(parent_list[0],iteration)
         offspring_2.copy_parent(parent_list[1],iteration)
-        if heros.adaptive_nu: # inherit model_target_acc from parent
+        if heros.adaptive_nu: # inherit model_target_acc & has_targetacc1_ancestor from parent
             offspring_1.model_target_acc = parent_list[0].model_target_acc
             offspring_2.model_target_acc = parent_list[1].model_target_acc
+
+            offspring_1.has_targetacc1_ancestor = parent_list[0].has_targetacc1_ancestor
+            offspring_2.has_targetacc1_ancestor = parent_list[1].has_targetacc1_ancestor
         if random.random() < heros.merge_prob: #Generate a single novel model that is the combination of the two parent models (yielding 3 total models created during this mating)
             offspring_3 = MODEL()
             offspring_3.copy_parent(parent_list[0],iteration)
@@ -415,6 +423,11 @@ class MODEL_POP:
                     offspring_3.model_target_acc = 1.0
                 else: # otherwise, model_target_acc is an average of the 2 parents
                     offspring_3.model_target_acc = (parent_list[0].model_target_acc + parent_list[1].model_target_acc) / 2
+
+                if parent_list[0].has_targetacc1_ancestor or parent_list[1].has_targetacc1_ancestor: # if either parent has a history of target_acc=1/nu>1 methodology, so does the offspring
+                    offspring_3.has_targetacc1_ancestor = True
+                else:
+                    offspring_3.has_targetacc1_ancestor = False
             # If model already exists, generate a random one with a larger rule-set size range
             try_counter = 0
             if self.archive_discovered_models:
@@ -428,11 +441,16 @@ class MODEL_POP:
                                 offspring_3.initialize_target(rules_in_model,1.0, heros) #Pressure to be highly accurate - revert to using random init
                                 # offspring_3.model_nu = "high"
                                 offspring_3.model_target_acc = 1.0
+                                offspring_3.has_targetacc1_ancestor = True
                             else:
                                 target = random.uniform(0.55,1.0)
                                 offspring_3.initialize_target(rules_in_model,target, heros)
                                 # offspring_3.model_nu = "normal"
                                 offspring_3.model_target_acc = target
+                                if offspring_3.model_target_acc == 1.0:
+                                    offspring_3.has_targetacc1_ancestor = True
+                                else:
+                                    offspring_3.has_targetacc1_ancestor = False
                         else:
                             if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
                                 offspring_3.initialize_target(rules_in_model,1.0, heros)
@@ -453,11 +471,16 @@ class MODEL_POP:
                                 offspring_3.initialize_target(rules_in_model,1.0, heros) #Pressure to be highly accurate - revert to using random init
                                 # offspring_3.model_nu = "high"
                                 offspring_3.model_target_acc = 1.0
+                                offspring_3.has_targetacc1_ancestor = True
                             else:
                                 target = random.uniform(0.55,1.0)
                                 offspring_3.initialize_target(rules_in_model,target, heros)
                                 # offspring_3.model_nu = "normal"
                                 offspring_3.model_target_acc = target
+                                if offspring_3.model_target_acc == 1.0:
+                                    offspring_3.has_targetacc1_ancestor = True
+                                else:
+                                    offspring_3.has_targetacc1_ancestor = False
                         else:
                             if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
                                 offspring_3.initialize_target(rules_in_model,1.0, heros)
@@ -492,21 +515,35 @@ class MODEL_POP:
             if heros.adaptive_nu: # if crossover changes a rule set, make its model_target_acc the average of the two initial parents
                 if offspring_1.rule_IDs != offspring_1_originalIDs:
                     offspring_1.model_target_acc = (parent_list[0].model_target_acc + parent_list[1].model_target_acc) / 2
+
+                    if parent_list[0].has_targetacc1_ancestor or parent_list[1].has_targetacc1_ancestor: # if either parent has_targetacc1_ancestor, so does the crossed over offspring
+                        offspring_1.has_targetacc1_ancestor = True
                 if offspring_2.rule_IDs != offspring_2_originalIDs:
                     offspring_2.model_target_acc = (parent_list[0].model_target_acc + parent_list[1].model_target_acc) / 2
+
+                    if parent_list[0].has_targetacc1_ancestor or parent_list[1].has_targetacc1_ancestor: # if either parent has_targetacc1_ancestor, so does the crossed over offspring
+                        offspring_2.has_targetacc1_ancestor = True
         # Mutation - check for duplicate rules
         if heros.adaptive_nu:
+            mutation_acc_pressure_occurred = False # keeping track of whether mutation_acc_pressure() was called
             if random.random() < heros.high_nu_weight: # probabilistic approach to determine whether nu > 1 strategy is used
                 offspring_1.mutation_acc_pressure(random,heros)
                 offspring_2.mutation_acc_pressure(random,heros)
+                mutation_acc_pressure_occurred = True
             else:
                 offspring_1.mutation(random,heros)
                 offspring_2.mutation(random,heros)
 
                 if offspring_1.rule_IDs != offspring_1_originalIDs:
                     offspring_1.model_target_acc = np.nan # unclear after mutation without any accuracy pressure
+
+                    if mutation_acc_pressure_occurred: # if mutation_acc_pressure() was called, has_targetacc1_ancestor=True b/c mutation_acc_pressure() is a nu>1 mechanism; introducing some "nu>1 DNA"
+                        offspring_1.has_targetacc1_ancestor = True
                 if offspring_2.rule_IDs != offspring_2_originalIDs:
                     offspring_2.model_target_acc = np.nan # unclear after mutation without any accuracy pressure
+
+                    if mutation_acc_pressure_occurred: # if mutation_acc_pressure() was called, has_targetacc1_ancestor=True b/c mutation_acc_pressure() is a nu>1 mechanism; introducing some "nu>1 DNA"
+                        offspring_2.has_targetacc1_ancestor = True
         else:
             if heros.nu > 1:
                 offspring_1.mutation_acc_pressure(random,heros)
@@ -531,10 +568,15 @@ class MODEL_POP:
                         if random.random() < heros.high_nu_weight:
                             offspring_1.initialize_target(rules_in_model,1.0, heros)
                             offspring_1.model_target_acc = 1.0
+                            offspring_1.has_targetacc1_ancestor = True
                         else:
                             target = random.uniform(0.55,1.0)
                             offspring_1.initialize_target(rules_in_model,target, heros)
                             offspring_1.model_target_acc = target
+                            if offspring_1.model_target_acc == 1.0:
+                                offspring_1.has_targetacc1_ancestor = True
+                            else:
+                                offspring_1.has_targetacc1_ancestor = False
                     else:
                         if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
                             offspring_1.initialize_target(rules_in_model,1.0, heros)
@@ -555,10 +597,15 @@ class MODEL_POP:
                         if random.random() < heros.high_nu_weight:
                             offspring_1.initialize_target(rules_in_model,1.0, heros)
                             offspring_1.model_target_acc = 1.0
+                            offspring_1.has_targetacc1_ancestor = True
                         else:
                             target = random.uniform(0.55,1.0)
                             offspring_1.initialize_target(rules_in_model,target, heros)
                             offspring_1.model_target_acc = target
+                            if offspring_1.model_target_acc == 1.0:
+                                offspring_1.has_targetacc1_ancestor = True
+                            else:
+                                offspring_1.has_targetacc1_ancestor = False
                     else:
                         if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
                             offspring_1.initialize_target(rules_in_model,1.0, heros)
@@ -601,10 +648,15 @@ class MODEL_POP:
                         if random.random() < heros.high_nu_weight:
                             offspring_2.initialize_target(rules_in_model,1.0, heros)
                             offspring_2.model_target_acc = 1.0
+                            offspring_2.has_targetacc1_ancestor = True
                         else:
                             target = random.uniform(0.55,1.0)
                             offspring_2.initialize_target(rules_in_model,target, heros)
                             offspring_2.model_target_acc = target
+                            if offspring_2.model_target_acc == 1.0:
+                                offspring_2.has_targetacc1_ancestor = True
+                            else:
+                                offspring_2.has_targetacc1_ancestor = False
                     else:
                         if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
                             offspring_2.initialize_target(rules_in_model,1.0, heros)
@@ -625,10 +677,15 @@ class MODEL_POP:
                         if random.random() < heros.high_nu_weight:
                             offspring_2.initialize_target(rules_in_model,1.0, heros)
                             offspring_2.model_target_acc = 1.0
+                            offspring_2.has_targetacc1_ancestor = True
                         else:
                             target = random.uniform(0.55,1.0)
                             offspring_2.initialize_target(rules_in_model,target, heros)
                             offspring_2.model_target_acc = target
+                            if offspring_2.model_target_acc == 1.0:
+                                offspring_2.has_targetacc1_ancestor = True
+                            else:
+                                offspring_2.has_targetacc1_ancestor = False
                     else:
                         if heros.nu > 1: #Pressure to be highly accurate - revert to using random init
                             offspring_2.initialize_target(rules_in_model,1.0, heros)

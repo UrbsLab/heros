@@ -551,9 +551,10 @@ class HEROS(BaseEstimator, TransformerMixin):
                 models = []
                 iter = 0 
                 count = 0
-                best_model_high_target_acc_count = 0
-                initial_learning_rate = 0.05
-                decay_rate = 0.01
+                best_model_high_target_acc_count = 0 # number of the last 5 model iterations with the top model having model_target_acc=1 (counter variable)
+                initial_learning_rate = 0.05 # initial learning rate for update equation of high_nu_weight
+                decay_rate = 0.01 # decay rate for update equation of high_nu_weight
+                high_nu_weight_reached_0 = False # whether high_nu_weight has ever reached 0
                 # RUN MODEL-LEARNING TRAINING ITERATIONS **************************************************************
                 while continue_phase_two:
                     #Apply NSGAII-like fast non dominated sorting of models into ranked fronts of models
@@ -615,6 +616,37 @@ class HEROS(BaseEstimator, TransformerMixin):
                             best_model_high_target_acc_count = 0 # reset every 5 model iterations
                             if high_nu_weight_updated:
                                 self.rule_population.global_fitness_update(self) # if high_nu_weight is updated, update the fitness of all rules in the rule pop. accordingly
+
+                            # for tracking of high_nu_weight value as iterations go by
+                            print("Iteration:", self.model_iteration, "\nHigh Nu Weight:", self.high_nu_weight, "\n")
+
+                            if self.high_nu_weight == 0.0 and high_nu_weight_reached_0 == False:
+                                preserved_models = [m for m in self.model_population.pop_set if m.has_targetacc1_ancestor == False]
+                                self.model_population.pop_set = preserved_models # remove all models that have "target_acc=1 DNA", b/c it is established that this is a noisier dataset; goal is to prevent large rule sets with many low coverage but accurate rules (ex. rules that cover only 1-2 instances)
+                                print("Size of model population after cleansing when high_nu_weight hits 0:", len(self.model_population.pop_set))
+
+                                #Apply NSGAII-like fast non dominated sorting of models into ranked fronts of models
+                                fronts = self.model_population.fast_non_dominated_sort(self)
+                                #Calculate crowding distances
+                                crowding_distances = {sol: d for front in fronts for sol, d in self.model_population.calculate_crowding_distance(front).items()}
+                                try_catch = 0
+                                while len(self.model_population.pop_set) < self.model_pop_size and try_catch < 100: #Generate offspring until we hit the target number
+                                    parent1 = self.model_population.binary_tournament_selection(crowding_distances,random)
+                                    parent2 = self.model_population.binary_tournament_selection(crowding_distances,random)
+                                    parent_list = [parent1,parent2]
+                                    models_found = self.model_population.generate_offspring(self.model_iteration,parent_list,random,self)
+                                    if not models_found:
+                                        try_catch += 1
+                                # Add Offspring Models to Population
+                                self.model_population.add_offspring_into_pop()
+
+                                # if we still don't have enough models after this, consider adding more initialize_target() models with nu=1 approach (although generate_offspring() already defaults to this if an already existing model is generated through evolution)
+
+                                # Sort the models in the population and identify the new models on the front
+                                self.model_population.sort_model_pop()
+                                self.model_population.identify_models_on_front()
+
+                                high_nu_weight_reached_0 = True # to prevent this code being run again
                     models = set(filter(lambda m: m.model_on_front == 1,self.model_population.pop_set))
                     if models == models_prev:
                         iter += 1
