@@ -621,8 +621,12 @@ class HEROS(BaseEstimator, TransformerMixin):
                             print("Iteration:", self.model_iteration, "\nHigh Nu Weight:", self.high_nu_weight, "\n")
 
                             if self.high_nu_weight == 0.0 and high_nu_weight_reached_0 == False:
-                                preserved_models = [m for m in self.model_population.pop_set if m.has_targetacc1_ancestor == False]
-                                self.model_population.pop_set = preserved_models # remove all models that have "target_acc=1 DNA", b/c it is established that this is a noisier dataset; goal is to prevent large rule sets with many low coverage but accurate rules (ex. rules that cover only 1-2 instances)
+                                # preserved_models = [m for m in self.model_population.pop_set if m.has_targetacc1_ancestor == False] # remove all models that have "target_acc=1 DNA", b/c it is established that this is a noisier dataset; goal is to prevent large rule sets with many low coverage but accurate rules (ex. rules that cover only 1-2 instances)
+                                preserved_models = sorted(
+                                    self.model_population.pop_set,
+                                    key=lambda m: len(m.rule_set)
+                                )[:len(self.model_population.pop_set) // 2] # remove the 50% of models with the highest number of rules from the population
+                                self.model_population.pop_set = preserved_models
                                 print("Size of model population after cleansing when high_nu_weight hits 0:", len(self.model_population.pop_set))
 
                                 #Apply NSGAII-like fast non dominated sorting of models into ranked fronts of models
