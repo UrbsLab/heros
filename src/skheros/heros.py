@@ -159,6 +159,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         self.adaptive_nu = adaptive_nu
         if self.adaptive_nu: # if this mode is on, initialize weight given to high nu approach
             self.high_nu_weight = 0.5
+            self.high_nu_weight_reached_0 = False # whether high_nu_weight has ever reached 0
         self.beta = float(beta)
         self.theta_sel = float(theta_sel)
         self.fitness_function = str(fitness_function)
@@ -554,7 +555,6 @@ class HEROS(BaseEstimator, TransformerMixin):
                 best_model_high_target_acc_count = 0 # number of the last 5 model iterations with the top model having model_target_acc=1 (counter variable)
                 initial_learning_rate = 0.05 # initial learning rate for update equation of high_nu_weight
                 decay_rate = 0.01 # decay rate for update equation of high_nu_weight
-                high_nu_weight_reached_0 = False # whether high_nu_weight has ever reached 0
                 # RUN MODEL-LEARNING TRAINING ITERATIONS **************************************************************
                 while continue_phase_two:
                     #Apply NSGAII-like fast non dominated sorting of models into ranked fronts of models
@@ -620,8 +620,10 @@ class HEROS(BaseEstimator, TransformerMixin):
                             # for tracking of high_nu_weight value as iterations go by
                             print("Iteration:", self.model_iteration, "\nHigh Nu Weight:", self.high_nu_weight, "\n")
 
-                            if self.high_nu_weight == 0.0 and high_nu_weight_reached_0 == False:
+                            if self.high_nu_weight == 0.0 and self.high_nu_weight_reached_0 == False: # if high_nu_weight reaches 0 (for the first time)
                                 # preserved_models = [m for m in self.model_population.pop_set if m.has_targetacc1_ancestor == False] # remove all models that have "target_acc=1 DNA", b/c it is established that this is a noisier dataset; goal is to prevent large rule sets with many low coverage but accurate rules (ex. rules that cover only 1-2 instances)
+                                # for m in self.model_population.pop_set:
+                                #     print(m.has_targetacc1_ancestor)
                                 preserved_models = sorted(
                                     self.model_population.pop_set,
                                     key=lambda m: len(m.rule_set)
@@ -634,7 +636,7 @@ class HEROS(BaseEstimator, TransformerMixin):
                                 #Calculate crowding distances
                                 crowding_distances = {sol: d for front in fronts for sol, d in self.model_population.calculate_crowding_distance(front).items()}
                                 try_catch = 0
-                                while len(self.model_population.pop_set) < self.model_pop_size and try_catch < 100: #Generate offspring until we hit the target number
+                                while (len(self.model_population.pop_set) + len(self.model_population.offspring_pop)) < self.model_pop_size and try_catch < 100: #Generate offspring until we hit the target number
                                     parent1 = self.model_population.binary_tournament_selection(crowding_distances,random)
                                     parent2 = self.model_population.binary_tournament_selection(crowding_distances,random)
                                     parent_list = [parent1,parent2]
@@ -650,7 +652,7 @@ class HEROS(BaseEstimator, TransformerMixin):
                                 self.model_population.sort_model_pop()
                                 self.model_population.identify_models_on_front()
 
-                                high_nu_weight_reached_0 = True # to prevent this code being run again
+                                self.high_nu_weight_reached_0 = True # to prevent this code being run again
                     models = set(filter(lambda m: m.model_on_front == 1,self.model_population.pop_set))
                     if models == models_prev:
                         iter += 1

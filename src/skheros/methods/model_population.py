@@ -529,21 +529,19 @@ class MODEL_POP:
             if random.random() < heros.high_nu_weight: # probabilistic approach to determine whether nu > 1 strategy is used
                 offspring_1.mutation_acc_pressure(random,heros)
                 offspring_2.mutation_acc_pressure(random,heros)
-                mutation_acc_pressure_occurred = True
+
+                if offspring_1.rule_IDs != offspring_1_originalIDs: # has_targetacc1_ancestor=True b/c mutation_acc_pressure() is a nu>1 mechanism; introducing some "nu>1 DNA"
+                    offspring_1.has_targetacc1_ancestor = True
+                if offspring_2.rule_IDs != offspring_2_originalIDs:
+                    offspring_2.has_targetacc1_ancestor = True
             else:
                 offspring_1.mutation(random,heros)
                 offspring_2.mutation(random,heros)
 
                 if offspring_1.rule_IDs != offspring_1_originalIDs:
                     offspring_1.model_target_acc = np.nan # unclear after mutation without any accuracy pressure
-
-                    if mutation_acc_pressure_occurred: # if mutation_acc_pressure() was called, has_targetacc1_ancestor=True b/c mutation_acc_pressure() is a nu>1 mechanism; introducing some "nu>1 DNA"
-                        offspring_1.has_targetacc1_ancestor = True
                 if offspring_2.rule_IDs != offspring_2_originalIDs:
                     offspring_2.model_target_acc = np.nan # unclear after mutation without any accuracy pressure
-
-                    if mutation_acc_pressure_occurred: # if mutation_acc_pressure() was called, has_targetacc1_ancestor=True b/c mutation_acc_pressure() is a nu>1 mechanism; introducing some "nu>1 DNA"
-                        offspring_2.has_targetacc1_ancestor = True
         else:
             if heros.nu > 1:
                 offspring_1.mutation_acc_pressure(random,heros)
