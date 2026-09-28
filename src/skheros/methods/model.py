@@ -98,6 +98,35 @@ class MODEL:
             self.rule_IDs.append(r.ID)
         self.birth_iteration = heros.model_iteration
 
+
+    def initialize_fittest(self, rules_in_model, min_correct_coverage, heros):
+        """ Initializes rule sets by trying to create a compact rule set made up of rules with high fitness. """
+        # have to correctly classify at least this proportion of the training instances to be considered (don't want rules that are too specific)
+        min_correct_covered_instances = int(np.ceil(min_correct_coverage * heros.env.num_instances))
+        pool = copy.copy(heros.rule_population.pop_set)
+        pool = [r for r in pool if r.correct_cover >= min_correct_covered_instances] # don't want rules that are too specific; want compact rule sets
+        self.rule_set = []
+        self.rule_IDs = []
+        selected_rules = []
+
+        while len(selected_rules) < rules_in_model:
+            # Prioritize HEROS fitness of rules (that are eligible to be added to the rule set)
+            # penalize rule(s) with highest useful_coverage if it has low useful_accuracy (penalty term = max(useful_accuracy)-r.useful_accuracy)
+            weights = [r.fitness**5 if r.useful_coverage != heros.rule_pareto.metric_limits[1] 
+                       else r.fitness**5 - (heros.rule_pareto.metric_limits[0]-r.useful_accuracy)
+                       for r in pool]
+            if sum(weights) == 0:
+                break
+            else: 
+                rule = random.choices(pool, weights = weights)[0]
+                selected_rules.append(rule)
+                pool.remove(rule)
+
+        for r in selected_rules:
+            self.rule_set.append(r)
+            self.rule_IDs.append(r.ID)
+        self.birth_iteration = heros.model_iteration
+
     
     def check_for_duplicates(self,rule_IDs,code_region):
         """ Debugging """

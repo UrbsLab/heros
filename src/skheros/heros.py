@@ -16,6 +16,8 @@ from .methods.rule_prediction import RULE_PREDICTION
 from .methods.rule_compaction import COMPACT
 from .methods.model_population import MODEL_POP
 from .methods.model_prediction import MODEL_PREDICTION
+from .methods.model import MODEL
+import statistics
 #import pickle #temporary testing
 #import inspect #temporary testing
 
@@ -621,16 +623,88 @@ class HEROS(BaseEstimator, TransformerMixin):
                             print("Iteration:", self.model_iteration, "\nHigh Nu Weight:", self.high_nu_weight, "\n")
 
                             if self.high_nu_weight == 0.0 and self.high_nu_weight_reached_0 == False: # if high_nu_weight reaches 0 (for the first time)
+                                print("Sizes of rule sets before cleansing when high_nu_weight hits 0:", sorted([m.objectives[1] for m in self.model_population.pop_set], reverse=True), "\n")
+                                # 1) Deleting any model that has "target_acc=1/high nu DNA"
                                 # preserved_models = [m for m in self.model_population.pop_set if m.has_targetacc1_ancestor == False] # remove all models that have "target_acc=1 DNA", b/c it is established that this is a noisier dataset; goal is to prevent large rule sets with many low coverage but accurate rules (ex. rules that cover only 1-2 instances)
                                 # for m in self.model_population.pop_set:
                                 #     print(m.has_targetacc1_ancestor)
-                                preserved_models = sorted(
-                                    self.model_population.pop_set,
-                                    key=lambda m: len(m.rule_set)
-                                )[:len(self.model_population.pop_set) // 2] # remove the 50% of models with the highest number of rules from the population
-                                self.model_population.pop_set = preserved_models
-                                print("Size of model population after cleansing when high_nu_weight hits 0:", len(self.model_population.pop_set))
+                                # 2) Deleting 50% of models in the population with the highest number of rules
+                                # preserved_models = sorted(
+                                #     self.model_population.pop_set,
+                                #     key=lambda m: len(m.rule_set)
+                                # )[:len(self.model_population.pop_set) // 2] # remove the 50% of models with the highest number of rules from the population
+                                # self.model_population.pop_set = preserved_models
+                                # 3) Protecting models on the Pareto front, and then deleting 50% of the remaining models with the highest number of rules
+                                # pareto_models = [m for m in self.model_population.pop_set if m.model_on_front == 1]
+                                # non_pareto_models = [m for m in self.model_population.pop_set if m.model_on_front == 0]
+                                # preserved_non_pareto = sorted(
+                                #     non_pareto_models,
+                                #     key=lambda m: (len(m.rule_set), -m.accuracy) # if ties in rule sizes, prioritize keeping the higher accuracy rule sets
+                                # )[:len(non_pareto_models) // 2] # remove the 50% of models with the highest number of rules from the remaining models
+                                # self.model_population.pop_set = pareto_models + preserved_non_pareto
+                                # 4) Build a new Pareto front based on performance on validation set (to remove any overfit models from current front/pop). Delete any model not on this new Pareto front (edit: organize into multiple val. set fronts, keep top 50% of all models).
+                                # model_val_accuracies = []
+                                # Calculate validation balanced acc. for all models in the population
+                                for m in self.model_population.pop_set:
+                                    y_pred = []
+                                    for instance_index in range(len(self.y_val)): # calculate model's val. accuracy the same way HEROS calculates train accuracy in evaluate_model_class()
+                                        instance_state = self.X_val[instance_index] # this indexing of rows is fine since original X is converted to np.array in check_inputs()
+                                        covered, prediction = m.predict(instance_state,self)
+                                        if covered:
+                                            if prediction != None:
+                                                y_pred.append(prediction)
+                                            else: # Class tie occured
+                                                incorrect_classes = [x for x in self.env.classes if x != self.y_val[instance_index]]
+                                                y_pred.append(random.choice(incorrect_classes)) #Predicts a wrong class if instance was not covered by model
+                                        else:
+                                            incorrect_classes = [x for x in self.env.classes if x != self.y_val[instance_index]]
+                                            y_pred.append(random.choice(incorrect_classes)) #Predicts a wrong class if instance was not covered by model
+                                    m_val_accuracy = m.balanced_accuracy(self.y_val, y_pred)
+                                    m.objectives = (m_val_accuracy,m.objectives[1])
+                                    # model_val_accuracies.append(m_val_accuracy)
 
+                                # # See which models are non-dominated (on the Pareto front) using val. accuracy and rule set size as the two objectives
+                                # non_dominated_idxs = []
+                                # for model_idx, m in enumerate(self.model_population.pop_set):
+                                #     non_dominated_model = True
+                                #     for competitor_m_idx, competitor_m in enumerate(self.model_population.pop_set):
+                                #         if model_idx == competitor_m_idx: # don't compare model to itself
+                                #             continue
+                                #         elif (competitor_m.objectives[1] < m.objectives[1] and model_val_accuracies[competitor_m_idx] >= model_val_accuracies[model_idx]) or (competitor_m.objectives[1] <= m.objectives[1] and model_val_accuracies[competitor_m_idx] > model_val_accuracies[model_idx]): # objectives[1] refers to rule set size
+                                #             # if another model dominates the current model being assessed (m):
+                                #             non_dominated_model = False
+
+                                #         if not non_dominated_model:
+                                #             break # break early if the current model being assessed (m) is dominated by another model
+                                #     if non_dominated_model:
+                                #         non_dominated_idxs.append(model_idx)
+                                # Organize into fronts/calculate crowding distance after replacing train acc with val acc in objectives
+                                fronts = self.model_population.fast_non_dominated_sort(self)
+                                #Calculate crowding distances
+                                crowding_distances = {sol: d for front in fronts for sol, d in self.model_population.calculate_crowding_distance(front).items()}
+                                # NSGAII-like model deletion (borrowed functionality from model_deletion())
+                                #Add solutions from full best fronts that there is space for (for now, keep top 50% of current population)
+                                if len(self.model_population.pop_set) > (self.model_pop_size * 0.5): # can eventually make this a user-defined hyperparameter (how many models to keep)
+                                    new_pop_set = []
+                                    i = 0
+                                    while len(new_pop_set) + len(fronts[i]) <= (self.model_pop_size * 0.5):# and i < len(fronts): 
+                                        new_pop_set.extend(fronts[i])
+                                        i += 1
+                                    # Sort the last front by crowding distance and select remaining
+                                    if len(new_pop_set) < (self.model_pop_size * 0.5):# and i < len(fronts):
+                                        last_front = sorted(fronts[i], key=lambda sol: crowding_distances[sol], reverse=True)
+                                        new_pop_set.extend(last_front[:(self.model_pop_size * 0.5) - len(new_pop_set)])
+                                    #Replace model population with best models that remain
+                                    self.model_population.pop_set = new_pop_set
+                                for m in self.model_population.pop_set: # restore original objectives (train acc & rule set size)
+                                    m.objectives = (m.accuracy,len(m.rule_set))
+
+                                # Reduce population to consist of only models on this new temporary Pareto front
+                                # self.model_population.pop_set = [self.model_population.pop_set[i] for i in non_dominated_idxs]
+                                print("Size of model population after cleansing when high_nu_weight hits 0:", len(self.model_population.pop_set), "\n")
+                                print("Sizes of rule sets after cleansing when high_nu_weight hits 0:", sorted([m.objectives[1] for m in self.model_population.pop_set], reverse=True), "\n")
+
+                                # Idea 1: Adding new models that are offspring of remaining models
                                 #Apply NSGAII-like fast non dominated sorting of models into ranked fronts of models
                                 fronts = self.model_population.fast_non_dominated_sort(self)
                                 #Calculate crowding distances
@@ -645,8 +719,58 @@ class HEROS(BaseEstimator, TransformerMixin):
                                         try_catch += 1
                                 # Add Offspring Models to Population
                                 self.model_population.add_offspring_into_pop()
-
                                 # if we still don't have enough models after this, consider adding more initialize_target() models with nu=1 approach (although generate_offspring() already defaults to this if an already existing model is generated through evolution)
+                                # # Idea 2: Adding new models through initialize_target (with nu=1 setting), OR new initialization strategy -> initialize_fittest()
+                                # failed_attempts_max = 100
+                                # fail_count = 0
+                                # #Determine min and max rule counts for initialized models 
+                                # # largest_remaining_model_size = max((len(m.rule_IDs) for m in self.model_population.pop_set), default=0) # largest remaining model after removing large rule count models (aiming for these new models to be compact)
+                                # median_remaining_model_size = int(statistics.median(
+                                #     [len(m.rule_IDs) for m in self.model_population.pop_set]
+                                # ) if self.model_population.pop_set else 0)
+                                # target_rule_min = 10
+                                # # target_rule_max = largest_remaining_model_size
+                                # target_rule_max = median_remaining_model_size
+                                # if target_rule_max < target_rule_min:
+                                #     min_rules = 1
+                                #     max_rules = target_rule_max
+                                # else:
+                                #     min_rules = target_rule_min
+                                #     max_rules = target_rule_max
+                                # # min_accuracy = 0.55
+                                # # target_list = np.linspace(min_accuracy,1.0,int((self.model_pop_size-len(self.model_population.pop_set))/5.0)).tolist() #aim for 5 bins to be initialized for each target accuracy
+                                # # target_list.reverse() #start by creating a model with maximally accurate rules
+                                # # target_list_counter = 0
+                                # min_correct_coverage = 0.0025 # value original BioHEL paper used for 'covBreak'; eventually will be a user-defined hyperparameter
+                                # while len(self.model_population.pop_set) < self.model_pop_size and fail_count < failed_attempts_max:
+                                #     new_model = MODEL()
+                                #     rules_in_model = random.randint(min_rules,max_rules)
+                                #     # new_model.initialize_target(rules_in_model, target_list[target_list_counter], self)
+                                #     # if target_list_counter > int((self.model_pop_size-len(self.model_population.pop_set))/5.0) - 2:
+                                #     #     target_list_counter = 0
+                                #     # else:
+                                #     #     target_list_counter += 1
+                                #     new_model.initialize_fittest(rules_in_model, min_correct_coverage, self)
+                                #     new_model.model_target_acc = np.nan
+                                #     #Check if model already in population, and add to population
+                                #     if self.model_population.archive_discovered_models:
+                                #         if not self.model_population.list_exists(new_model.rule_IDs, self.model_population.explored_models):
+                                #             # Evalute model and update model parameters
+                                #             new_model.evaluate_model_class(self)
+                                #             #Add model to population
+                                #             self.model_population.pop_set.append(new_model) #add to model population
+                                #             self.model_population.add_new_explored_model(new_model.rule_IDs, self.model_population.explored_models)
+                                #         else:
+                                #             fail_count += 1
+                                #     else: #No model archiving
+                                #         if not self.model_population.model_exists(new_model):
+                                #             # Evalute model and update model parameters
+                                #             new_model.evaluate_model_class(self)
+                                #             #Add model to population
+                                #             self.model_population.pop_set.append(new_model) #add to model population
+                                #             #self.model_population.add_new_explored_model(new_model.rule_IDs, self.model_population.explored_models)
+                                #         else:
+                                #             fail_count += 1
 
                                 # Sort the models in the population and identify the new models on the front
                                 self.model_population.sort_model_pop()
