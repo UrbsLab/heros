@@ -62,6 +62,7 @@ def main(argv):
     #parser.add_argument('--v', dest='verbose', help='boolean flag to run in verbose mode', type=bool, default=False)
     parser.add_argument('--v', dest='verbose', help='boolean flag to run in verbose mode', action='store_true')
     parser.add_argument('--min', dest='min_output', help='boolean flag to minimize saved HEROS output', action='store_true')
+    parser.add_argument('--adnu', dest='adaptive_nu', help='boolean flag to use adaptive_nu', action='store_true')
                         
     #HPC parameters
     parser.add_argument('--rc', dest='run_cluster', help='cluster type', type=str, default='LSF')
@@ -133,6 +134,7 @@ def main(argv):
     else: 
         model_pop_init = str(options.model_pop_init)
     min_output = options.min_output
+    adaptive_nu = options.adaptive_nu
     #HPC parameters
     run_cluster = options.run_cluster
     reserved_memory = options.reserved_memory
@@ -193,10 +195,10 @@ def main(argv):
 
                 if not check: #Regular Job submission run
                     if run_cluster == 'LSF':
-                        submit_lsf_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,min_output,alternate,alternate_mode,feedback)
+                        submit_lsf_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,min_output,alternate,alternate_mode,feedback,adaptive_nu)
                         jobCount +=1
                     elif run_cluster == 'SLURM':
-                        submit_slurm_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,min_output,alternate,alternate_mode,feedback)
+                        submit_slurm_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,min_output,alternate,alternate_mode,feedback,adaptive_nu)
                         jobCount +=1
                     else:
                         print('ERROR: Cluster type not found')
@@ -208,10 +210,10 @@ def main(argv):
                         missing_count += 1
                         if resubmit:
                             if run_cluster == 'LSF':
-                                submit_lsf_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,min_output,alternate,alternate_mode,feedback)
+                                submit_lsf_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,min_output,alternate,alternate_mode,feedback,adaptive_nu)
                                 jobCount +=1
                             elif run_cluster == 'SLURM':
-                                submit_slurm_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,min_output,alternate,alternate_mode,feedback)
+                                submit_slurm_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,min_output,alternate,alternate_mode,feedback,adaptive_nu)
                                 jobCount +=1
                             else:
                                 print('ERROR: Cluster type not found')
@@ -220,7 +222,7 @@ def main(argv):
         print(str(missing_count)+' jobs incomplete')
 
 #UPenn Cluster
-def submit_lsf_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,min_output,alternate,alternate_mode,feedback): 
+def submit_lsf_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,min_output,alternate,alternate_mode,feedback,adaptive_nu): 
     job_ref = str(time.time())
     job_name = 'HEROS_'+full_data_name+'_seed_'+str(target_random_seed)+'_'+job_ref
     job_path = scratchPath+'/'+job_name+ '_run.sh'
@@ -235,12 +237,13 @@ def submit_lsf_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_n
     fb_arg = ' --fb' if feedback else ''
     verbose_arg = ' --v' if verbose else ''
     min_arg = ' --min' if min_output else ''
-    sh_file.write('python job_heros.py'+' --d '+str(full_data_path)+' --o '+str(outputPath)+' --ekf '+str(ekfolder)+' --ol '+str(outcome_label) +' --il '+str(instanceID_label) +' --el '+str(excluded_column) + ' --in '+str(model_pop_init)+' --ot '+str(outcome_type)+' --it '+str(iterations)+' --ps '+str(pop_size)+' --nu '+str(nu)+' --mi '+str(model_iterations)+' --ms '+str(model_pop_size)+' --cp '+str(cross_prob)+' --mp '+str(mut_prob)+' --b '+str(beta)+' --ts '+str(theta_sel)+' --ff '+str(fitness_function)+' --s '+str(subsumption)+' --rsl '+str(rsl)+' --ft '+str(feat_track)+' --ng '+str(new_gen)+' --mg '+str(merge_prob)+' --pt '+str(rule_pop_init)+' --c '+str(compaction)+' --tp '+str(track_performance)+' --sr '+str(stored_rule_iterations)+' --sm '+str(stored_model_iterations)+' --rs '+str(target_random_seed)+ verbose_arg + min_arg+ ' --a ' + str(alternate)+ ' --m ' + str(alternate_mode) + fb_arg +'\n')
+    adaptivenu_arg = ' --adnu' if adaptive_nu else ''
+    sh_file.write('python job_heros.py'+' --d '+str(full_data_path)+' --o '+str(outputPath)+' --ekf '+str(ekfolder)+' --ol '+str(outcome_label) +' --il '+str(instanceID_label) +' --el '+str(excluded_column) + ' --in '+str(model_pop_init)+' --ot '+str(outcome_type)+' --it '+str(iterations)+' --ps '+str(pop_size)+' --nu '+str(nu)+' --mi '+str(model_iterations)+' --ms '+str(model_pop_size)+' --cp '+str(cross_prob)+' --mp '+str(mut_prob)+' --b '+str(beta)+' --ts '+str(theta_sel)+' --ff '+str(fitness_function)+' --s '+str(subsumption)+' --rsl '+str(rsl)+' --ft '+str(feat_track)+' --ng '+str(new_gen)+' --mg '+str(merge_prob)+' --pt '+str(rule_pop_init)+' --c '+str(compaction)+' --tp '+str(track_performance)+' --sr '+str(stored_rule_iterations)+' --sm '+str(stored_model_iterations)+' --rs '+str(target_random_seed)+ verbose_arg + min_arg+ adaptivenu_arg + ' --a ' + str(alternate)+ ' --m ' + str(alternate_mode) + fb_arg +'\n')
     sh_file.close()
     os.system('bsub < ' + job_path)
     
 #Cedars Cluster
-def submit_slurm_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,min_output,alternate,alternate_mode,feedback): 
+def submit_slurm_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data_name,outputPath,full_data_path,ekfolder,outcome_label,instanceID_label,excluded_column,model_pop_init,outcome_type,iterations,pop_size,nu,model_iterations,model_pop_size,cross_prob,mut_prob,beta,theta_sel,fitness_function,subsumption,rsl,feat_track,new_gen,merge_prob,rule_pop_init,compaction,track_performance,stored_rule_iterations,stored_model_iterations,target_random_seed,verbose,min_output,alternate,alternate_mode,feedback,adaptive_nu): 
     job_ref = str(time.time())
     job_name = 'HEROS_'+full_data_name+'_seed_'+str(target_random_seed)+'_'+job_ref
     job_path = scratchPath+'/'+job_name+ '_run.sh'
@@ -255,7 +258,8 @@ def submit_slurm_cluster_job(scratchPath,logPath,reserved_memory,queue,full_data
     fb_arg = ' --fb' if feedback else ''
     verbose_arg = ' --v' if verbose else ''
     min_arg = ' --min' if min_output else ''
-    sh_file.write('srun python job_heros.py'+' --d '+str(full_data_path)+' --o '+str(outputPath)+' --ekf '+str(ekfolder)+' --ol '+str(outcome_label) +' --il '+str(instanceID_label) +' --el '+str(excluded_column)+' --in '+str(model_pop_init)+' --ot '+str(outcome_type)+' --it '+str(iterations)+' --ps '+str(pop_size)+' --nu '+str(nu)+' --mi '+str(model_iterations)+' --ms '+str(model_pop_size)+' --cp '+str(cross_prob)+' --mp '+str(mut_prob)+' --b '+str(beta)+' --ts '+str(theta_sel)+' --ff '+str(fitness_function)+' --s '+str(subsumption)+' --rsl '+str(rsl)+' --ft '+str(feat_track)+' --ng '+str(new_gen)+' --mg '+str(merge_prob)+' --pt '+str(rule_pop_init)+' --c '+str(compaction)+' --tp '+str(track_performance)+' --sr '+str(stored_rule_iterations)+' --sm '+str(stored_model_iterations)+' --rs '+str(target_random_seed)+ verbose_arg + min_arg + ' --a ' + str(alternate)+ ' --m ' + str(alternate_mode) + fb_arg +'\n')
+    adaptivenu_arg = ' --adnu' if adaptive_nu else ''
+    sh_file.write('srun python job_heros.py'+' --d '+str(full_data_path)+' --o '+str(outputPath)+' --ekf '+str(ekfolder)+' --ol '+str(outcome_label) +' --il '+str(instanceID_label) +' --el '+str(excluded_column)+' --in '+str(model_pop_init)+' --ot '+str(outcome_type)+' --it '+str(iterations)+' --ps '+str(pop_size)+' --nu '+str(nu)+' --mi '+str(model_iterations)+' --ms '+str(model_pop_size)+' --cp '+str(cross_prob)+' --mp '+str(mut_prob)+' --b '+str(beta)+' --ts '+str(theta_sel)+' --ff '+str(fitness_function)+' --s '+str(subsumption)+' --rsl '+str(rsl)+' --ft '+str(feat_track)+' --ng '+str(new_gen)+' --mg '+str(merge_prob)+' --pt '+str(rule_pop_init)+' --c '+str(compaction)+' --tp '+str(track_performance)+' --sr '+str(stored_rule_iterations)+' --sm '+str(stored_model_iterations)+' --rs '+str(target_random_seed)+ verbose_arg + min_arg + adaptivenu_arg + ' --a ' + str(alternate)+ ' --m ' + str(alternate_mode) + fb_arg +'\n')
     sh_file.close()
     os.system('sbatch ' + job_path)
 

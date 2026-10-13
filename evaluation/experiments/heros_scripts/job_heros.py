@@ -59,6 +59,7 @@ def main(argv):
     parser.add_argument('--rs', dest='random_state', help='random state seed', type=int, default=42)
     parser.add_argument('--v', dest='verbose', help='boolean flag to run in verbose mode', type=str, default='False')
     parser.add_argument('--min', dest='min_output', help='boolean flag to minimize saved HEROS output', action='store_true')
+    parser.add_argument('--adnu', dest='adaptive_nu', help='boolean flag to use adaptive_nu', action='store_true')
 
     #----------------------------------------------------------------------------------------------
     options=parser.parse_args(argv[1:])
@@ -119,6 +120,7 @@ def main(argv):
     else:
         verbose = False
     min_output = options.min_output
+    adaptive_nu = options.adaptive_nu
 
     # Get Dataset Name
     data_name = os.path.splitext(os.path.basename(full_data_path))[0]
@@ -150,7 +152,7 @@ def main(argv):
     ek = loaded_data['Score'].tolist()
 
     #Train HEROS --------------------------------------------------------------------------------------------------------------------
-    heros = HEROS(outcome_type=outcome_type,iterations=iterations,pop_size=pop_size, cross_prob=cross_prob,mut_prob=mut_prob,nu=nu,beta=beta,theta_sel=theta_sel,
+    heros = HEROS(outcome_type=outcome_type,iterations=iterations,pop_size=pop_size, cross_prob=cross_prob,mut_prob=mut_prob,nu=nu,adaptive_nu=adaptive_nu,beta=beta,theta_sel=theta_sel,
                 fitness_function=fitness_function,subsumption=subsumption,rsl=rsl,feat_track=feat_track, model_iterations=model_iterations,
                 model_pop_size=model_pop_size,model_pop_init=model_pop_init,new_gen=new_gen,merge_prob=merge_prob,rule_pop_init=rule_pop_init,compaction=compaction,
                 track_performance=track_performance,model_tracking=True,stored_rule_iterations=stored_rule_iterations,stored_model_iterations=stored_model_iterations,
