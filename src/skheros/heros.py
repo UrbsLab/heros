@@ -684,16 +684,16 @@ class HEROS(BaseEstimator, TransformerMixin):
                                 crowding_distances = {sol: d for front in fronts for sol, d in self.model_population.calculate_crowding_distance(front).items()}
                                 # NSGAII-like model deletion (borrowed functionality from model_deletion())
                                 #Add solutions from full best fronts that there is space for (for now, keep top 50% of current population)
-                                if len(self.model_population.pop_set) > (self.model_pop_size * 0.5): # can eventually make this a user-defined hyperparameter (how many models to keep)
+                                if len(self.model_population.pop_set) > (self.model_pop_size // 2): # can eventually make this a user-defined hyperparameter (how many models to keep)
                                     new_pop_set = []
                                     i = 0
-                                    while len(new_pop_set) + len(fronts[i]) <= (self.model_pop_size * 0.5):# and i < len(fronts): 
+                                    while len(new_pop_set) + len(fronts[i]) <= (self.model_pop_size // 2):# and i < len(fronts): 
                                         new_pop_set.extend(fronts[i])
                                         i += 1
                                     # Sort the last front by crowding distance and select remaining
-                                    if len(new_pop_set) < (self.model_pop_size * 0.5):# and i < len(fronts):
+                                    if len(new_pop_set) < (self.model_pop_size // 2):# and i < len(fronts):
                                         last_front = sorted(fronts[i], key=lambda sol: crowding_distances[sol], reverse=True)
-                                        new_pop_set.extend(last_front[:(self.model_pop_size * 0.5) - len(new_pop_set)])
+                                        new_pop_set.extend(last_front[:(self.model_pop_size // 2) - len(new_pop_set)])
                                     #Replace model population with best models that remain
                                     self.model_population.pop_set = new_pop_set
                                 for m in self.model_population.pop_set: # restore original objectives (train acc & rule set size)
