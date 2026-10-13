@@ -9,7 +9,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 #UPDATE Path below as needed!!!
-sys.path.append('/project/kamoun_shared/output_shared/heros_v0.3_dev/heros/src')
+sys.path.append('/project/kamoun_shared/output_shared/heros_adaptivenu_test/heros/src')
+# sys.path.append('/project/kamoun_shared/output_shared/heros_v0.3_dev/heros/src')
 #sys.path.append('/project/kamoun_shared/code_shared/new_heros/scikit-heros/')
 #from src.skheros.heros import HEROS
 from skheros.heros import HEROS #PIP INSTALL RUN
