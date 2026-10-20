@@ -26,7 +26,7 @@ import numpy as np
 from src.skheros.methods.zadia_project import Soft_Gini_SGD, delta_rule_mutation, tree_split
 from src.skheros.methods.zadia_exp_v2 import multi_feature_GD
 from src.skheros.methods.zadia_experiment import multi_iter_GD
-from src.skheros.methods.zadia_memory import best_quantitative_split_with_memory
+from src.skheros.methods.lyra_project import local_quantitative_optmization
 
 
 class RULE_POP:
@@ -113,6 +113,8 @@ class RULE_POP:
         if do_covering:
             new_rule = RULE(heros)
             new_rule.initialize_by_covering(set_numerosity_sum+1,instance_state,outcome_state,heros,random,np)
+            # LYRA OPTIMIZATION OPERATOR
+            new_rule = self.apply_selected_optimization(new_rule, instance_state, heros, random, np)
             #self.debug_confirm_offspring_match(new_rule, instance,heros,'covering',None)
             if len(new_rule.condition_indexes) > 0: #prevents completely general rules from being added to the population
                 #Check for duplicate rule in {P} - important since covering runs if {C} is empty, which can generate an existing rule in the match set
@@ -204,11 +206,11 @@ class RULE_POP:
                 self.correct_set[j] -= 1
 
 
-    def apply_selected_optimization(self, offspring, heros, random, np):
+    def apply_selected_optimization(self, offspring, instance_state, heros, random, np):
         """Apply the selected optional optimization step to an offspring rule."""
         method = getattr(heros, 'optimization_method', None)
         if method is None:
-            return
+            return offspring
 
         if method == 'soft_gini_sgd':
             for feature in offspring.condition_indexes:
@@ -220,11 +222,12 @@ class RULE_POP:
         elif method == 'tree_split':
             for feature in offspring.condition_indexes:
                 tree_split(offspring, heros, feature, np)
-        elif method == 'mem_split':
-            for feature in offspring.condition_indexes:
-                best_quantitative_split_with_memory(offspring, heros, feature, np)
+        elif method == 'local_quantitative_optimization':
+            offspring = local_quantitative_optmization(offspring, instance_state, heros, random, np)
         else:
             raise ValueError(f"Unsupported optimization method: {method}")
+
+        return offspring
 
 
     def debug_confirm_offspring_match(self, rule, instance,heros,step,parent_list):
@@ -284,9 +287,12 @@ class RULE_POP:
 
 
         #ZADIA OPTIMIZATION OPERATOR ***************************************
-        for offspring in offspring_list:
-            self.apply_selected_optimization(offspring, heros, random, np)
-        
+        #for offspring in offspring_list:
+        #    self.apply_selected_optimization(offspring, heros, random, np)
+
+        # LYRA OPTIMIZATION OPERATOR
+        for i, offspring in enumerate(offspring_list):
+            offspring_list[i] = self.apply_selected_optimization(offspring, instance_state, heros, random, np)
 
 
         #Check for offspring duplication
@@ -930,6 +936,9 @@ class RULE_POP:
             rule_obj.action = None
             rule_obj.numerosity = 1
             rule_obj.birth_iteration = 0
+            # LYRA OPTIMIZATION OPERATOR: no current instance during tree initialization (None), so split sides are chosen by rule fitness
+            if getattr(heros, 'optimization_method', None) == 'local_quantitative_optimization':
+                rule_obj = local_quantitative_optmization(rule_obj, None, heros, random, np)
             try: #FUTURE EXPANSION TO QUANTITATIVE OUTCOMES NEEDED
                 if hasattr(rule_obj, 'complete_rule_evaluation_class'): #Evaluates rules and assignes best outcome.
                     front_updated = rule_obj.complete_rule_evaluation_class(heros, random, None)
