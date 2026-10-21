@@ -26,7 +26,7 @@ import numpy as np
 from src.skheros.methods.zadia_project import Soft_Gini_SGD, delta_rule_mutation, tree_split
 from src.skheros.methods.zadia_exp_v2 import multi_feature_GD
 from src.skheros.methods.zadia_experiment import multi_iter_GD
-from src.skheros.methods.lyra_project import local_quantitative_optmization
+from src.skheros.methods.lyra_project import local_quantitative_optmization, local_quantitative_optimization_v3
 
 
 class RULE_POP:
@@ -224,6 +224,8 @@ class RULE_POP:
                 tree_split(offspring, heros, feature, np)
         elif method == 'local_quantitative_optimization':
             offspring = local_quantitative_optmization(offspring, instance_state, heros, random, np)
+        elif method == 'local_quantitative_optimization_v3':
+            offspring = local_quantitative_optimization_v3(offspring, instance_state, heros, random, np)
         else:
             raise ValueError(f"Unsupported optimization method: {method}")
 
@@ -939,6 +941,8 @@ class RULE_POP:
             # LYRA OPTIMIZATION OPERATOR: no current instance during tree initialization (None), so split sides are chosen by rule fitness
             if getattr(heros, 'optimization_method', None) == 'local_quantitative_optimization':
                 rule_obj = local_quantitative_optmization(rule_obj, None, heros, random, np)
+            elif getattr(heros, 'optimization_method', None) == 'local_quantitative_optimization_v3':
+                rule_obj = local_quantitative_optimization_v3(rule_obj, None, heros, random, np)
             try: #FUTURE EXPANSION TO QUANTITATIVE OUTCOMES NEEDED
                 if hasattr(rule_obj, 'complete_rule_evaluation_class'): #Evaluates rules and assignes best outcome.
                     front_updated = rule_obj.complete_rule_evaluation_class(heros, random, None)

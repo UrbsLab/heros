@@ -4,7 +4,8 @@
 # Submit from the repo root, once per config:
 #   mkdir -p logs
 #   sbatch --array=0-199 evaluation/hpc/run_replicates.sh baseline
-#   sbatch --array=0-199 evaluation/hpc/run_replicates.sh local_quant_opt
+#   sbatch --array=0-199 evaluation/hpc/run_replicates.sh local_quant_opt_tree
+#   sbatch --array=0-199 evaluation/hpc/run_replicates.sh local_quant_opt_gini
 # Optional 2nd/3rd args: dataset (default MUX6_QF_500) and results folder. Set CV=<k> to change the fold count.
 #SBATCH -p defq
 #SBATCH --job-name=heros_rep
@@ -16,7 +17,7 @@
 #SBATCH -o logs/%x_%A_%a.out
 #SBATCH -e logs/%x_%A_%a.err
 
-CONFIG=${1:?usage: sbatch --array=0-199 run_replicates.sh <baseline|local_quant_opt|zadia_method> [dataset] [results_dir]}
+CONFIG=${1:?usage: sbatch --array=0-199 run_replicates.sh <baseline|local_quant_opt_tree|local_quant_opt_gini> [dataset] [results_dir]}
 DATASET=${2:-MUX6_QF_500}
 RESULTS_DIR=${3:-results/replicates/$DATASET}
 CV=${CV:-10}

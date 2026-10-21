@@ -9,10 +9,10 @@ from src.skheros.heros import HEROS
 # Baseline vs local_quantitative_optimization using the dataset setup and HEROS parameters from HEROS_Demo_Notebook.ipynb
 # Usage: python evaluation/run_notebook_comparison.py MUX6     (or MUX6_QF, MUX6_QF_SPLIT, MUX6_QF_500)
 # Replicate run (one CV fold, one seed, one config, results saved to csv), e.g. as a Slurm array task (see evaluation/hpc/run_replicates.sh):
-#        python evaluation/run_notebook_comparison.py MUX6_QF_500 --configs local_quant_opt --cv 10 --fold 3 --seed 7 --out results/local_quant_opt_fold3_seed7.csv
+#        python evaluation/run_notebook_comparison.py MUX6_QF_500 --configs local_quant_opt_gini --cv 10 --fold 3 --seed 7 --out results/local_quant_opt_gini_fold3_seed7.csv
 parser = argparse.ArgumentParser()
 parser.add_argument('dataset', nargs='?', default='MUX6')
-parser.add_argument('--configs', default='baseline,local_quant_opt,zadia_method', help='comma-separated configs to run')
+parser.add_argument('--configs', default='baseline,local_quant_opt_tree,local_quant_opt_gini', help='comma-separated configs to run')
 parser.add_argument('--seed', type=int, default=42, help='HEROS random_state (data partitions do not depend on it)')
 parser.add_argument('--cv', type=int, default=None, help='number of stratified CV folds to split the pooled train+test data into')
 parser.add_argument('--fold', type=int, default=None, help='CV fold (0 to cv-1) to hold out as testing data; requires --cv')
@@ -124,8 +124,12 @@ def describe_conditions(rule):
 
 # Run comparison 
 configs = [('baseline', None),
-           ('local_quant_opt', 'local_quantitative_optimization'), 
-           ('zadia_method', 'tree_split')]
+           ('local_quant_opt_tree', 'local_quantitative_optimization'), 
+           ('local_quant_opt_gini', 'local_quantitative_optimization_v3')]
+
+unknown = set(args.configs.split(',')) - {c[0] for c in configs}
+if unknown:
+    parser.error(f"unknown config(s) {sorted(unknown)}; choose from {[c[0] for c in configs]}")
 configs = [c for c in configs if c[0] in args.configs.split(',')]
 
 results = []

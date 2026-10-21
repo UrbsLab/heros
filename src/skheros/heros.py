@@ -55,8 +55,8 @@ class HEROS(BaseEstimator, TransformerMixin):
         :param alternate: Number of phase alternations between Phase I and Phase II (must be int >= 0)
         :param alternate_mode: Experimental parameter to specify the method for determining when to alternate between Phase I and Phase II (must be 'limit', 'converge', 'equal', or None)
         :param feedback: TBD
-        :param optimization_method: Optional optimizer selection for the rule mutation stage. Use None to disable this step, or one of 'soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split', or 'local_quantitative_optimization'
-   
+        :param optimization_method: Optional optimizer selection for the rule mutation stage. Use None to disable this step, or one of 'soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split', 'local_quantitative_optimization', or 'local_quantitative_optimization_v3'
+
         """
         # Basic run parameter checks
         if not outcome_type == 'class' and not outcome_type == 'quant':
@@ -197,8 +197,8 @@ class HEROS(BaseEstimator, TransformerMixin):
             self.optimization_method = None
         else:
             normalized_method = str(optimization_method).lower()
-            if normalized_method not in ['soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split','local_quantitative_optimization']:
-                raise Exception("'optimization_method' param must be None, 'soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split', or 'local_quantitative_optimization'")
+            if normalized_method not in ['soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split','local_quantitative_optimization','local_quantitative_optimization_v3']:
+                raise Exception("'optimization_method' param must be None, 'soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split', 'local_quantitative_optimization', or 'local_quantitative_optimization_v3'")
             self.optimization_method = normalized_method
         self.training_weights = []
         self.phase_one_limit = 5000

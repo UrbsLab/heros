@@ -3,8 +3,8 @@ import pandas as pd
 from scipy.stats import wilcoxon
 
 # Combine per-run csvs from evaluation/hpc/run_replicates.sh (one per config x CV fold x seed) and compare configs
-# Usage: python evaluation/summarize_replicates.py results/replicates/MUX6_QF_500
-results_dir = sys.argv[1] if len(sys.argv) > 1 else 'results/replicates/MUX6_QF_500'
+# Usage: python evaluation/summarize_replicates.py results/MUX6_QF_500
+results_dir = sys.argv[1] if len(sys.argv) > 1 else 'results/MUX6_QF_500'
 files = glob.glob(os.path.join(results_dir, '*_fold*_seed*.csv'))
 if not files:
     sys.exit(f'No result files found in {results_dir}')
@@ -14,8 +14,13 @@ df.to_csv(os.path.join(results_dir, 'all_replicates.csv'), index=False)
 metrics = ['rule set size', 'train balanced acc', 'test balanced acc', 'test coverage', 'rule pop size', 'run time (s)']
 counts = df.groupby('config').agg(runs=('seed', 'size'), folds=('fold', 'nunique'), seeds=('seed', 'nunique'))
 print(f"Completed runs per config:\n{counts.to_string()}\n")
-print("Mean (std) over all fold x seed runs:")
-print(df.groupby('config')[metrics].agg(['mean', 'std']).round(3).T.to_string(), '\n')
+summary = df.groupby('config')[metrics].mean().add_prefix('mean ')
+summary['min rule set size'] = df.groupby('config')['rule set size'].min()
+summary['max rule set size'] = df.groupby('config')['rule set size'].max()
+summary = summary.round(3)
+summary.to_csv(os.path.join(results_dir, 'summary.csv'))
+print("Mean over all fold x seed runs (rule set size min/max across runs):")
+print(summary.T.to_string(), '\n')
 
 # Runs sharing a fold reuse the same training data, so they are not independent. Average each seed over its folds
 # (a CV estimate per seed), then compare configs with a paired Wilcoxon signed-rank test across seeds.

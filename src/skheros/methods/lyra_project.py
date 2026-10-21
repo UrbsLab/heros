@@ -386,23 +386,15 @@ def local_quantitative_optimization_v2(rule, x, Y, heros, random, np):
         # Evaluate candidate rules
         if heros.outcome_type == 'class':
 
-            modified_complete_rule_evaluation_class(
-                left_rule, heros, random, None
-            )
+            modified_complete_rule_evaluation_class(left_rule, heros, random, None)
 
-            modified_complete_rule_evaluation_class(
-                right_rule, heros, random, None
-            )
+            modified_complete_rule_evaluation_class(right_rule, heros, random, None)
 
         elif heros.outcome_type == 'quant':
 
-            modified_complete_rule_evaluation_quant(
-                left_rule, heros
-            )
+            modified_complete_rule_evaluation_quant(left_rule, heros)
 
-            modified_complete_rule_evaluation_quant(
-                right_rule, heros
-            )
+            modified_complete_rule_evaluation_quant(right_rule, heros)
 
         # Select the better candidate
         if left_rule.fitness >= right_rule.fitness:
@@ -410,14 +402,143 @@ def local_quantitative_optimization_v2(rule, x, Y, heros, random, np):
         else:
             optimized_conditions[selected_feature] = right_candidate
 
-    # ---------------------------------------------------------
     # Apply ALL optimized conditions to the rule at the end
-    # ---------------------------------------------------------
 
     for feature, optimized_condition in optimized_conditions.items():
-
         condition_position = rule.condition_indexes.index(feature)
-
         rule.condition_values[condition_position] = optimized_condition
+
+    return rule
+
+
+def gini_split_threshold(feature_values, outcomes, np):
+    """find the best depth-1 Gini split threshold for one feature, matching DecisionTreeClassifier(max_depth = 1)
+    without sklearn's per-fit overhead. Returns None when there is no split (pure node or constant feature)."""
+
+    # sklearn fits trees on float32 values, so cast the same way to get identical thresholds
+    values = np.asarray(feature_values, dtype=np.float32).astype(np.float64)
+    outcomes = np.asarray(outcomes)
+
+    # missing values (None -> nan) are left out of the split
+    keep = ~np.isnan(values)
+    values = values[keep]
+    outcomes = outcomes[keep]
+
+    # sort feature values and outcomes together
+    order = np.argsort(values, kind='stable')
+    values = values[order]
+    classes, class_codes = np.unique(outcomes[order], return_inverse=True)
+
+    # no split if the node is pure or the feature has only one value
+    if len(classes) < 2 or values[0] == values[-1]:
+        return None
+
+    # class counts on the left of each split position (left = first p instances) and on the right
+    left_counts = np.cumsum(np.eye(len(classes))[class_codes], axis=0)[:-1]
+    right_counts = left_counts[-1] + np.eye(len(classes))[class_codes[-1]] - left_counts
+    left_n = np.arange(1, len(values))
+    right_n = len(values) - left_n
+
+    # maximizing this proxy is the same as minimizing the weighted Gini impurity of the two children (sklearn's proxy)
+    proxy = (left_counts ** 2).sum(axis=1) / left_n + (right_counts ** 2).sum(axis=1) / right_n
+
+    # only split between distinct values (sklearn's FEATURE_THRESHOLD), ties go to the first (lowest) position as in sklearn
+    valid = values[1:] > values[:-1] + 1e-7
+    proxy[~valid] = -np.inf
+    p = int(np.argmax(proxy)) + 1
+
+    # midpoint threshold, computed as sklearn does
+    threshold = values[p - 1] / 2.0 + values[p] / 2.0
+    if threshold == values[p] or np.isinf(threshold):
+        threshold = values[p - 1]
+
+    return threshold
+
+
+def local_quantitative_optimization_v3(rule, target_state, heros, random, np):
+    """same as local_quantitative_optmization, but finds each split threshold with a numpy Gini split
+    (gini_split_threshold) instead of fitting a sklearn decision tree. Class outcomes only."""
+
+    # identify quantitative features in the rule
+    quant_features = []
+
+    for feat in rule.condition_indexes:
+        if heros.env.feat_types[feat] == 0:
+            quant_features.append(feat)
+
+    # return the rule if there are no features to optimize
+    if len(quant_features) == 0:
+        return rule
+
+    # loop through each quantitative feature in the rule
+    while len(quant_features) > 0:
+
+        # randomly select a feature to optimize
+        selected_feature = random.choice(quant_features)
+        quant_features.remove(selected_feature)
+
+
+        # stores training data indices that match the rule without the feature to be optimized
+        optimization_indices = []
+
+        # loop through instances in the training data
+        for instance_index in range(heros.env.num_instances):
+
+            instance_state = heros.env.train_data[0][instance_index]
+
+            # check if instance matches the rule (without the rule to be optimized)
+            if matches_except_feature(rule, instance_state, heros, selected_feature):
+                optimization_indices.append(instance_index)
+
+        # skip if no training instances match the rest of the rule (nothing to fit a threshold on)
+        if len(optimization_indices) == 0:
+            continue
+
+        # build the optimization dataset
+        X_opt = [] # values for the feature we are optimizing
+        y_opt = [] # outcomes
+
+        for instance_index in optimization_indices:
+
+            # pull the training data instance matching according to the previously identified indices
+            instance_state = heros.env.train_data[0][instance_index]
+
+            # pull the relevant feature and outcome values
+            feature_value = instance_state[selected_feature]
+            outcome_value = heros.env.train_data[1][instance_index]
+
+            X_opt.append(feature_value)
+            y_opt.append(outcome_value)
+
+        # find the best Gini split threshold
+        threshold = gini_split_threshold(X_opt, y_opt, np)
+
+        # skip if no threshold was found
+        if threshold is None:
+            continue
+
+        # candidate conditions for each side of the split (x <= threshold goes to the left, as in sklearn)
+        left_condition = [-np.inf, threshold]
+        right_condition = [threshold, np.inf]
+
+        # index of the condition to update
+        condition_position = rule.condition_indexes.index(selected_feature)
+
+        if target_state is not None:
+            # rule born by covering or evolution: keep the side of the split that contains the current instance's value
+            target_value = target_state[selected_feature]
+            if target_value is None:  # missing value: no side to choose, leave the condition as it is
+                continue
+
+            if target_value <= threshold:
+                new_condition = left_condition
+            else:
+                new_condition = right_condition
+        else:
+            # rule initialized by the decision tree: keep the side of the split with the higher rule fitness
+            new_condition = select_condition_by_fitness(rule, condition_position, left_condition, right_condition, heros, random)
+
+        # update the condition for the selected feature
+        rule.condition_values[condition_position] = new_condition
 
     return rule
