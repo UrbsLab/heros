@@ -7,7 +7,7 @@ from skrebate import MultiSWRFDB
 from src.skheros.heros import HEROS
 
 # Baseline vs local_quantitative_optimization using the dataset setup and HEROS parameters from HEROS_Demo_Notebook.ipynb
-# Usage: python evaluation/run_notebook_comparison.py MUX6     (or MUX6_QF, MUX6_QF_SPLIT, MUX6_QF_500)
+# Usage: python evaluation/run_notebook_comparison.py MUX6     (or MUX6_QF, MUX6_QF_SPLIT, MUX6_QF_500, or a *_QUANT dataset from QUANT_DATASETS below)
 # Replicate run (one CV fold, one seed, one config, results saved to csv), e.g. as a Slurm array task (see evaluation/hpc/run_replicates.sh):
 #        python evaluation/run_notebook_comparison.py MUX6_QF_500 --configs local_quant_opt_gini --cv 10 --fold 3 --seed 7 --out results/local_quant_opt_gini_fold3_seed7.csv
 parser = argparse.ArgumentParser()
@@ -17,20 +17,42 @@ parser.add_argument('--seed', type=int, default=42, help='HEROS random_state (da
 parser.add_argument('--cv', type=int, default=None, help='number of stratified CV folds to split the pooled train+test data into')
 parser.add_argument('--fold', type=int, default=None, help='CV fold (0 to cv-1) to hold out as testing data; requires --cv')
 parser.add_argument('--out', default=None, help='optional csv path to save the summary table')
+parser.add_argument('--iterations', type=int, default=50000, help='HEROS rule-learning iterations')
 args = parser.parse_args()
 if (args.cv is None) != (args.fold is None) or (args.cv is not None and not 0 <= args.fold < args.cv):
     parser.error('--cv and --fold must be given together, with 0 <= fold < cv')
 example_dataset = args.dataset
 split_data = False # True: make a stratified train/test split from the single training file
 
+# Fully quantitative versions of the multiplexer and GAMETES datasets (made by evaluation/datasets/make_quantitative.py).
+# One file each: use --cv to split it into folds, or leave --cv out for a stratified 75/25 train/test split.
+QUANT_DATASETS = {'MUX6_QUANT': 'multiplexer_data_quant/A_multiplexer_6_bit_500_inst_QF.txt',
+                  'MUX11_QUANT': 'multiplexer_data_quant/B_multiplexer_11_bit_5000_inst_QF.txt',
+                  'MUX20_QUANT': 'multiplexer_data_quant/C_multiplexer_20_bit_10000_inst_QF.txt',
+                  'MUX37_QUANT': 'multiplexer_data_quant/D_multiplexer_37_bit_10000_inst_QF.txt',
+                  'MUX70_QUANT': 'multiplexer_data_quant/E_multiplexer_70_bit_20000_inst_QF.txt',
+                  'MUX135_QUANT': 'multiplexer_data_quant/F_multiplexer_135_bit_20000_inst_QF.txt',
+                  'GAMETES_uni_4add_QUANT': 'gametes_data_quant/A_uni_4add_QF.txt',
+                  'GAMETES_univariate_QUANT': 'gametes_data_quant/B_univariate_QF.txt',
+                  'GAMETES_2way_epistasis_QUANT': 'gametes_data_quant/C_2way_epistasis_QF.txt',
+                  'GAMETES_2way_epi_2het_QUANT': 'gametes_data_quant/D_2way_epi_2het_QF.txt',
+                  'GAMETES_uni_4het_QUANT': 'gametes_data_quant/E_uni_4het_QF.txt',
+                  'GAMETES_3way_epistasis_QUANT': 'gametes_data_quant/F_3way_epistasis_QF.txt'}
+
 # Dataset setup (as in notebook)
 outcome_label = 'Class'
 instanceID_label = 'InstanceID'
-excluded_column = None
-if example_dataset == 'MUX6':
+excluded_columns = [] # non-feature columns to drop (besides the instance ID and outcome)
+if example_dataset in QUANT_DATASETS:
+    train_data_path = 'evaluation/datasets/' + QUANT_DATASETS[example_dataset]
+    test_data_path = None
+    excluded_columns = ['Group', 'Model'] # multiplexer address group / GAMETES heterogeneity model labels (would leak the answer)
+    cat_feat_indexes = []
+    split_data = True
+elif example_dataset == 'MUX6':
     train_data_path = 'evaluation/datasets/partitioned/multiplexer/A_multiplexer_6_bit_500_inst_CV_Train_1.txt'
     test_data_path = 'evaluation/datasets/partitioned/multiplexer/A_multiplexer_6_bit_500_inst_CV_Test_1.txt'
-    excluded_column = 'Group'
+    excluded_columns = ['Group']
     cat_feat_indexes = list(range(6))
 elif example_dataset == 'MUX6_QF': # notebook trains and tests on the same file for this dataset
     train_data_path = 'evaluation/datasets/unit_testing/Multiplexer6_feature_type_mix_decimals.csv'
@@ -46,23 +68,24 @@ elif example_dataset == 'MUX6_QF_SPLIT': # same file as MUX6_QF, but with separa
 elif example_dataset == 'MUX6_QF_500': # MUX6 500 instance CV partition with R_2 and R_3 made quantitative
     train_data_path = 'evaluation/datasets/unit_testing/A_multiplexer_6_bit_500_inst_QF_CV_Train_1.txt'
     test_data_path = 'evaluation/datasets/unit_testing/A_multiplexer_6_bit_500_inst_QF_CV_Test_1.txt'
-    excluded_column = 'Group'
+    excluded_columns = ['Group']
     cat_feat_indexes = [0, 1, 2, 3]
 else:
-    raise ValueError('Dataset must be MUX6, MUX6_QF, MUX6_QF_SPLIT, or MUX6_QF_500')
+    raise ValueError('Dataset must be MUX6, MUX6_QF, MUX6_QF_SPLIT, MUX6_QF_500, or one of ' + ', '.join(QUANT_DATASETS))
 sep = '\t' if train_data_path.endswith('.txt') else ','
 
 # HEROS parameters (as in notebook) 
-params = dict(outcome_type='class', iterations=50000, pop_size=500, cross_prob=0.8, mut_prob=0.04, nu=1, beta=0.2, theta_sel=0.5,
+stored_rule_iterations = ','.join(str(i) for i in sorted({500, 1000, 5000, 10000, args.iterations}) if i <= args.iterations)
+params = dict(outcome_type='class', iterations=args.iterations, pop_size=500, cross_prob=0.8, mut_prob=0.04, nu=1, beta=0.2, theta_sel=0.5,
               fitness_function='pareto', subsumption='both', rsl=0, feat_track='end', model_iterations=100,
               model_pop_size=100, model_pop_init='target_acc', new_gen=1.0, merge_prob=0.1, rule_pop_init='dt_bstrap', compaction='sub',
-              track_performance=1000, model_tracking=True, stored_rule_iterations='500,1000,5000,10000,50000', stored_model_iterations='10,50,100',
+              track_performance=1000, model_tracking=True, stored_rule_iterations=stored_rule_iterations, stored_model_iterations='10,50,100',
               random_state=args.seed, verbose=False, alternate=5, alternate_mode='equal', feedback=False)
 max_instances = 2000
 
 def prepare(df):
-    """Drop excluded, instance ID and outcome columns (as in notebook)"""
-    X = df.drop(columns=[c for c in (excluded_column, instanceID_label) if c in df.columns])
+    """Drop excluded, instance ID and outcome columns (as in notebook), and empty 'Unnamed' columns read from trailing tabs"""
+    X = df.drop(columns=[c for c in df.columns if c in excluded_columns or c == instanceID_label or str(c).startswith('Unnamed:')])
     X = X.drop(outcome_label, axis=1)
     row_id = df[instanceID_label].values if instanceID_label in df.columns else None
     return X, df[outcome_label].values, row_id
@@ -170,4 +193,4 @@ print(f"\n{'=' * 30} {example_dataset} summary ({len(y)} train / {len(y_test)} t
 print(pd.DataFrame(results).to_string(index=False))
 if args.out:
     os.makedirs(os.path.dirname(args.out) or '.', exist_ok=True)
-    pd.DataFrame(results).assign(dataset=example_dataset).to_csv(args.out, index=False)
+    pd.DataFrame(results).assign(dataset=example_dataset, iterations=args.iterations).to_csv(args.out, index=False)

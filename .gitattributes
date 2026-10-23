@@ -1,0 +1,2 @@
+# Shell scripts run on Linux (the HPC cluster), so always keep Unix line endings
+*.sh text eol=lf
