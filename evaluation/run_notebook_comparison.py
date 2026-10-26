@@ -160,7 +160,7 @@ for name, method in configs:
     print(f"\n{'=' * 30} {example_dataset}: {name} {'=' * 30}", flush=True)
     t = time.time()
     h = HEROS(**params, optimization_method=method)
-    h.fit(X, y, row_id, cat_feat_indexes=cat_feat_indexes, ek=ek)
+    h.fit(X, y, row_id, cat_feat_indexes=cat_feat_indexes, ek=None)
     run_time = time.time() - t
 
     # Model metrics (top model selected on training data)
