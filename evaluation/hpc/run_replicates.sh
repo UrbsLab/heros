@@ -7,8 +7,8 @@
 #   sbatch --array=0-199 evaluation/hpc/run_replicates.sh baseline
 #   sbatch --array=0-199 evaluation/hpc/run_replicates.sh local_quant_opt_tree
 #   sbatch --array=0-199 evaluation/hpc/run_replicates.sh local_quant_opt_gini
-# Optional 2nd/3rd args: dataset (default MUX6_QF_500) and results folder. Set CV=<k> to change the fold count
-# and ITERATIONS=<n> to change the HEROS iterations (default 50000).
+# Optional 2nd/3rd args: dataset (default MUX6_QF_500) and results folder. Set CV=<k> to change the fold count,
+# ITERATIONS=<n> to change the HEROS iterations (default 50000) and TOLERANCE=<t> to set vacuous_tolerance (default 0).
 #SBATCH -p defq
 #SBATCH --job-name=heros_rep
 #SBATCH --nodes=1
@@ -19,11 +19,12 @@
 #SBATCH -o logs/%x_%A_%a.out
 #SBATCH -e logs/%x_%A_%a.err
 
-CONFIG=${1:?usage: sbatch --array=0-199 run_replicates.sh <baseline|local_quant_opt_tree|local_quant_opt_gini> [dataset] [results_dir]}
+CONFIG=${1:?usage: sbatch --array=0-199 run_replicates.sh <baseline|local_quant_opt_tree|> [dataset] [results_dir]}
 DATASET=${2:-MUX6_QF_500}
 RESULTS_DIR=${3:-results/replicates/$DATASET}
 CV=${CV:-10}
 ITERATIONS=${ITERATIONS:-50000}
+TOLERANCE=${TOLERANCE:-0}
 TASK=${SLURM_ARRAY_TASK_ID:?submit with --array}
 FOLD=$((TASK % CV))
 SEED=$((TASK / CV))
@@ -37,4 +38,4 @@ conda activate "$CONDA_ENV"
 
 cd "$SLURM_SUBMIT_DIR"
 python evaluation/run_notebook_comparison.py "$DATASET" --configs "$CONFIG" --cv "$CV" --fold "$FOLD" --seed "$SEED" --iterations "$ITERATIONS" \
-    --out "$RESULTS_DIR/${CONFIG}_fold${FOLD}_seed${SEED}.csv"
+    --vacuous_tolerance "$TOLERANCE" --out "$RESULTS_DIR/${CONFIG}_tol${TOLERANCE}_fold${FOLD}_seed${SEED}.csv"

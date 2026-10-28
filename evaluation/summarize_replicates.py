@@ -20,6 +20,11 @@ df = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
 os.makedirs(out_dir, exist_ok=True)
 df.to_csv(os.path.join(out_dir, 'all_replicates.csv'), index=False)
 
+# When a run sweeps vacuous_tolerance, summarize each tolerance as its own config (baseline does no optimization, so keeps its name)
+if 'vacuous_tolerance' in df and df['vacuous_tolerance'].nunique() > 1:
+    swept = df['config'] != 'baseline'
+    df.loc[swept, 'config'] = df.loc[swept, 'config'] + '_tol' + df.loc[swept, 'vacuous_tolerance'].astype(str)
+
 metrics = ['rule set size', 'train balanced acc', 'test balanced acc', 'test coverage', 'rule pop size', 'run time (s)']
 counts = df.groupby('config').agg(runs=('seed', 'size'), folds=('fold', 'nunique'), seeds=('seed', 'nunique'))
 print(f"Completed runs per config:\n{counts.to_string()}\n")

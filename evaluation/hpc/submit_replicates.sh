@@ -6,8 +6,9 @@
 # for every task, writes results/<RUN_NAME>/all_replicates.csv and summary.csv, and deletes the per-task csvs once all are present.
 
 # ---- settings -----------------------------------------------------------------------------------------------------
-RUN_NAME=gini_vs_tree                                         # results go to results/$RUN_NAME, logs to logs/$RUN_NAME
-CONFIGS="baseline local_quant_opt_tree local_quant_opt_gini"  # any configs from run_notebook_comparison.py
+RUN_NAME=tree_tolerance                                       # results go to results/$RUN_NAME, logs to logs/$RUN_NAME
+CONFIGS="local_quant_opt_tree"                                # any configs from run_notebook_comparison.py
+TOLERANCES="0 0.1 0.2"                                        # vacuous_tolerance values; each config runs once per value
 DATASET=MUX6_QF_500                                           # any dataset name from run_notebook_comparison.py
 ITERATIONS=50000                                              # HEROS rule-learning iterations
 CV=10                                                         # folds per seed
@@ -27,11 +28,14 @@ N_TASKS=$((CV * SEEDS))
 JOBS=""
 N_CONFIGS=0
 for CONFIG in $CONFIGS; do
-    JOB=$(CV=$CV ITERATIONS=$ITERATIONS sbatch --parsable --array=0-$((N_TASKS - 1)) -t "$TIME" -o "$LOG_DIR/%x_%A_%a.out" -e "$LOG_DIR/%x_%A_%a.err" \
-          evaluation/hpc/run_replicates.sh "$CONFIG" "$DATASET" "$RUN_DIR/runs") || exit 1
-    echo "$CONFIG on $DATASET, $ITERATIONS iterations: job $JOB ($N_TASKS tasks)"
-    JOBS="$JOBS:$JOB"
-    N_CONFIGS=$((N_CONFIGS + 1))
+    for TOLERANCE in $TOLERANCES; do
+        JOB=$(CV=$CV ITERATIONS=$ITERATIONS TOLERANCE=$TOLERANCE sbatch --parsable --array=0-$((N_TASKS - 1)) -t "$TIME" \
+              -o "$LOG_DIR/%x_%A_%a.out" -e "$LOG_DIR/%x_%A_%a.err" \
+              evaluation/hpc/run_replicates.sh "$CONFIG" "$DATASET" "$RUN_DIR/runs") || exit 1
+        echo "$CONFIG (tolerance $TOLERANCE) on $DATASET, $ITERATIONS iterations: job $JOB ($N_TASKS tasks)"
+        JOBS="$JOBS:$JOB"
+        N_CONFIGS=$((N_CONFIGS + 1))
+    done
 done
 
 # Runs after every array task has ended (afterany: also when some fail, so you still get a summary and a warning)
