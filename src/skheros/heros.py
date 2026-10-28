@@ -22,7 +22,7 @@ class HEROS(BaseEstimator, TransformerMixin):
     def __init__(self,outcome_type='class',iterations=100000,pop_size=1000,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,fitness_function='pareto',
                  subsumption='both',rsl=0,feat_track=None,model_iterations=500,model_pop_size=100, model_pop_init = 'target_acc', new_gen=1.0,merge_prob=0.1,
                  rule_pop_init=None,compaction='sub',track_performance=0,model_tracking=False,stored_rule_iterations=None,stored_model_iterations=None,random_state=None,
-                 verbose=False,alternate=5,alternate_mode='equal',feedback=False,optimization_method=None):
+                 verbose=False,alternate=5,alternate_mode='equal',feedback=False,optimization_method=None,vacuous_tolerance=0.0):
         """
         A Scikit-Learn compatible implementation of the 'Heuristic Evolutionary Rule Optimization System' (HEROS) Algorithm.
         ..
@@ -56,6 +56,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         :param alternate_mode: Experimental parameter to specify the method for determining when to alternate between Phase I and Phase II (must be 'limit', 'converge', 'equal', or None)
         :param feedback: TBD
         :param optimization_method: Optional optimizer selection for the rule mutation stage. Use None to disable this step, or one of 'soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split', 'local_quantitative_optimization', or 'local_quantitative_optimization_v3'
+        :param vacuous_tolerance: After optimization, quantitative conditions are dropped (fewest excluded instances first) while the total fraction of training instances they exclude stays <= this value. 0 drops only conditions that exclude nothing. (Must be float from 0 - 1)
 
         """
         # Basic run parameter checks
@@ -140,7 +141,10 @@ class HEROS(BaseEstimator, TransformerMixin):
 
         if not alternate_mode == 'limit' and not alternate_mode == 'converge' and not alternate_mode == 'equal' and not alternate_mode is None and not alternate_mode == 'None':
             raise Exception("'alternate_mode' param must be 'limit', 'converge', 'equal', or None")
-        
+
+        if not (self.check_is_float(vacuous_tolerance) or self.check_is_int(vacuous_tolerance)) or vacuous_tolerance < 0 or vacuous_tolerance > 1:
+            raise Exception("'vacuous_tolerance' param must be float from 0 - 1")
+
         #Initialize global variables
         self.outcome_type = str(outcome_type)
         self.iterations = int(iterations)
@@ -200,6 +204,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             if normalized_method not in ['soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split','local_quantitative_optimization','local_quantitative_optimization_v3']:
                 raise Exception("'optimization_method' param must be None, 'soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split', 'local_quantitative_optimization', or 'local_quantitative_optimization_v3'")
             self.optimization_method = normalized_method
+        self.vacuous_tolerance = float(vacuous_tolerance)
         self.training_weights = []
         self.phase_one_limit = 5000
         self.phase_one_ratio = 0
@@ -1198,6 +1203,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             file.write(f"random_state: {self.random_state}\n")
             file.write(f"verbose: {self.verbose}\n")
             file.write(f"optimization_method: {self.optimization_method}\n")
+            file.write(f"vacuous_tolerance: {self.vacuous_tolerance}\n")
             if self.use_ek:
                 file.write(f"ek_weights: {self.env.ek_weights}\n")
 

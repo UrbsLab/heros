@@ -26,6 +26,7 @@ class DATA_MANAGE:
             else:
                 self.feat_types.append(0)
         self.missing_values = np.isnan(X).sum()
+        self.feat_missing_count = [int(count) for count in np.isnan(X).sum(axis=0)] #per feature - number of training instances missing a value for it
         # Initialize class outcome attributes
         self.classes = [] #for class outcomes - stores unique class values in dataset
         self.class_counts = {} #for class outcomes - dictionary of classes with their respective instance counts
@@ -38,6 +39,7 @@ class DATA_MANAGE:
         # Initialize feature attributes
         self.feat_q_range = [[np.inf, -np.inf] for _ in range(self.num_feat)] #for quantitative features - stores min and max quant feature values in dataset
         self.feat_q_decimal = [None for _ in range(self.num_feat)]
+        self.feat_q_sorted = [None for _ in range(self.num_feat)] #for quantitative features - sorted non-missing training values (for counting instances excluded by a condition range)
         self.feat_c_values = [[] for _ in range(self.num_feat)] #for categorical features - stores unique feature values in dataset
         self.avg_feat_states = 0 #for calculating rule specificity limit - stores average number of unique feature values in each feature (quantitative features are assigned 2 unique values by default)
         # Update data attributes
@@ -125,6 +127,7 @@ class DATA_MANAGE:
             else: #quantitative
                 self.feat_q_range[feat][0] = np.nanmin(X[:, feat])
                 self.feat_q_range[feat][1] = np.nanmax(X[:, feat])
+                self.feat_q_sorted[feat] = np.sort(X[~np.isnan(X[:, feat]), feat])
                 unique_state_count += 2 #Assumption/Estimate made here for quantitative features for calculating rule specificity limit
 
                 # Calculate maximum decimal places for this feature column

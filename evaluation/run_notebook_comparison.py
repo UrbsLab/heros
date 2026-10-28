@@ -18,6 +18,7 @@ parser.add_argument('--cv', type=int, default=None, help='number of stratified C
 parser.add_argument('--fold', type=int, default=None, help='CV fold (0 to cv-1) to hold out as testing data; requires --cv')
 parser.add_argument('--out', default=None, help='optional csv path to save the summary table')
 parser.add_argument('--iterations', type=int, default=50000, help='HEROS rule-learning iterations')
+parser.add_argument('--vacuous_tolerance', type=float, default=0.0, help='max total fraction of training instances excluded by quantitative conditions dropped after optimization')
 args = parser.parse_args()
 if (args.cv is None) != (args.fold is None) or (args.cv is not None and not 0 <= args.fold < args.cv):
     parser.error('--cv and --fold must be given together, with 0 <= fold < cv')
@@ -80,7 +81,7 @@ params = dict(outcome_type='class', iterations=args.iterations, pop_size=500, cr
               fitness_function='pareto', subsumption='both', rsl=0, feat_track='end', model_iterations=100,
               model_pop_size=100, model_pop_init='target_acc', new_gen=1.0, merge_prob=0.1, rule_pop_init='dt_bstrap', compaction='sub',
               track_performance=1000, model_tracking=True, stored_rule_iterations=stored_rule_iterations, stored_model_iterations='10,50,100',
-              random_state=args.seed, verbose=False, alternate=5, alternate_mode='equal', feedback=False)
+              random_state=args.seed, verbose=False, alternate=5, alternate_mode='equal', feedback=False, vacuous_tolerance=args.vacuous_tolerance)
 max_instances = 2000
 
 def prepare(df):
@@ -193,4 +194,4 @@ print(f"\n{'=' * 30} {example_dataset} summary ({len(y)} train / {len(y_test)} t
 print(pd.DataFrame(results).to_string(index=False))
 if args.out:
     os.makedirs(os.path.dirname(args.out) or '.', exist_ok=True)
-    pd.DataFrame(results).assign(dataset=example_dataset, iterations=args.iterations).to_csv(args.out, index=False)
+    pd.DataFrame(results).assign(dataset=example_dataset, iterations=args.iterations, vacuous_tolerance=args.vacuous_tolerance).to_csv(args.out, index=False)

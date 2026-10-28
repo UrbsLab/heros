@@ -173,6 +173,9 @@ class RULE_POP:
             i = 0
             while i < len(self.correct_set):
                 rule_index = self.correct_set[i]
+                if self.pop_set[rule_index] is candidate_subsumer: #a rule cannot subsume itself (is_more_general allows equal conditions)
+                    i += 1
+                    continue
                 good_check = True
                 if heros.outcome_type == 'quant':
                     if candidate_subsumer.action[0] > self.pop_set[rule_index].action[0] or candidate_subsumer.action[1] < self.pop_set[rule_index].action[1]:
@@ -229,6 +232,8 @@ class RULE_POP:
         else:
             raise ValueError(f"Unsupported optimization method: {method}")
 
+        # Optimized ranges can grow to cover (nearly) a feature's whole training range; drop those conditions so equivalent rules collapse into one
+        offspring.remove_vacuous_conditions(heros,np)
         return offspring
 
 

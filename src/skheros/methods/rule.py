@@ -775,6 +775,32 @@ class RULE:
             self.fitness = pow(self.accuracy, heros.nu)
 
 
+    def remove_vacuous_conditions(self,heros,np):
+        """ Removes quantitative conditions that exclude few or no training instances. Each condition's cost is the fraction of training instances it
+            excludes (out of range or missing, since missing values do not match a specified condition). Conditions are removed cheapest first while
+            the summed cost stays <= heros.vacuous_tolerance, which bounds the fraction of training instances newly matched by the rule. With a
+            tolerance of 0 only conditions that exclude nothing are removed, leaving the rule's training matches unchanged. At least one condition is always kept."""
+        env = heros.env
+        costs = []
+        for i, feat in enumerate(self.condition_indexes):
+            if not env.feat_types[feat]: #quantitative feature
+                values = env.feat_q_sorted[feat]
+                low, high = self.condition_values[i]
+                in_range = np.searchsorted(values, high, side='right') - np.searchsorted(values, low, side='left')
+                costs.append(((env.num_instances - in_range) / float(env.num_instances), i))
+        costs.sort()
+        removed = set()
+        total_cost = 0.0
+        for cost, i in costs:
+            if len(removed) >= len(self.condition_indexes) - 1 or total_cost + cost > heros.vacuous_tolerance:
+                break
+            total_cost += cost
+            removed.add(i)
+        if removed:
+            self.condition_values = [value for i, value in enumerate(self.condition_values) if i not in removed]
+            self.condition_indexes = [feat for i, feat in enumerate(self.condition_indexes) if i not in removed]
+
+
     def subsumes(self,other_rule,heros):
         """ Determines if 'self' rule meets conditions for subsuming the 'other_rule'. A rule is a subsumer if:
         (1) It has the same action as the other rule.
@@ -785,7 +811,7 @@ class RULE:
             if not self.action == other_rule.action:
                 return False
         elif heros.outcome_type == 'quant':
-            if self.action[0] >= other_rule.action[0] or self.action[1] <= other_rule.action[1]:
+            if self.action[0] > other_rule.action[0] or self.action[1] < other_rule.action[1]:
                 return False
         else:
             print("Error: Outcome type undefined.")
@@ -799,18 +825,22 @@ class RULE:
 
     def is_more_general(self,other_rule,heros):
         """ Checks the conditions determining if self rule is more general than other rule as defined by being a candidate subsumer.
-        (1) self has fewer specified features
-        (2) other specifies at least the same subset of features as self
-        (3) if a given feature is quanatiative the self_rule low boundary is <= than for other_rule
+        (1) self has the same number or fewer specified features
+        (2) other specifies at least the same subset of features as self (so equal counts means the same feature set)
+        (3) if a given feature is categorical the values are the same
+        (4) if a given feature is quanatiative the self_rule low boundary is <= than for other_rule
             and the self_rule high boundary is >= than for other_rule, i.e. the range is equal or larger (more general) at both ends."""
-        if len(self.condition_indexes) >= len(other_rule.condition_indexes):
+        if len(self.condition_indexes) > len(other_rule.condition_indexes):
             return False #not more general
         for feat in self.condition_indexes: #for each feature specified in 'self' rule
             if feat not in other_rule.condition_indexes: #does self cover all the instance space of 'other_rule'
                 return False #not more general
-            if not heros.env.feat_types[feat]: #quantiative feature
-                self_rule_position = self.condition_indexes.index(feat)
-                other_rule_position = other_rule.condition_indexes.index(feat)
+            self_rule_position = self.condition_indexes.index(feat)
+            other_rule_position = other_rule.condition_indexes.index(feat)
+            if heros.env.feat_types[feat]: #categorical feature
+                if self.condition_values[self_rule_position] != other_rule.condition_values[other_rule_position]:
+                    return False #not more general
+            else: #quantiative feature
                 # Current assumption - subsumer has a wider quanatiative feature range inclusive of the other rule's range
                 if self.condition_values[self_rule_position][0] > other_rule.condition_values[other_rule_position][0]: #low end
                     return False #not more general
