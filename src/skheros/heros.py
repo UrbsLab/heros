@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import collections.abc
 from sklearn.metrics import balanced_accuracy_score
+from sklearn.model_selection import train_test_split
 from sklearn.base import BaseEstimator, TransformerMixin
 from .methods.time_tracking import TIME_TRACK
 from .methods.data_mange import DATA_MANAGE
@@ -19,7 +20,7 @@ from .methods.model_prediction import MODEL_PREDICTION
 #import inspect #temporary testing
 
 class HEROS(BaseEstimator, TransformerMixin):
-    def __init__(self,outcome_type='class',iterations=100000,pop_size=1000,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,fitness_function='pareto',
+    def __init__(self,outcome_type='class',iterations=100000,pop_size=1000,cross_prob=0.8,mut_prob=0.04,nu=1,adaptive_nu=False,beta=0.2,theta_sel=0.5,fitness_function='pareto',
                  subsumption='both',rsl=0,feat_track=None,model_iterations=500,model_pop_size=100, model_pop_init = 'target_acc', new_gen=1.0,merge_prob=0.1,
                  rule_pop_init=None,compaction='sub',track_performance=0,model_tracking=False,stored_rule_iterations=None,stored_model_iterations=None,random_state=None,
                  verbose=False,alternate=5,alternate_mode='equal',feedback=False):
@@ -33,6 +34,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         :param cross_prob: The probability of applying crossover in rule discovery with the genetic algorithm. (Must be float from 0 - 1)
         :param mut_prob: The probability of mutating a position within an offspring rule. (Must be float from 0 - 1)
         :param nu: Power parameter used to determine the importance of high rule-accuracy when calculating fitness. (must be non-negative)
+        :param adaptive_nu: Boolean indicating whether value of nu will adapt according to the needs of the problem. Runs HEROS w/ nu=1 and nu=10 side-by-side until first half of model iterations is complete, and then decides on a value of nu to move forward with
         :param beta: Learning parameter - used in calculating average match set size (must be float from 0 - 1) 
         :param theta_sel: The fraction of the correct set to be included in tournament selection (must be float from 0 - 1)
         :param fitness_function: The fitness function used to globally evaluate rules (must be 'accuracy' or 'pareto') 
@@ -77,6 +79,13 @@ class HEROS(BaseEstimator, TransformerMixin):
             raise Exception("'nu' param must be an int or float")
         if nu < 0:
             raise Exception("'nu' param must be > 0")
+
+        if adaptive_nu == 'True' or adaptive_nu == True:
+            adaptive_nu = True
+        if adaptive_nu == 'False' or adaptive_nu == False:
+            adaptive_nu = False
+        if not self.check_is_bool(adaptive_nu):
+            raise Exception("'adaptive_nu' param must be a boolean, i.e. True or False")
 
         if not self.check_is_float(beta) or beta < 0 or beta > 1:
             raise Exception("'beta' param must be float from 0 - 1")
@@ -147,6 +156,10 @@ class HEROS(BaseEstimator, TransformerMixin):
         self.cross_prob = float(cross_prob)
         self.mut_prob = float(mut_prob)
         self.nu = float(nu)
+        self.adaptive_nu = adaptive_nu
+        # if self.adaptive_nu:
+        #     self.decision_reached = False # will turn to True when evaluation is done after half of model iterations
+        self.decision_reached = False # used with adaptive_nu; will turn to True when evaluation is done after half of model iterations
         self.beta = float(beta)
         self.theta_sel = float(theta_sel)
         self.fitness_function = str(fitness_function)
@@ -331,11 +344,19 @@ class HEROS(BaseEstimator, TransformerMixin):
         np.random.seed(self.random_state)
         # Data Preparation
         X, y, row_id, cat_feat_indexes, pop_df, ek = self.check_inputs(X, y, row_id, cat_feat_indexes, pop_df, ek) #check loaded data
+        if self.adaptive_nu: # split initial training set into a train and val set, with the val set evaluating model performance in order to adjust high_nu_weight
+            X, X_val, y, y_val = train_test_split(X, y, test_size=0.2, random_state=self.random_state, stratify=y)
+            self.X_val, self.y_val = X_val, y_val # saving for later use in other methods
         self.env = DATA_MANAGE(X, y, row_id, cat_feat_indexes, ek, self) #initialize the data environment; data formatting, summary statistics, and expert knowledge preparation
        
         # Initialize Objects
         self.iteration = 0
-        self.rule_population = RULE_POP() # Initialize rule sets
+        if self.adaptive_nu: # make 2 rule population objects, one that will operate assuming nu=1 and one assuming nu=10
+            self.rule_population_nu1 = RULE_POP()
+            self.rule_population_nu10 = RULE_POP()
+            self.num_loops_through_instances = 0 # for keeping track of how many times a full loop has been done through the training instances (only works if instances are accessed in order each loop)
+        else:
+            self.rule_population = RULE_POP() # Initialize rule sets
         #if self.fitness_function == 'pareto' or self.nu == 1: #new 3/29/25
         if self.fitness_function == 'pareto': #new 3/29/25
             self.rule_pareto = RULE_PARETO()
@@ -352,33 +373,92 @@ class HEROS(BaseEstimator, TransformerMixin):
         # Initialize Rule Population (if specified)
         verbose_debug_tree_init = False #DEBUG FLAG
         if self.rule_pop_init == 'load': # Initialize rule population based on loaded rule population
-            self.rule_population.load_rule_population(pop_df,self,random,np)
+            if self.adaptive_nu:
+                self.rule_population_nu1.load_rule_population(pop_df,self,random,np)
+                self.rule_population_nu10.load_rule_population(pop_df,self,random,np)
+            else:
+                self.rule_population.load_rule_population(pop_df,self,random,np)
         elif self.rule_pop_init == 'dt':
-            self.rule_population.tree_init_population(X,y,self,random,np,verbose_debug_tree_init)
-            print('PopSize After Tree Initialization ' +str(len(self.rule_population.pop_set))) #DEBUG
-            print('Micro PopSize After Tree Initialization ' +str(self.rule_population.micro_pop_count)) #DEBUG
+            if self.adaptive_nu:
+                self.rule_population_nu1.tree_init_population(X,y,self,random,np,verbose_debug_tree_init)
+                print('PopSize (nu=1) After Tree Initialization ' +str(len(self.rule_population_nu1.pop_set))) #DEBUG
+                print('Micro PopSize (nu=1) After Tree Initialization ' +str(self.rule_population_nu1.micro_pop_count)) #DEBUG
+                self.rule_population_nu10.tree_init_population(X,y,self,random,np,verbose_debug_tree_init)
+                print('PopSize (nu=10) After Tree Initialization ' +str(len(self.rule_population_nu10.pop_set))) #DEBUG
+                print('Micro PopSize (nu=10) After Tree Initialization ' +str(self.rule_population_nu10.micro_pop_count)) #DEBUG
+            else:
+                self.rule_population.tree_init_population(X,y,self,random,np,verbose_debug_tree_init)
+                print('PopSize After Tree Initialization ' +str(len(self.rule_population.pop_set))) #DEBUG
+                print('Micro PopSize After Tree Initialization ' +str(self.rule_population.micro_pop_count)) #DEBUG
         elif self.rule_pop_init == 'dt_bstrap':
-            self.rule_population.tree_init_population(X,y,self,random,np,verbose_debug_tree_init, bstrap=True)
-            print('PopSize After Tree Initialization ' +str(len(self.rule_population.pop_set))) #DEBUG
-            print('Micro PopSize After Tree Initialization ' +str(self.rule_population.micro_pop_count)) #DEBUG
+            if self.adaptive_nu:
+                self.rule_population_nu1.tree_init_population(X,y,self,random,np,verbose_debug_tree_init, bstrap=True)
+                print('PopSize (nu=1) After Tree Initialization ' +str(len(self.rule_population_nu1.pop_set))) #DEBUG
+                print('Micro PopSize (nu=1) After Tree Initialization ' +str(self.rule_population_nu1.micro_pop_count)) #DEBUG
+                self.rule_population_nu10.tree_init_population(X,y,self,random,np,verbose_debug_tree_init, bstrap=True)
+                print('PopSize (nu=10) After Tree Initialization ' +str(len(self.rule_population_nu10.pop_set))) #DEBUG
+                print('Micro PopSize (nu=10) After Tree Initialization ' +str(self.rule_population_nu10.micro_pop_count)) #DEBUG
+            else:
+                self.rule_population.tree_init_population(X,y,self,random,np,verbose_debug_tree_init, bstrap=True)
+                print('PopSize After Tree Initialization ' +str(len(self.rule_population.pop_set))) #DEBUG
+                print('Micro PopSize After Tree Initialization ' +str(self.rule_population.micro_pop_count)) #DEBUG
         else: # No rule population initialization other than standard LCS-algorithm-style 'covering' mechanism.
             pass
 
         # Clean/Compact Initialized Population
-        if len(self.rule_population.pop_set) > 1:
-            self.timer.compaction_time_start()
-            compact = COMPACT(self)
-            self.sufficient_rule_pop_remain = True
-            self.sufficient_rule_pop_remain = compact.basic_rule_cleaning(self)
-            if self.compaction == 'sub' and self.sufficient_rule_pop_remain:
-                self.sufficient_rule_pop_remain = compact.subsumption_compation(self)
-            compact.clear_pop_copy()
-            self.timer.compaction_time_stop()
+        if self.adaptive_nu:
+            self.rule_population = self.rule_population_nu1 # first apply on nu=1 pop
+            if len(self.rule_population.pop_set) > 1:
+                self.timer.compaction_time_start()
+                compact = COMPACT(self)
+                self.sufficient_rule_pop_remain_nu1 = True
+                self.sufficient_rule_pop_remain_nu1 = compact.basic_rule_cleaning(self)
+                if self.compaction == 'sub' and self.sufficient_rule_pop_remain_nu1:
+                    self.sufficient_rule_pop_remain_nu1 = compact.subsumption_compation(self)
+                compact.clear_pop_copy()
+                self.timer.compaction_time_stop()
+
+            self.rule_population = self.rule_population_nu10 # next apply on nu=10 pop
+            if len(self.rule_population.pop_set) > 1:
+                self.timer.compaction_time_start()
+                compact = COMPACT(self)
+                self.sufficient_rule_pop_remain_nu10 = True
+                self.sufficient_rule_pop_remain_nu10 = compact.basic_rule_cleaning(self)
+                if self.compaction == 'sub' and self.sufficient_rule_pop_remain_nu10:
+                    self.sufficient_rule_pop_remain_nu10 = compact.subsumption_compation(self)
+                compact.clear_pop_copy()
+                self.timer.compaction_time_stop()
+
+            # self.sufficient_rule_pop_remain is only True if that is the case for both nu=1 and nu=10 rule pops
+            if self.sufficient_rule_pop_remain_nu1 and self.sufficient_rule_pop_remain_nu10:
+                self.sufficient_rule_pop_remain = True
+            else:
+                self.sufficient_rule_pop_remain = False
+        else:
+            if len(self.rule_population.pop_set) > 1:
+                self.timer.compaction_time_start()
+                compact = COMPACT(self)
+                self.sufficient_rule_pop_remain = True
+                self.sufficient_rule_pop_remain = compact.basic_rule_cleaning(self)
+                if self.compaction == 'sub' and self.sufficient_rule_pop_remain:
+                    self.sufficient_rule_pop_remain = compact.subsumption_compation(self)
+                compact.clear_pop_copy()
+                self.timer.compaction_time_stop()
 
         # Archive tree-intialized rule population for external examination
         if self.rule_pop_init == 'dt' or self.rule_pop_init == 'dt_bstrap':
-            self.rule_population.archive_rule_pop(0)
+            if self.adaptive_nu: # archive both the nu=1 rule pop and nu=10 rule pop
+                self.rule_population = self.rule_population_nu1
+                self.rule_population.archive_rule_pop(0)
 
+                self.rule_population = self.rule_population_nu10
+                self.rule_population.archive_rule_pop(0)
+            else:
+                self.rule_population.archive_rule_pop(0)
+
+        if self.adaptive_nu:
+            self.rule_population = self.rule_population_nu1 # 1st rule iteration starts on rule_population_nu1
+        
         # Memory Cleanup
         X = None
         y = None
@@ -387,8 +467,12 @@ class HEROS(BaseEstimator, TransformerMixin):
 
         #CODE TO RUN PHASE I ONLY ----------------------------------------------------
         if self.model_iterations > 1: #Apply Phase II
-            # Initialize model population and 
-            self.model_population = MODEL_POP() # Initialize rule sets
+            if self.adaptive_nu: # create two separate model pops, one assuming nu=1 and one assuming nu=10, that will both operate for the first half of model iterations
+                self.model_population_nu1 = MODEL_POP()
+                self.model_population_nu10 = MODEL_POP()
+            else:
+                # Initialize model population and 
+                self.model_population = MODEL_POP() # Initialize rule sets
             self.model_iteration = 0
         else: 
             print("Running HEROS with Phase I only (no model iterations).")
@@ -404,12 +488,34 @@ class HEROS(BaseEstimator, TransformerMixin):
             self.tracking.alternations.append(self.iteration)
 
             if self.model_iteration == 0:
-                self.model_population.initialize_model_population(
-                    self, random, self.model_pop_init
-                )
+                if self.adaptive_nu: # initialize both nu=1 and nu=10 model populations
+                    self.rule_population = self.rule_population_nu1 # ensure nu=1 model pop uses nu=1 rule pop
+                    self.nu = 1 # ensure nu=1 model pop uses nu=1
+                    self.model_population_nu1.initialize_model_population( # initialize nu=1 model pop
+                        self, random, self.model_pop_init
+                    )
+
+                    self.rule_population = self.rule_population_nu10 # ensure nu=10 model pop uses nu=10 rule pop
+                    self.nu = 10 # ensure nu=10 model pop uses nu=10
+                    self.model_population_nu10.initialize_model_population( # initialize nu=10 model pop
+                        self, random, self.model_pop_init
+                    )
+
+                    self.model_population = self.model_population_nu1 # ensure 1st model iteration starts with nu=1 model pop
+                    self.rule_population = self.rule_population_nu1 # ensure nu=1 model pop uses nu=1 rule pop
+                    self.nu = 1 # ensure nu=1 model pop uses nu=1
+                else:
+                    self.model_population.initialize_model_population(
+                        self, random, self.model_pop_init
+                    )
             
             self.phase_two()
-            self.model_population.model_alterations.append(self.model_iteration)
+            # if HEROS is operating on both nu=1/nu=10 pops (no need for 'self.model_iterations > 1' to be part of if condition as HEROS would have already exited fit() if that was the case)
+            if self.adaptive_nu and self.decision_reached == False:
+                self.model_population_nu1.model_alterations.append(self.model_iteration)
+                self.model_population_nu10.model_alterations.append(self.model_iteration)
+            else:
+                self.model_population.model_alterations.append(self.model_iteration)
             self.curr_alt += 1
 
         while self.iterations - self.iteration > 0:
@@ -433,6 +539,13 @@ class HEROS(BaseEstimator, TransformerMixin):
         improvement = 0
         """ (HEROS PHASE 1) RUN RULE-LEARNING TRAINING ITERATIONS"""
         while continue_phase_one:
+            # DEBUG PRINTS: checking if settings for nu/rule_pop/model_pop are aligned properly
+            # print(f"Rule iteration: {self.iteration}\nrule_population = rule_population_nu1: {self.rule_population is self.rule_population_nu1}\nnu: {self.nu}\n")
+            # if self.iteration % 2 == 0 and self.decision_reached == False and not (self.rule_population is self.rule_population_nu1 and self.nu == 1):
+            #     print(f"Error during rule iteration {self.iteration}. Expected nu=1 settings.")
+            # elif self.iteration % 2 == 1 and self.decision_reached == False and not (self.rule_population is self.rule_population_nu10 and self.nu == 10):
+            #     print(f"Error during rule iteration {self.iteration}. Expected nu=10 settings.")
+            # END DEBUG PRINTS
             # Get current training instance
             if i % 2 == 0 or self.model_iteration == 0 or self.feedback == False:
                 instance = self.env.get_instance()
@@ -453,7 +566,58 @@ class HEROS(BaseEstimator, TransformerMixin):
             
             # Increment iteration and training instance
             self.iteration += 1
-            self.env.next_instance()
+            # if HEROS is operating on both nu=1/nu=10 rule pops (no final decision reached yet, self.model_iterations > 1)
+            if self.adaptive_nu and self.decision_reached == False and self.model_iterations > 1:
+                # if the iteration number is odd, flip to using the nu=10 rule pop
+                if self.iteration % 2 == 1:
+                    self.rule_population = self.rule_population_nu10
+                    self.nu = 10
+                # if the iteration number is even, flip to using the nu=1 rule pop and also get the next instance (since the nu=1/nu=10 rule pops have now both had a chance to operate on the current instance)
+                else:
+                    self.rule_population = self.rule_population_nu1
+                    self.nu = 1
+                    self.env.next_instance()
+            else:
+                self.env.next_instance()
+            # # if HEROS is operating on both nu=1/nu=10 rule pops (no final decision reached yet, self.model_iterations > 1)
+            # if self.adaptive_nu and self.decision_reached == False and self.model_iterations > 1:
+            #     # if HEROS has done a full loop through all the training instances, increase the value of self.num_loops_through_instances by 1
+            #     if self.env.instance_index == 0 and self.iteration != 0:
+            #         self.num_loops_through_instances += 1
+
+            #     # if there are an even number of training instances
+            #     if self.env.num_instances % 2 == 0:
+            #         # if HEROS has done a full loop through all the training instances and is back on instance 0, flip the order of when nu=1/nu=10 rule pop is used (so that each rule pop is exposed to different instances on the next loop)
+            #         if self.env.instance_index == 0 and self.iteration != 0:
+            #             pass
+            #         # otherwise, if self.num_loops_through_instances % 2 == 0, alternate nu=1/nu=10 in the normal manner
+            #         elif self.num_loops_through_instances % 2 == 0:
+            #             # if the rule iteration number is odd, flip to nu=10 rule pop
+            #             if self.iteration % 2 == 1:
+            #                 self.rule_population = self.rule_population_nu10
+            #                 self.nu = 10
+            #             else:
+            #                 self.rule_population = self.rule_population_nu1
+            #                 self.nu = 1
+            #         # if self.num_loops_through_instances % 2 == 1, flip the order of nu=1/nu=10
+            #         else:
+            #             # if the rule iteration number is odd, flip to nu=1 rule pop
+            #             if self.iteration % 2 == 1:
+            #                 self.rule_population = self.rule_population_nu1
+            #                 self.nu = 1
+            #             else:
+            #                 self.rule_population = self.rule_population_nu10
+            #                 self.nu = 10
+            #     # if there are an odd number of training instances, nu=1/nu=10 rule pops will naturally cover a different set of training instances on the next loop through
+            #     else:
+            #         # if the rule iteration number is odd, flip to nu=10 rule pop
+            #         if self.iteration % 2 == 1:
+            #             self.rule_population = self.rule_population_nu10
+            #             self.nu = 10
+            #         else:
+            #             self.rule_population = self.rule_population_nu1
+            #             self.nu = 1
+
             i += 1
 
             ## SWITCH EVALUATION AND STOP CRITERIA AND ADD COMPACTION IN BETWEEN
@@ -476,16 +640,52 @@ class HEROS(BaseEstimator, TransformerMixin):
                 if i >= self.iterations:
                     continue_phase_one = False
 
-            if continue_phase_one == False: 
-                # RULE COMPACTION *********************************************
-                self.timer.compaction_time_start()
-                compact = COMPACT(self)
-                self.sufficient_rule_pop_remain = True
-                self.sufficient_rule_pop_remain = compact.basic_rule_cleaning(self)
-                if self.compaction == 'sub' and self.sufficient_rule_pop_remain:
-                    self.sufficient_rule_pop_remain = compact.subsumption_compation(self)
-                compact.clear_pop_copy()
-                self.timer.compaction_time_stop()
+            if continue_phase_one == False:
+                # if HEROS is operating on both nu=1/nu=10 rule pops
+                if self.adaptive_nu and self.decision_reached == False and self.model_iterations > 1:
+                    # keeping track of what rule pop object HEROS is currently on, before applying compaction to both
+                    current_rule_pop = self.rule_population
+
+                    self.rule_population = self.rule_population_nu1
+                    # RULE COMPACTION on nu=1 rule pop *********************************************
+                    self.timer.compaction_time_start()
+                    compact = COMPACT(self)
+                    self.sufficient_rule_pop_remain_nu1 = True
+                    self.sufficient_rule_pop_remain_nu1 = compact.basic_rule_cleaning(self)
+                    if self.compaction == 'sub' and self.sufficient_rule_pop_remain_nu1:
+                        self.sufficient_rule_pop_remain_nu1 = compact.subsumption_compation(self)
+                    compact.clear_pop_copy()
+                    self.timer.compaction_time_stop()
+
+                    self.rule_population = self.rule_population_nu10
+                    # RULE COMPACTION on nu=10 rule pop *********************************************
+                    self.timer.compaction_time_start()
+                    compact = COMPACT(self)
+                    self.sufficient_rule_pop_remain_nu10 = True
+                    self.sufficient_rule_pop_remain_nu10 = compact.basic_rule_cleaning(self)
+                    if self.compaction == 'sub' and self.sufficient_rule_pop_remain_nu10:
+                        self.sufficient_rule_pop_remain_nu10 = compact.subsumption_compation(self)
+                    compact.clear_pop_copy()
+                    self.timer.compaction_time_stop()
+
+                    # self.sufficient_rule_pop_remain is only True if that is the case for both nu=1 and nu=10 rule pops
+                    if self.sufficient_rule_pop_remain_nu1 and self.sufficient_rule_pop_remain_nu10:
+                        self.sufficient_rule_pop_remain = True
+                    else:
+                        self.sufficient_rule_pop_remain = False
+
+                    # restoring the rule pop object HEROS was on before any compaction
+                    self.rule_population = current_rule_pop
+                else: 
+                    # RULE COMPACTION *********************************************
+                    self.timer.compaction_time_start()
+                    compact = COMPACT(self)
+                    self.sufficient_rule_pop_remain = True
+                    self.sufficient_rule_pop_remain = compact.basic_rule_cleaning(self)
+                    if self.compaction == 'sub' and self.sufficient_rule_pop_remain:
+                        self.sufficient_rule_pop_remain = compact.subsumption_compation(self)
+                    compact.clear_pop_copy()
+                    self.timer.compaction_time_stop()
                 
 
             # Evaluation tracking ***************************************************
@@ -499,18 +699,43 @@ class HEROS(BaseEstimator, TransformerMixin):
                 #Archive current rule population
                 if self.verbose:
                     print('Archiving: '+str(self.iteration))
-                self.rule_population.archive_rule_pop(self.iteration)
-                self.timer.archive_rule_pop(self.iteration)
+                # if HEROS is operating on both nu=1/nu=10 rule pops
+                if self.adaptive_nu and self.decision_reached == False and self.model_iterations > 1:
+                    self.rule_population_nu1.archive_rule_pop(self.iteration)
+                    self.rule_population_nu10.archive_rule_pop(self.iteration)
+                    self.timer.archive_rule_pop(self.iteration)
+                else:
+                    self.rule_population.archive_rule_pop(self.iteration)
+                    self.timer.archive_rule_pop(self.iteration)
 
         
 
         ### THIS SHOULD HAPPEN AT THE VERY END OF LAST PHASE I RUN # BATCH FEATURE TRACKING **************************************
         if self.feat_track == 'end':
-            self.FT.batch_calculate_ft_scores(self)
+            # if HEROS is operating on both nu=1/nu=10 rule pops
+            if self.adaptive_nu and self.decision_reached == False and self.model_iterations > 1:
+                # keeping track of what rule pop object HEROS is currently on, before calculating FT scores for both nu=1 and nu=10 rule pops
+                current_rule_pop = self.rule_population
+
+                self.rule_population = self.rule_population_nu1
+                self.FT.batch_calculate_ft_scores(self)
+
+                self.rule_population = self.rule_population_nu10
+                self.FT.batch_calculate_ft_scores(self)
+
+                # restoring the rule pop object HEROS was on before calculating FT scores
+                self.rule_population = current_rule_pop
+            else:
+                self.FT.batch_calculate_ft_scores(self)
         self.timer.phase1_time_stop()
         if self.verbose:
             print("HEROS (Phase 1) run complete!")
-            print("Number of Unique Rules Identified: "+str(len(self.rule_population.explored_rules)))
+            # if HEROS is operating on both nu=1/nu=10 rule pops
+            if self.adaptive_nu and self.decision_reached == False and self.model_iterations > 1:
+                print("Number of Unique Rules Identified (nu=1 rule pop.): "+str(len(self.rule_population_nu1.explored_rules)))
+                print("Number of Unique Rules Identified (nu=10 rule pop.): "+str(len(self.rule_population_nu10.explored_rules)))
+            else:
+                print("Number of Unique Rules Identified: "+str(len(self.rule_population.explored_rules)))
             print("Number of Iterations Used:" + str(i))
             #print(self.rule_population.explored_rules)
         self.phase_one_ratio = float(i/self.iterations)
@@ -520,16 +745,59 @@ class HEROS(BaseEstimator, TransformerMixin):
         """(HEROS PHASE 2) RUN RULE-SET-LEARNING TRAINING ITERATIONS  """
         self.timer.phase2_time_start()
         continue_phase_two = True
+        
+        if self.adaptive_nu:
+            # To make sure phase 1 can pick up where it left off, if alternating back; will restore these values at the end of this phase 2 run
+            current_nu = self.nu
+            current_rule_pop = self.rule_population
+
+            if self.decision_reached == False: # ensuring phase 2 is starting with the right rule_population and nu when switching from phase 1 -> 2 (on alternations >= 2, since model init code in fit() handles this already for the 1st phase 2 run)
+                if self.model_iteration % 2 == 0:
+                    self.nu = 1
+                    self.rule_population = self.rule_population_nu1
+                else:
+                    self.nu = 10
+                    self.rule_population = self.rule_population_nu10
 
         if self.model_iterations > 1: #Apply Phase II
-            if not self.sufficient_rule_pop_remain: #abort Phase II and use Phase I rule population as final phase II model. 
-                self.model_population.skip_phase2(self)
-                self.model_population.get_target_model(0) #the 'model' object with the best accuracy, then coverage, then lowest rule count (assumes prior sorting)
-                self.timer.phase2_time_stop()
-                self.timer.update_global_time()
-                if self.verbose:
-                    print("HEROS (Phase 2) skipped - Returned entire rule population pre-cleaning/compaction as final model!")
-                    print("Random Seed Check - End: "+ str(random.random()))
+            if not self.sufficient_rule_pop_remain: #abort Phase II and use Phase I rule population as final phase II model.
+                if self.adaptive_nu:
+                    if self.decision_reached == False: # i.e. both nu=1 and nu=10 rule pops are active
+                        # # keeping track of what rule pop object HEROS is currently on, before adding 'rule pop model' to each of nu=1/nu=10 model pop
+                        # current_rule_pop = self.rule_population
+
+                        self.rule_population = self.rule_population_nu1
+                        self.model_population_nu1.skip_phase2(self)
+                        self.model_population_nu1.get_target_model(0) #the 'model' object with the best accuracy, then coverage, then lowest rule count (assumes prior sorting)
+
+                        self.rule_population = self.rule_population_nu10
+                        self.model_population_nu10.skip_phase2(self)
+                        self.model_population_nu10.get_target_model(0) #the 'model' object with the best accuracy, then coverage, then lowest rule count (assumes prior sorting)
+
+                        # restoring the rule pop object HEROS was on before
+                        self.rule_population = current_rule_pop
+
+                        self.timer.phase2_time_stop()
+                        self.timer.update_global_time()
+                        if self.verbose:
+                            print("HEROS (Phase 2) skipped - Returned entire rule population pre-cleaning/compaction as final model!")
+                            print("Random Seed Check - End: "+ str(random.random()))
+                    else: # decision_reached=True, meaning only one pop is in play
+                        self.model_population.skip_phase2(self)
+                        self.model_population.get_target_model(0) #the 'model' object with the best accuracy, then coverage, then lowest rule count (assumes prior sorting)
+                        self.timer.phase2_time_stop()
+                        self.timer.update_global_time()
+                        if self.verbose:
+                            print("HEROS (Phase 2) skipped - Returned entire rule population pre-cleaning/compaction as final model!")
+                            print("Random Seed Check - End: "+ str(random.random()))
+                else: # normal operation with adaptive_nu=False
+                    self.model_population.skip_phase2(self)
+                    self.model_population.get_target_model(0) #the 'model' object with the best accuracy, then coverage, then lowest rule count (assumes prior sorting)
+                    self.timer.phase2_time_stop()
+                    self.timer.update_global_time()
+                    if self.verbose:
+                        print("HEROS (Phase 2) skipped - Returned entire rule population pre-cleaning/compaction as final model!")
+                        print("Random Seed Check - End: "+ str(random.random()))
 
             else: #Run Phase 2 normally
                 models_prev = []
@@ -538,6 +806,13 @@ class HEROS(BaseEstimator, TransformerMixin):
                 count = 0
                 # RUN MODEL-LEARNING TRAINING ITERATIONS **************************************************************
                 while continue_phase_two:
+                    # DEBUG PRINTS: checking if settings for nu/rule_pop/model_pop are aligned properly
+                    # print(f"Model iteration: {self.model_iteration}\nmodel_population = model_population_nu1: {self.model_population is self.model_population_nu1}\nrule_population = rule_population_nu1: {self.rule_population is self.rule_population_nu1}\nnu: {self.nu}\n")
+                    # if self.model_iteration % 2 == 0 and self.decision_reached == False and not (self.model_population is self.model_population_nu1 and self.rule_population is self.rule_population_nu1 and self.nu == 1):
+                    #     print(f"Error during model iteration {self.model_iteration}. Expected nu=1 settings.")
+                    # elif self.model_iteration % 2 == 1 and self.decision_reached == False and not (self.model_population is self.model_population_nu10 and self.rule_population is self.rule_population_nu10 and self.nu == 10):
+                    #     print(f"Error during model iteration {self.model_iteration}. Expected nu=10 settings.")
+                    # END DEBUG PRINTS
                     #Apply NSGAII-like fast non dominated sorting of models into ranked fronts of models
                     fronts = self.model_population.fast_non_dominated_sort(self)
                     #Calculate crowding distances
@@ -569,24 +844,71 @@ class HEROS(BaseEstimator, TransformerMixin):
                     #self.top_models.append(self.model_population.get_max()) !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                     #Pause learning to conduct a complete evaluation of the current rule population
                     if self.stored_model_iterations != None and (self.model_iteration + 1) in self.stored_model_iterations:
-                        #Archive current rule population
-                        self.model_population.sort_model_pop()
-                        self.model_population.identify_models_on_front() #For evaluating all models on the front.
-                        self.model_population.archive_model_pop(self.model_iteration+1)
-                        self.timer.archive_model_pop(self.model_iteration+1)
+                        if self.adaptive_nu and self.decision_reached == False:
+                            #Archive current model populations (for both nu=1 and nu=10 at this stage)
+                            self.model_population_nu1.sort_model_pop()
+                            self.model_population_nu1.identify_models_on_front() #For evaluating all models on the front.
+                            self.model_population_nu1.archive_model_pop(self.model_iteration+1)
+
+                            self.model_population_nu10.sort_model_pop()
+                            self.model_population_nu10.identify_models_on_front() #For evaluating all models on the front.
+                            self.model_population_nu10.archive_model_pop(self.model_iteration+1)
+
+                            self.timer.archive_model_pop(self.model_iteration+1)
+                        else:
+                            #Archive current rule population
+                            self.model_population.sort_model_pop()
+                            self.model_population.identify_models_on_front() #For evaluating all models on the front.
+                            self.model_population.archive_model_pop(self.model_iteration+1)
+                            self.timer.archive_model_pop(self.model_iteration+1)
                     #Next Iteration
                     self.model_iteration += 1
                     #Sort the model population first by accuracy and then by number of rules in model.
                     self.model_population.sort_model_pop()
                     self.model_population.identify_models_on_front() #For evaluating all models on the front.
                     models = set(filter(lambda m: m.model_on_front == 1,self.model_population.pop_set))
-                    if models == models_prev:
-                        iter += 1
+                    if self.adaptive_nu:
+                        # if 1/2 of the model iterations have completed (and nu=1/nu=10 both have had an equal number of model iterations, i.e. current value of self.model_iteration is even)
+                        if self.model_iteration >= (self.model_iterations / 2) and self.model_iteration % 2 == 0 and self.decision_reached == False:
+                            # perform decision (i.e. nu=1 or nu=10 pop)
+                            self.model_population = self.model_population_nu1
+                            best_acc_nu1 = self.auto_select_top_model(self.X_val, self.y_val, return_test_acc=True) # getting val acc of model that performed best on val set
+
+                            self.model_population = self.model_population_nu10
+                            best_acc_nu10 = self.auto_select_top_model(self.X_val, self.y_val, return_test_acc=True) # getting val acc of model that performed best on val set
+
+                            if best_acc_nu1 >= best_acc_nu10: # give ties to nu=1 (default HEROS)
+                                self.model_population = self.model_population_nu1
+                                self.rule_population = self.rule_population_nu1
+                                self.nu = 1
+                                print("Chose nu=1 pop")
+                            else:
+                                self.model_population = self.model_population_nu10
+                                self.rule_population = self.rule_population_nu10
+                                self.nu = 10
+                                print("Chose nu=10 pop")
+
+                            self.decision_reached = True # no more switching between nu=1/nu=10 pops
+
+                        if self.decision_reached == False:
+                            # if model_iteration is odd, switch to nu=10 pop; otherwise, switch to nu=1 pop
+                            if self.model_iteration % 2 == 1:
+                                self.model_population = self.model_population_nu10
+                                self.rule_population = self.rule_population_nu10
+                                self.nu = 10
+                            else:
+                                self.model_population = self.model_population_nu1
+                                self.rule_population = self.rule_population_nu1
+                                self.nu = 1
                     else:
-                        iter = 0
-                    #print(iter)
+                        # this code is only relevant for self.alternate_mode="limit"; self.adaptive_nu not set up for this at this stage
+                        if models == models_prev:
+                            iter += 1
+                        else:
+                            iter = 0
+                        #print(iter)
+                        models_prev = models
                     count += 1
-                    models_prev = models
 
 
                     # STOP CRITERIA CHECK 
@@ -607,6 +929,8 @@ class HEROS(BaseEstimator, TransformerMixin):
                     
                 self.model_population.sort_model_pop()
                 self.model_population.identify_models_on_front() #For evaluating all models on the front.
+                if self.adaptive_nu and self.decision_reached == False: # because model_population would have changed since models was last computed
+                    models = set(filter(lambda m: m.model_on_front == 1,self.model_population.pop_set))
                 self.model_population.get_target_model(0) #the 'model' object with the best accuracy, then coverage, then lowest rule count (assumes prior sorting)
                 self.timer.phase2_time_stop()
                 self.timer.update_global_time()
@@ -632,6 +956,11 @@ class HEROS(BaseEstimator, TransformerMixin):
                                 instance_weights[i] += 1 
                 normalized_weights = [((weight + len(models))/(2 * len(models))) for weight in instance_weights]
                 self.training_weights = normalized_weights
+
+                # restoring values that were present at the start of this phase 2 run if both nu=1/nu=10 pops are still in play
+                if self.adaptive_nu and self.decision_reached == False:
+                    self.nu = current_nu
+                    self.rule_population = current_rule_pop
 
     def run_iteration(self,instance):
         # Make 'Match Set', {M}
@@ -1170,6 +1499,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             file.write(f"cross_prob: {self.cross_prob}\n")
             file.write(f"mut_prob: {self.mut_prob}\n")
             file.write(f"nu: {self.nu}\n")
+            file.write(f"adaptive_nu: {self.adaptive_nu}\n")
             file.write(f"beta: {self.beta}\n")
             file.write(f"theta_sel: {self.theta_sel}\n")
             file.write(f"fitness_function: {self.fitness_function}\n")
@@ -1204,7 +1534,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         return non_dominated_model_indexes
 
 
-    def auto_select_top_model(self,X_test,y_test,verbose=False,model_pop_iter=None):
+    def auto_select_top_model(self,X_test,y_test,verbose=False,model_pop_iter=None, return_test_acc=False):
         """ Given testing data, evaluates all non-dominated models on trained model Pareto-front and returns the best performing model
         based on balanced testing accuracy, instance-coverage, and rule-set size. Maximizing testing accuracy and instance-coverage is 
         always the priority, with minimizing rule-set size as a secondary selection criteria. """
@@ -1249,4 +1579,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             print('Best rule count: '+str(best_rule_count))
             print('Best model index: '+str(best_model_index))
             print('----------------------------------------')
-        return best_model_index
+        if return_test_acc:
+            return best_accuracy # return the best testing acc value, for self.adaptive_nu when comparing best models from nu=1 and nu=10 pops
+        else:
+            return best_model_index
