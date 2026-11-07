@@ -885,7 +885,8 @@ def v7_single_pass(rule, target_state, heros, random, np, target_outcome=None):
     Only intervals containing at least heros.min_interval_instances of those instances are candidates. The best interval is
     kept only if its inside/outside split is significant: Pearson chi-square test of the inside/outside x class table at
     heros.significance_alpha, Bonferroni corrected for the number of candidate intervals. If it is not significant, or no
-    interval is large enough, the condition is dropped, unless it is the rule's only condition.
+    interval is large enough, the condition is dropped, even if it is the rule's last condition (the caller then discards
+    the rule, since a rule with no conditions matches every instance).
     For rules born by covering or evolution (target_state given) only intervals containing the current instance's value are
     candidates, so the rule still matches the current instance; a feature whose value is missing in the current instance is
     left as it is. target_outcome is unused (kept so v7 is called like v5 and v6). Class outcomes only."""
@@ -986,14 +987,12 @@ def v7_single_pass(rule, target_state, heros, random, np, target_outcome=None):
                     chi_square = ((observed - expected) ** 2 / expected).sum()
                     significant = chi_square >= chi_square_critical_value(significance_alpha / int(valid.sum()), degrees_of_freedom)
 
-        # drop the condition if no interval is large enough or the best split is not significant (unless it is the rule's only condition)
+        # drop the condition if no interval is large enough or the best split is not significant, even if it is the rule's
+        # last condition: a rule left with no conditions is discarded by the caller (covering, GA, tree initialization)
         if not significant:
-            if len(rule.condition_indexes) > 1:
-                rule.condition_indexes.pop(condition_position)
-                rule.condition_values.pop(condition_position)
-                continue
-            if not valid.any():  # only condition and no valid interval: leave it as it is
-                continue
+            rule.condition_indexes.pop(condition_position)
+            rule.condition_values.pop(condition_position)
+            continue
 
         # update the condition for the selected feature
         rule.condition_values[condition_position] = [float(bounds[lower_index[best]]), float(bounds[upper_index[best]])]

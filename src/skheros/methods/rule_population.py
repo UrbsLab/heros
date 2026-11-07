@@ -273,6 +273,10 @@ class RULE_POP:
     def genetic_algorithm(self, instance, heros, random,np):
         instance_state = instance[0] #instance feature values
         outcome_state = instance[1] #instance outcome value
+        # No parents to select if {M} is empty: happens only when covering discarded a rule left with no conditions
+        # (local_quantitative_optimization_v7 can drop every condition); otherwise covering always adds a matching rule
+        if len(self.match_set) == 0:
+            return []
         # PARENT SELECTION *****************************************
         heros.timer.selection_time_start() #parent selection time tracking
         parent_list = self.tournament_selection(heros,random)
@@ -308,6 +312,8 @@ class RULE_POP:
         # LYRA OPTIMIZATION OPERATOR
         for i, offspring in enumerate(offspring_list):
             offspring_list[i] = self.apply_selected_optimization(offspring, instance_state, heros, random, np, outcome_state)
+        # discard offspring left with no conditions (local_quantitative_optimization_v7 can drop every condition), as covering does
+        offspring_list = [offspring for offspring in offspring_list if len(offspring.condition_indexes) > 0]
 
 
         #Check for offspring duplication
@@ -965,6 +971,8 @@ class RULE_POP:
             elif getattr(heros, 'optimization_method', None) == 'local_quantitative_optimization_v7':
                 rule_obj = local_quantitative_optimization_v7(rule_obj, None, heros, random, np)
                 rule_obj.remove_vacuous_conditions(heros, np) # same pruning apply_selected_optimization does after optimizing
+                if len(rule_obj.condition_indexes) == 0: # v7 dropped every condition: a completely general rule is not added
+                    continue
             try: #FUTURE EXPANSION TO QUANTITATIVE OUTCOMES NEEDED
                 if hasattr(rule_obj, 'complete_rule_evaluation_class'): #Evaluates rules and assignes best outcome.
                     front_updated = rule_obj.complete_rule_evaluation_class(heros, random, None)
