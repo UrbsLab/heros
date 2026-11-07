@@ -26,7 +26,7 @@ import numpy as np
 from src.skheros.methods.zadia_project import Soft_Gini_SGD, delta_rule_mutation, tree_split
 from src.skheros.methods.zadia_exp_v2 import multi_feature_GD
 from src.skheros.methods.zadia_experiment import multi_iter_GD
-from src.skheros.methods.lyra_project import local_quantitative_optmization, local_quantitative_optimization_v3
+from src.skheros.methods.lyra_project import local_quantitative_optmization, local_quantitative_optimization_v3, local_quantitative_optimization_v4, local_quantitative_optimization_v5, local_quantitative_optimization_v6, local_quantitative_optimization_v7
 
 
 class RULE_POP:
@@ -114,7 +114,7 @@ class RULE_POP:
             new_rule = RULE(heros)
             new_rule.initialize_by_covering(set_numerosity_sum+1,instance_state,outcome_state,heros,random,np)
             # LYRA OPTIMIZATION OPERATOR
-            new_rule = self.apply_selected_optimization(new_rule, instance_state, heros, random, np)
+            new_rule = self.apply_selected_optimization(new_rule, instance_state, heros, random, np, outcome_state)
             #self.debug_confirm_offspring_match(new_rule, instance,heros,'covering',None)
             if len(new_rule.condition_indexes) > 0: #prevents completely general rules from being added to the population
                 #Check for duplicate rule in {P} - important since covering runs if {C} is empty, which can generate an existing rule in the match set
@@ -209,7 +209,7 @@ class RULE_POP:
                 self.correct_set[j] -= 1
 
 
-    def apply_selected_optimization(self, offspring, instance_state, heros, random, np):
+    def apply_selected_optimization(self, offspring, instance_state, heros, random, np, outcome_state=None):
         """Apply the selected optional optimization step to an offspring rule."""
         method = getattr(heros, 'optimization_method', None)
         if method is None:
@@ -229,6 +229,14 @@ class RULE_POP:
             offspring = local_quantitative_optmization(offspring, instance_state, heros, random, np)
         elif method == 'local_quantitative_optimization_v3':
             offspring = local_quantitative_optimization_v3(offspring, instance_state, heros, random, np)
+        elif method == 'local_quantitative_optimization_v4':
+            offspring = local_quantitative_optimization_v4(offspring, instance_state, heros, random, np)
+        elif method == 'local_quantitative_optimization_v5':
+            offspring = local_quantitative_optimization_v5(offspring, instance_state, heros, random, np, outcome_state)
+        elif method == 'local_quantitative_optimization_v6':
+            offspring = local_quantitative_optimization_v6(offspring, instance_state, heros, random, np, outcome_state)
+        elif method == 'local_quantitative_optimization_v7':
+            offspring = local_quantitative_optimization_v7(offspring, instance_state, heros, random, np, outcome_state)
         else:
             raise ValueError(f"Unsupported optimization method: {method}")
 
@@ -299,7 +307,7 @@ class RULE_POP:
 
         # LYRA OPTIMIZATION OPERATOR
         for i, offspring in enumerate(offspring_list):
-            offspring_list[i] = self.apply_selected_optimization(offspring, instance_state, heros, random, np)
+            offspring_list[i] = self.apply_selected_optimization(offspring, instance_state, heros, random, np, outcome_state)
 
 
         #Check for offspring duplication
@@ -948,6 +956,15 @@ class RULE_POP:
                 rule_obj = local_quantitative_optmization(rule_obj, None, heros, random, np)
             elif getattr(heros, 'optimization_method', None) == 'local_quantitative_optimization_v3':
                 rule_obj = local_quantitative_optimization_v3(rule_obj, None, heros, random, np)
+            elif getattr(heros, 'optimization_method', None) == 'local_quantitative_optimization_v4':
+                rule_obj = local_quantitative_optimization_v4(rule_obj, None, heros, random, np)
+            elif getattr(heros, 'optimization_method', None) == 'local_quantitative_optimization_v5':
+                rule_obj = local_quantitative_optimization_v5(rule_obj, None, heros, random, np)
+            elif getattr(heros, 'optimization_method', None) == 'local_quantitative_optimization_v6':
+                rule_obj = local_quantitative_optimization_v6(rule_obj, None, heros, random, np)
+            elif getattr(heros, 'optimization_method', None) == 'local_quantitative_optimization_v7':
+                rule_obj = local_quantitative_optimization_v7(rule_obj, None, heros, random, np)
+                rule_obj.remove_vacuous_conditions(heros, np) # same pruning apply_selected_optimization does after optimizing
             try: #FUTURE EXPANSION TO QUANTITATIVE OUTCOMES NEEDED
                 if hasattr(rule_obj, 'complete_rule_evaluation_class'): #Evaluates rules and assignes best outcome.
                     front_updated = rule_obj.complete_rule_evaluation_class(heros, random, None)

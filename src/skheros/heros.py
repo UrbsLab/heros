@@ -22,7 +22,7 @@ class HEROS(BaseEstimator, TransformerMixin):
     def __init__(self,outcome_type='class',iterations=100000,pop_size=1000,cross_prob=0.8,mut_prob=0.04,nu=1,beta=0.2,theta_sel=0.5,fitness_function='pareto',
                  subsumption='both',rsl=0,feat_track=None,model_iterations=500,model_pop_size=100, model_pop_init = 'target_acc', new_gen=1.0,merge_prob=0.1,
                  rule_pop_init=None,compaction='sub',track_performance=0,model_tracking=False,stored_rule_iterations=None,stored_model_iterations=None,random_state=None,
-                 verbose=False,alternate=5,alternate_mode='equal',feedback=False,optimization_method=None,vacuous_tolerance=0.0):
+                 verbose=False,alternate=5,alternate_mode='equal',feedback=False,optimization_method=None,vacuous_tolerance=0.0,num_quantiles=10,significance_alpha=0.05,min_interval_instances=10):
         """
         A Scikit-Learn compatible implementation of the 'Heuristic Evolutionary Rule Optimization System' (HEROS) Algorithm.
         ..
@@ -55,8 +55,11 @@ class HEROS(BaseEstimator, TransformerMixin):
         :param alternate: Number of phase alternations between Phase I and Phase II (must be int >= 0)
         :param alternate_mode: Experimental parameter to specify the method for determining when to alternate between Phase I and Phase II (must be 'limit', 'converge', 'equal', or None)
         :param feedback: TBD
-        :param optimization_method: Optional optimizer selection for the rule mutation stage. Use None to disable this step, or one of 'soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split', 'local_quantitative_optimization', or 'local_quantitative_optimization_v3'
+        :param optimization_method: Optional optimizer selection for the rule mutation stage. Use None to disable this step, or one of 'soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split', 'local_quantitative_optimization', 'local_quantitative_optimization_v3', 'local_quantitative_optimization_v4', 'local_quantitative_optimization_v5', 'local_quantitative_optimization_v6', or 'local_quantitative_optimization_v7' (v5, v6 and v7: class outcomes only)
         :param vacuous_tolerance: After optimization, quantitative conditions are dropped (fewest excluded instances first) while the total fraction of training instances they exclude stays <= this value. 0 drops only conditions that exclude nothing. (Must be float from 0 - 1)
+        :param num_quantiles: Number of quantile bins per quantitative feature used by 'local_quantitative_optimization_v7'; interval bounds are searched over the bin cut points and +/- infinity. (Must be an integer >= 2)
+        :param significance_alpha: 'local_quantitative_optimization_v7' keeps a condition's best interval only if its inside/outside split of the instances matching the rest of the rule is significant at this level (chi-square test, Bonferroni corrected for the number of candidate intervals); otherwise the condition is dropped (unless it is the rule's only condition). 1 disables the test. (Must be float in (0, 1])
+        :param min_interval_instances: Minimum number of training instances (matching the rest of the rule) inside a candidate interval for 'local_quantitative_optimization_v7'. (Must be an integer >= 1)
 
         """
         # Basic run parameter checks
@@ -201,10 +204,19 @@ class HEROS(BaseEstimator, TransformerMixin):
             self.optimization_method = None
         else:
             normalized_method = str(optimization_method).lower()
-            if normalized_method not in ['soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split','local_quantitative_optimization','local_quantitative_optimization_v3']:
-                raise Exception("'optimization_method' param must be None, 'soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split', 'local_quantitative_optimization', or 'local_quantitative_optimization_v3'")
+            if normalized_method not in ['soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split','local_quantitative_optimization','local_quantitative_optimization_v3','local_quantitative_optimization_v4','local_quantitative_optimization_v5','local_quantitative_optimization_v6','local_quantitative_optimization_v7']:
+                raise Exception("'optimization_method' param must be None, 'soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split', 'local_quantitative_optimization', 'local_quantitative_optimization_v3', 'local_quantitative_optimization_v4', 'local_quantitative_optimization_v5', 'local_quantitative_optimization_v6', or 'local_quantitative_optimization_v7'")
             self.optimization_method = normalized_method
         self.vacuous_tolerance = float(vacuous_tolerance)
+        if not isinstance(num_quantiles, int) or isinstance(num_quantiles, bool) or num_quantiles < 2:
+            raise Exception("'num_quantiles' param must be an integer >= 2")
+        self.num_quantiles = num_quantiles
+        if not 0 < float(significance_alpha) <= 1:
+            raise Exception("'significance_alpha' param must be a float in (0, 1]")
+        self.significance_alpha = float(significance_alpha)
+        if not isinstance(min_interval_instances, int) or isinstance(min_interval_instances, bool) or min_interval_instances < 1:
+            raise Exception("'min_interval_instances' param must be an integer >= 1")
+        self.min_interval_instances = min_interval_instances
         self.training_weights = []
         self.phase_one_limit = 5000
         self.phase_one_ratio = 0
@@ -1204,6 +1216,9 @@ class HEROS(BaseEstimator, TransformerMixin):
             file.write(f"verbose: {self.verbose}\n")
             file.write(f"optimization_method: {self.optimization_method}\n")
             file.write(f"vacuous_tolerance: {self.vacuous_tolerance}\n")
+            file.write(f"num_quantiles: {self.num_quantiles}\n")
+            file.write(f"significance_alpha: {self.significance_alpha}\n")
+            file.write(f"min_interval_instances: {self.min_interval_instances}\n")
             if self.use_ek:
                 file.write(f"ek_weights: {self.env.ek_weights}\n")
 

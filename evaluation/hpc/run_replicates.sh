@@ -9,6 +9,8 @@
 #   sbatch --array=0-199 evaluation/hpc/run_replicates.sh local_quant_opt_gini
 # Optional 2nd/3rd args: dataset (default MUX6_QF_500) and results folder. Set CV=<k> to change the fold count,
 # ITERATIONS=<n> to change the HEROS iterations (default 50000) and TOLERANCE=<t> to set vacuous_tolerance (default 0).
+# local_quant_opt_v7 settings: NUM_QUANTILES=<q> (default 10), ALPHA=<a> significance_alpha (default 0.05),
+# MIN_INSTANCES=<m> min_interval_instances (default 10). Other configs ignore them.
 #SBATCH -p defq
 #SBATCH --job-name=heros_rep
 #SBATCH --nodes=1
@@ -25,6 +27,9 @@ RESULTS_DIR=${3:-results/replicates/$DATASET}
 CV=${CV:-10}
 ITERATIONS=${ITERATIONS:-50000}
 TOLERANCE=${TOLERANCE:-0}
+NUM_QUANTILES=${NUM_QUANTILES:-10}
+ALPHA=${ALPHA:-0.05}
+MIN_INSTANCES=${MIN_INSTANCES:-10}
 TASK=${SLURM_ARRAY_TASK_ID:?submit with --array}
 FOLD=$((TASK % CV))
 SEED=$((TASK / CV))
@@ -38,4 +43,4 @@ conda activate "$CONDA_ENV"
 
 cd "$SLURM_SUBMIT_DIR"
 python evaluation/run_notebook_comparison.py "$DATASET" --configs "$CONFIG" --cv "$CV" --fold "$FOLD" --seed "$SEED" --iterations "$ITERATIONS" \
-    --vacuous_tolerance "$TOLERANCE" --out "$RESULTS_DIR/${CONFIG}_tol${TOLERANCE}_fold${FOLD}_seed${SEED}.csv"
+    --vacuous_tolerance "$TOLERANCE" --num_quantiles "$NUM_QUANTILES" --significance_alpha "$ALPHA" --min_interval_instances "$MIN_INSTANCES" --out "$RESULTS_DIR/${CONFIG}_tol${TOLERANCE}_fold${FOLD}_seed${SEED}.csv"

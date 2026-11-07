@@ -14,6 +14,9 @@ ITERATIONS=50000                                              # HEROS rule-learn
 CV=10                                                         # folds per seed
 SEEDS=20                                                      # seeds per config
 TIME=4:00:00                                                  # Slurm time limit per task (raise for big datasets / more iterations)
+NUM_QUANTILES=50                                              # local_quant_opt_v7: quantile bins per feature
+ALPHA=0.05                                                    # local_quant_opt_v7: significance_alpha (1 disables the test)
+MIN_INSTANCES=10                                              # local_quant_opt_v7: min_interval_instances
 # -------------------------------------------------------------------------------------------------------------------
 
 RUN_DIR=results/$RUN_NAME
@@ -29,7 +32,7 @@ JOBS=""
 N_CONFIGS=0
 for CONFIG in $CONFIGS; do
     for TOLERANCE in $TOLERANCES; do
-        JOB=$(CV=$CV ITERATIONS=$ITERATIONS TOLERANCE=$TOLERANCE sbatch --parsable --array=0-$((N_TASKS - 1)) -t "$TIME" \
+        JOB=$(CV=$CV ITERATIONS=$ITERATIONS TOLERANCE=$TOLERANCE NUM_QUANTILES=$NUM_QUANTILES ALPHA=$ALPHA MIN_INSTANCES=$MIN_INSTANCES sbatch --parsable --array=0-$((N_TASKS - 1)) -t "$TIME" \
               -o "$LOG_DIR/%x_%A_%a.out" -e "$LOG_DIR/%x_%A_%a.err" \
               evaluation/hpc/run_replicates.sh "$CONFIG" "$DATASET" "$RUN_DIR/runs") || exit 1
         echo "$CONFIG (tolerance $TOLERANCE) on $DATASET, $ITERATIONS iterations: job $JOB ($N_TASKS tasks)"
