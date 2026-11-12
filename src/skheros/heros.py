@@ -57,7 +57,7 @@ class HEROS(BaseEstimator, TransformerMixin):
         :param feedback: TBD
         :param optimization_method: Optional optimizer selection for the rule mutation stage. Use None to disable this step, or one of 'soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split', 'local_quantitative_optimization', 'local_quantitative_optimization_v3', 'local_quantitative_optimization_v4', 'local_quantitative_optimization_v5', 'local_quantitative_optimization_v6', or 'local_quantitative_optimization_v7' (v5, v6 and v7: class outcomes only)
         :param vacuous_tolerance: After optimization, quantitative conditions are dropped (fewest excluded instances first) while the total fraction of training instances they exclude stays <= this value. 0 drops only conditions that exclude nothing. (Must be float from 0 - 1)
-        :param num_quantiles: Number of quantile bins per quantitative feature used by 'local_quantitative_optimization_v7'; interval bounds are searched over the bin cut points and +/- infinity. (Must be an integer >= 2)
+        :param num_quantiles: Number of quantile bins per quantitative feature used by 'local_quantitative_optimization_v7'; interval bounds are searched over the bin cut points and +/- infinity. An integer is the bin count; a float in (0, 1) is a fraction of the number of training instances, e.g. 0.05 with 1000 instances gives 50 bins (at least 2). (Must be an integer >= 2 or a float in (0, 1))
         :param significance_alpha: 'local_quantitative_optimization_v7' keeps a condition's best interval only if its inside/outside split of the instances matching the rest of the rule is significant at this level (chi-square test, Bonferroni corrected for the number of candidate intervals); otherwise the condition is dropped, and a rule left with no conditions is discarded. 1 disables the test. (Must be float in (0, 1])
         :param min_interval_instances: Minimum number of training instances (matching the rest of the rule) inside a candidate interval for 'local_quantitative_optimization_v7'. (Must be an integer >= 1)
 
@@ -208,8 +208,8 @@ class HEROS(BaseEstimator, TransformerMixin):
                 raise Exception("'optimization_method' param must be None, 'soft_gini_sgd', 'multi_feature_gd', 'multi_iter_gd', 'tree_split', 'local_quantitative_optimization', 'local_quantitative_optimization_v3', 'local_quantitative_optimization_v4', 'local_quantitative_optimization_v5', 'local_quantitative_optimization_v6', or 'local_quantitative_optimization_v7'")
             self.optimization_method = normalized_method
         self.vacuous_tolerance = float(vacuous_tolerance)
-        if not isinstance(num_quantiles, int) or isinstance(num_quantiles, bool) or num_quantiles < 2:
-            raise Exception("'num_quantiles' param must be an integer >= 2")
+        if isinstance(num_quantiles, bool) or not ((isinstance(num_quantiles, int) and num_quantiles >= 2) or (isinstance(num_quantiles, float) and 0 < num_quantiles < 1)):
+            raise Exception("'num_quantiles' param must be an integer >= 2 (bin count) or a float in (0, 1) (fraction of training instances)")
         self.num_quantiles = num_quantiles
         if not 0 < float(significance_alpha) <= 1:
             raise Exception("'significance_alpha' param must be a float in (0, 1]")
@@ -1216,7 +1216,7 @@ class HEROS(BaseEstimator, TransformerMixin):
             file.write(f"verbose: {self.verbose}\n")
             file.write(f"optimization_method: {self.optimization_method}\n")
             file.write(f"vacuous_tolerance: {self.vacuous_tolerance}\n")
-            file.write(f"num_quantiles: {self.num_quantiles}\n")
+            file.write(f"num_quantiles: {self.num_quantiles}" + (f" (resolved to {self.env.lqo_num_bins} bins)" if getattr(getattr(self, 'env', None), 'lqo_num_bins', None) else "") + "\n")
             file.write(f"significance_alpha: {self.significance_alpha}\n")
             file.write(f"min_interval_instances: {self.min_interval_instances}\n")
             if self.use_ek:

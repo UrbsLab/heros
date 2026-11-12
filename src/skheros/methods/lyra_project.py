@@ -827,16 +827,28 @@ def local_quantitative_optimization_v6(rule, target_state, heros, random, np, ta
     return rule
 
 
+def resolve_num_quantiles(num_quantiles, num_instances):
+    """bin count from num_quantiles: an integer is used as is, a float in (0, 1) is a fraction of the number of training
+    instances (rounded, at least 2 bins)"""
+
+    if isinstance(num_quantiles, float):
+        return max(2, int(round(num_quantiles * num_instances)))
+    return num_quantiles
+
+
 def quantile_cut_points(heros, np, num_quantiles):
     """return {feature index: sorted array of cut points} for every quantitative feature, where the cut points split the
     feature's training values (missing values left out) into num_quantiles quantile bins, e.g. num_quantiles = 10 gives the
-    10th, 20th, ..., 90th percentiles. Duplicate cut points (from tied values) are merged. Built once per training run and
-    cached on heros.env."""
+    10th, 20th, ..., 90th percentiles. num_quantiles may also be a float in (0, 1), a fraction of the number of training
+    instances (see resolve_num_quantiles). Duplicate cut points (from tied values) are merged. Built once per training run
+    and cached on heros.env."""
 
     cache = getattr(heros.env, 'lqo_cut_points', None)
     if cache is None or cache[0] != num_quantiles:
         X, _ = training_arrays(heros, np)
-        probabilities = np.arange(1, num_quantiles) / num_quantiles
+        num_bins = resolve_num_quantiles(num_quantiles, X.shape[0])
+        heros.env.lqo_num_bins = num_bins
+        probabilities = np.arange(1, num_bins) / num_bins
         cut_points = {}
         for feat in range(X.shape[1]):
             if heros.env.feat_types[feat] == 0:  # quantitative
